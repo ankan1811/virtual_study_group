@@ -5,14 +5,18 @@ import LandinPage from "./pages/LandingPage";
 import AuthPage from "./pages/AuthPage";
 import Login from "./components/Login";
 import Register from "./components/Register";
+import RoomPage from "./pages/RoomPage";
+import RoomCallPage from "./pages/RoomCallPage";
+import LandingPage from "./pages/LandingPage";
 
 function App() {
   return (
     <>
       <BrowserRouter>
         <Routes>
-          <Route element={<LandinPage />} path="/" />
+          <Route element={<LandingPage />} path="/" />
           <Route element={<HomePage />} path="/home" />
+          <Route element={<RoomPage />} path="/room" />
           <Route
             element={
               <AuthPage>
@@ -29,6 +33,7 @@ function App() {
             }
             path="/register"
           />
+          <Route element={<RoomCallPage />} path="/room/call" />
         </Routes>
       </BrowserRouter>
     </>

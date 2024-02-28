@@ -37,9 +37,12 @@ export default function Navbar() {
               key={id}
               className="bottom-border-animate hover:border-b-4 pt-2"
             >
-              <h1 className="text-gray-600 hover:text-sky-700 font-medium">
+              <Link
+                to={item.path}
+                className="text-gray-600 hover:text-sky-700 font-medium"
+              >
                 {item.title}
-              </h1>
+              </Link>
             </li>
           ))}
         </ul>
@@ -47,7 +50,7 @@ export default function Navbar() {
           {navItemsRight.map((item, id) => (
             <li key={id} className="">
               <Button variant="ghost">
-                <Link to="/login" className="flex gap-2 items-center">
+                <Link to={item.path} className="flex gap-2 items-center">
                   <LogIn size={20} />
                   <h1 className="text-lg">{item.title}</h1>
                 </Link>

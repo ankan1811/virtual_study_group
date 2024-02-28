@@ -10,6 +10,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import React from "react";
 export default function Login() {
+  function handleSubmit() {
+    // e.preventDefault();
+    console.log("button is clicked");
+  }
   return (
     <Card className="w-[350px] shadow-2xl border-2 border-cyan-900">
       <CardHeader className="items-center">
@@ -34,7 +38,10 @@ export default function Login() {
         </form>
       </CardContent>
       <CardFooter className="flex justify-center">
-        <Button className="bg-slate-500 hover:bg-slate-800 hover:text-white hover:border-0 text-md">
+        <Button
+          className="bg-slate-500 hover:bg-slate-800 hover:text-white hover:border-0 text-md"
+          onClick={() => handleSubmit}
+        >
           SIGN IN
         </Button>
       </CardFooter>

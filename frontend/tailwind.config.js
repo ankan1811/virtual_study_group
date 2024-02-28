@@ -9,6 +9,9 @@ export const content = [
 ];
 export const prefix = "";
 export const theme = {
+  // colors:{
+  //   "mycolor-text":"#0C2D57",
+  // },
   container: {
     center: true,
     padding: "2rem",
@@ -18,6 +21,10 @@ export const theme = {
   },
   extend: {
     colors: {
+      'my-chat':'#211C6A',
+      'other-chat':'',
+      'my-chat-text':'#2D9596',
+      'my-text-color':'#0C2D57',
       border: "hsl(var(--border))",
       input: "hsl(var(--input))",
       ring: "hsl(var(--ring))",
