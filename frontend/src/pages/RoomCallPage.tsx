@@ -1,10 +1,12 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import NavbarCall from "../components/NavbarCall";
 import { Send, User } from "lucide-react";
 import Emoji from "../components/shared/Emoji";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import Stream from "../components/Stream";
+// import dotenv from "dotenv";
+// dotenv.config();
 import type {
   ICameraVideoTrack,
   IMicrophoneAudioTrack,
@@ -35,6 +37,7 @@ let audioTrack: IMicrophoneAudioTrack;
 let videoTrack: ICameraVideoTrack;
 
 export default function RoomCallPage() {
+  console.log("rendered");
   const [isAudioOn, setIsAudioOn] = useState(false);
   const [isVideoOn, setIsVideoOn] = useState(false);
   const [isAudioPubed, setIsAudioPubed] = useState(false);
@@ -50,6 +53,10 @@ export default function RoomCallPage() {
     }
     videoTrack = await createCameraVideoTrack();
     videoTrack.play("camera-video");
+    // if (!isVideoPubed) {
+    // await client.publish(videoTrack);
+    // setIsVideoPubed(true);
+    // }
   };
 
   const turnOnMicrophone = async (flag?: boolean) => {
@@ -68,7 +75,7 @@ export default function RoomCallPage() {
   const channel = useRef("");
   channel.current = "toy";
   const appid = useRef("");
-  appid.current = process.env.AGORA_APP_ID!;
+  appid.current = "0f5775ce2bed49cfa080d178da7a6866";
   const token = useRef("");
 
   const joinChannel = async () => {
@@ -134,7 +141,9 @@ export default function RoomCallPage() {
     await client.publish(audioTrack);
     setIsAudioPubed(true);
   };
-
+  useEffect(() => {
+    joinChannel();
+  }, []);
   return (
     <div className="h-screen flex flex-col">
       <NavbarCall leaveChannel={leaveChannel} />
