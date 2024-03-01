@@ -1,12 +1,12 @@
-// server.ts
-
 import express from 'express';
 import mongoose from 'mongoose';
 import bodyParser from 'body-parser';
-
+import roomRoutes from './routes/roomRoutes';
 import authRoutes from './routes/authRoutes'
 import dotenv from "dotenv";
+
 dotenv.config();
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -23,6 +23,7 @@ app.use(bodyParser.json());
 
 // Routes
 app.use('/auth', authRoutes);
+app.use('/room', roomRoutes);
 
 app.listen(PORT, () => {
   console.log(`🔥🧯 Server is running on PORT ${PORT} ⚡`);
