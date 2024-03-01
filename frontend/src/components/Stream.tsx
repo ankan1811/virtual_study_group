@@ -55,55 +55,83 @@ export default function Stream(prop: propsInterface) {
       <div className="flex flex-wrap justify-evenly mt-[25px] w-full">
         {/* Video container */}
         <div
-          className="flex justify-center items-center border-2 rounded-2xl cursor-pointer overflow-hidden h-[10rem] w-[10rem]"
+          className="flex justify-center items-center border-2 rounded-2xl cursor-pointer overflow-hidden h-[20rem] w-[20rem] m-2"
           id="user-container-1"
           onClick={() => setShowMainS(!showMainS)}
         >
-          <h1>1</h1>
+          {
+            <div className="flex flex-col">
+              <video
+                id="camera-video"
+                className="p-2"
+                hidden={prop.isVideoOn ? false : true}
+              ></video>
+              <h1 className="z-10 text-right  poppins-regular">User 1</h1>
+            </div>
+          }
         </div>
         <div
-          className="flex justify-center items-center border-2 rounded-2xl cursor-pointer overflow-hidden h-[10rem] w-[10rem]"
+          className="flex justify-center items-center border-2 rounded-2xl cursor-pointer overflow-hidden h-[15rem] w-[20rem] m-2"
           id="user-container-2"
         >
-          <h1>2</h1>
+          <div className="flex flex-col">
+            <video
+              id="remote-video"
+              className="p-2"
+              hidden={prop.isVideoSubed ? false : true}
+            ></video>
+            <h1 className="z-10 text-right  poppins-regular">User 2</h1>
+          </div>
         </div>
         <div
-          className="flex justify-center items-center border-2 rounded-2xl cursor-pointer overflow-hidden h-[10rem] w-[10rem]"
+          className="flex justify-center items-center border-2 rounded-2xl cursor-pointer overflow-hidden h-[15rem] w-[20rem] m-2"
           id="user-container-3"
         >
           <h1>3</h1>
         </div>
         <div
-          className="flex justify-center items-center border-2 rounded-2xl cursor-pointer overflow-hidden h-[10rem] w-[10rem]"
+          className="flex justify-center items-center border-2 rounded-2xl cursor-pointer overflow-hidden h-[15rem] w-[20rem] m-2"
           id="user-container-4"
         >
           <h1>4</h1>
+        </div>
+        <div
+          className="flex justify-center items-center border-2 rounded-2xl cursor-pointer overflow-hidden h-[15rem] w-[20rem] m-2"
+          id="user-container-4"
+        >
+          <h1>5</h1>
         </div>
       </div>
       <div className="flex gap-4 fixed bottom-4">
         <Button
           className="rounded-full p-3"
           onClick={() => {
-            setCam(!isCam);
+            // setCam(!isCam);
+            prop.turnOnCamera();
+            // if(!prop.isVideoPubed)
+            //   prop.publishVideo();
+            // else prop.setIsVideoOn(false);
+            // prop.setIsVideoOn(!prop.isVideoOn);
           }}
         >
-          {isCam ? <Camera size={15} /> : <CameraOff size={15} />}
+          {!prop.isVideoOn ? <Camera size={15} /> : <CameraOff size={15} />}
         </Button>
         <Button
           className="rounded-full p-3"
           onClick={() => {
-            setMic(!isMic);
+            // setMic(!isMic);
+            prop.setIsAudioOn(!prop.isAudioOn);
           }}
         >
-          {isMic ? <Mic size={15} /> : <MicOff size={15} />}
+          {!prop.isAudioOn ? <Mic size={15} /> : <MicOff size={15} />}
         </Button>
         <Button
           className="rounded-full p-3"
           onClick={() => {
-            setPresent(!isPresent);
+            // setPresent(!isPresent);
           }}
         >
-          {isPresent ? <MonitorUp size={15} /> : <MonitorX size={15} />}
+          {<MonitorUp size={15} />}
         </Button>
       </div>
     </section>
