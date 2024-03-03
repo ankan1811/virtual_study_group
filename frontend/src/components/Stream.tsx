@@ -8,8 +8,8 @@ import {
   MonitorX,
   X,
 } from "lucide-react";
-
 import React, { useState } from "react";
+
 type StateFunction<T> = React.Dispatch<React.SetStateAction<T>>;
 interface propsInterface {
   isAudioOn: boolean;
