@@ -11,12 +11,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { useDispatch } from "react-redux";
+import { login } from "../store/authStore/authSlice";
 export default function Register() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+
   const handleSubmit: MouseEventHandler<HTMLButtonElement> = async (e) => {
     e.preventDefault();
     console.log(`{email:${email}} {name:${name}}`);
@@ -34,7 +38,7 @@ export default function Register() {
             password,
           })
           .then((res) => {
-            console.log(res);
+            dispatch(login(res.data.name));
             localStorage.setItem("token", res.data.token);
             navigate("/home");
           });

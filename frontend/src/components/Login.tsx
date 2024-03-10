@@ -11,10 +11,17 @@ import { Label } from "@/components/ui/label";
 import React, { MouseEventHandler, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { useDispatch } from "react-redux";
+import { login } from "../store/authStore/authSlice";
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+  // const isAuthenticated = useSelector(
+  //   (state: AuthState) => state.auth.isAuthenticated
+  // );
+  // const user = useSelector((state: AuthState) => state.auth.user);
   const handleSubmit: MouseEventHandler<HTMLButtonElement> = async (e) => {
     e.preventDefault();
     await axios
@@ -23,7 +30,7 @@ export default function Login() {
         password,
       })
       .then((res) => {
-        console.log(res);
+        dispatch(login(res.data.name));
         localStorage.setItem("token", res.data.token);
         navigate("/home");
       });
