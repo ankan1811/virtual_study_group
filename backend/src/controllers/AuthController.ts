@@ -51,8 +51,8 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Create and send JWT token
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET || '');
+    // Create and send JWT token with user information
+    const token = jwt.sign({ userId: user._id, email: user.email, name: user.name }, process.env.JWT_SECRET || '');
     res.status(200).json({ token });
   } catch (error) {
     console.error(error);

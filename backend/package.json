@@ -28,6 +28,7 @@
         "typescript": "^5.3.3"
     },
     "devDependencies": {
-        "@types/cors": "^2.8.17"
+        "@types/cors": "^2.8.17",
+        "@types/socket.io": "^3.0.2"
     }
 }
