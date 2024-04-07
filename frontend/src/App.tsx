@@ -1,6 +1,5 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import "./App.css";
-import HomePage from "./pages/HomePage";
 import AuthPage from "./pages/AuthPage";
 import Login from "./components/Login";
 import Register from "./components/Register";
@@ -9,6 +8,9 @@ import RoomCallPage from "./pages/RoomCallPage";
 import LandingPage from "./pages/LandingPage";
 import { Provider } from "react-redux";
 import store from "./store/authStore/store";
+import Streampage from "./pages/Streampage";
+import AskAiPage from "./pages/AskAiPage";
+import DemoAiPage from "./pages/DemoAiPage";
 function App() {
   return (
     <>
@@ -16,8 +18,10 @@ function App() {
         <BrowserRouter>
           <Routes>
             <Route element={<LandingPage />} path="/" />
-            <Route element={<HomePage />} path="/home" />
-            <Route element={<RoomPage />} path="/room" />
+            <Route element={<RoomPage />} path="/home" />
+            <Route element={<Streampage />} path="/stream" />
+            <Route element={<AskAiPage />} path="/ask" />
+            <Route element={<DemoAiPage />} path="/demo" />
             <Route
               element={
                 <AuthPage>

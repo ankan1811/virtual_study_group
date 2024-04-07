@@ -30,7 +30,7 @@ export default function Login() {
         password,
       })
       .then((res) => {
-        dispatch(login(res.data.name));
+        dispatch(login({ name: res.data.name }));
         localStorage.setItem("token", res.data.token);
         navigate("/home");
       });
