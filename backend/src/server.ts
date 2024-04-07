@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import bodyParser from "body-parser";
 import roomRoutes from "./routes/roomRoutes";
 import authRoutes from "./routes/authRoutes";
+import chatRoutes from "./routes/chatRoutes";
 import dotenv from "dotenv";
 import cors from "cors";
 dotenv.config();
@@ -25,7 +26,7 @@ app.use(bodyParser.json());
 // Routes
 app.use("/auth", authRoutes);
 app.use("/room", roomRoutes);
-
+app.use("/chat", chatRoutes);
 app.listen(PORT, () => {
   console.log(`🔥🧯 Server is running on PORT ${PORT} ⚡`);
 });

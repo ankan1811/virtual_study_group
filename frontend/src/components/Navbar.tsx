@@ -14,8 +14,12 @@ export default function Navbar() {
       path: "/home",
     },
     {
-      title: "Join room",
-      path: "/room",
+      title: "Streaming",
+      path: "/stream",
+    },
+    {
+      title: "Ask AI",
+      path: "/ask"
     },
     {
       title: "Contact us",
@@ -32,51 +36,53 @@ export default function Navbar() {
   // }, []);
 
   return (
-    <nav className="bg-white w-full border-b md:border-0 shadow-md poppins-regular">
-      <div className="px-5 py-4 flex justify-between">
-        <div className="">
-          <img alt="Logo" src={Logo} />
-        </div>
-        <ul className="flex gap-10">
-          {navItemsCenter.map((item, id) => (
-            <li
-              key={id}
-              className="bottom-border-animate hover:border-b-4 pt-2"
-            >
-              <Link
-                to={isAuthenticated ? item.path : "/login"}
-                className="text-gray-600 hover:text-sky-700 font-medium"
+    <nav className="bg-white w-full border-b md:border-0 shadow-md poppins-regular fixed top-0">
+      <div className="flex justify-center">
+        <div className="px-5 py-4 flex justify-between xl:w-[1280px] w-full">
+          <div className="">
+            <img alt="Logo" src={Logo} />
+          </div>
+          <ul className="flex gap-10">
+            {navItemsCenter.map((item, id) => (
+              <li
+                key={id}
+                className="bottom-border-animate hover:border-b-4 pt-2"
               >
-                {item.title}
-              </Link>
+                <Link
+                  to={isAuthenticated ? item.path : "/login"}
+                  className="text-gray-600 hover:text-sky-700 font-medium"
+                >
+                  {item.title}
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <ul className="flex gap-10">
+            <li className="">
+              {isAuthenticated ? (
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    dispatch(logout());
+                    // localStorage.removeItem("token");
+                  }}
+                >
+                  <Link to="/" className="flex gap-2 items-center">
+                    <LogOut size={20} />
+                    <h1 className="text-lg">Logout</h1>
+                  </Link>
+                </Button>
+              ) : (
+                <Button variant="ghost">
+                  <Link to="/login" className="flex gap-2 items-center">
+                    <LogIn size={20} />
+                    <h1 className="text-lg">Login</h1>
+                  </Link>
+                </Button>
+              )}
             </li>
-          ))}
-        </ul>
-        <ul className="flex gap-10">
-          <li className="">
-            {isAuthenticated ? (
-              <Button
-                variant="destructive"
-                onClick={() => {
-                  dispatch(logout());
-                  // localStorage.removeItem("token");
-                }}
-              >
-                <Link to="/" className="flex gap-2 items-center">
-                  <LogOut size={20} />
-                  <h1 className="text-lg">Logout</h1>
-                </Link>
-              </Button>
-            ) : (
-              <Button variant="ghost">
-                <Link to="/login" className="flex gap-2 items-center">
-                  <LogIn size={20} />
-                  <h1 className="text-lg">Login</h1>
-                </Link>
-              </Button>
-            )}
-          </li>
-        </ul>
+          </ul>
+        </div>
       </div>
     </nav>
   );

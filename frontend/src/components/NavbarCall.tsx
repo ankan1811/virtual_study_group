@@ -18,7 +18,7 @@ export default function NavbarCall({
         <ul className="flex gap-10">
           <li key="" className="">
             <Button variant="destructive" onClick={leaveChannel}>
-              <Link to="/" className="flex gap-2 items-center">
+              <Link to="/home" className="flex gap-2 items-center">
                 <LogIn size={20} />
                 <h1 className="text-lg">Exit room</h1>
               </Link>
