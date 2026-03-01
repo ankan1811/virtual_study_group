@@ -17,7 +17,7 @@ export default function ChatComponent({ roomId }: { roomId: string }) {
   const [inputValue, setInputValue] = useState("");
   const user = useSelector((state: AuthState) => state.auth.user);
   useEffect(() => {
-    const newSocket = io("http://localhost:3001", {
+    const newSocket = io(import.meta.env.VITE_API_URL, {
       transports: ["websocket", "polling"],
     });
     setSocket(newSocket);
@@ -42,7 +42,11 @@ export default function ChatComponent({ roomId }: { roomId: string }) {
 
   const sendMessage = () => {
     if (inputValue.trim() !== "") {
-      socket?.emit("serverMessage", { message: inputValue, roomId: roomId, sentby: user?.name });
+      socket?.emit("serverMessage", {
+        message: inputValue,
+        roomId: roomId,
+        sentby: user?.name,
+      });
     }
     setInputValue("");
   };

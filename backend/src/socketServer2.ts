@@ -57,5 +57,5 @@ io.on('connection', (socket) => {
     });
 });
 
-server.listen(3000, () => console.log(`HTTP Server is running on PORT 3000`));
+server.listen(3002, () => console.log(`Streaming server is running on PORT 3002`));
     

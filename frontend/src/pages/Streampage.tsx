@@ -15,7 +15,7 @@ export default function Streampage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [ytString, setYtString] = useState<string>('');
   useEffect(() => {
-    const newSocket = io("http://localhost:3002", {
+    const newSocket = io(import.meta.env.VITE_STREAM_SOCKET_URL, {
       transports: ["websocket", "polling"],
     });
     return () => {

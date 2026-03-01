@@ -17,17 +17,16 @@ virtual_study_group/
 |       |
 |       |-- server.ts                # Main entry point - Express app setup, MongoDB
 |       |                              connection, CORS config, route mounting.
-|       |                              Runs on port 3000.
+|       |                              Port configured via backend/.env (PORT)
 |       |
 |       |-- socketServer.ts          # Socket.IO server for real-time chat.
+|       |                              Attached to the same HTTP server as Express.
 |       |                              Handles joinRoom and serverMessage events.
-|       |                              Broadcasts messages to room channels.
-|       |                              Runs on port 3001.
 |       |
 |       |-- socketServer2.ts         # Socket.IO server for live streaming.
 |       |                              Spawns FFmpeg child process for RTMP output.
 |       |                              Handles binary stream data from frontend.
-|       |                              Runs on port 3002.
+|       |                              Port configured via frontend/.env (VITE_STREAM_SOCKET_URL)
 |       |
 |       |-- controllers/             # Request handlers (business logic)
 |       |   |-- AuthController.ts    # Register (bcrypt hash) and Login (JWT sign)
@@ -115,7 +114,7 @@ virtual_study_group/
         |   |-- Navbar.tsx           # Main navigation bar - links to Home, Streaming,
         |   |                          Ask AI, Contact. Shows Login/Logout button
         |   |-- NavbarCall.tsx       # Minimal navbar for in-call view with exit button
-        |   |-- ChatComponent.tsx    # Real-time chat widget - Socket.IO on port 3001,
+        |   |-- ChatComponent.tsx    # Real-time chat widget - Socket.IO on port 7000,
         |   |                          room-based messaging, styled message bubbles
         |   |-- Messages.tsx         # Placeholder message component for AI demo page
         |   |-- Stream.tsx           # Video stream grid - up to 5 video slots,
@@ -148,12 +147,10 @@ virtual_study_group/
             |-- p5sound_fix.js       # P5.js sound library compatibility fix
 
 
-PORTS SUMMARY
-=============
-  Backend HTTP API    :  3000
-  Socket.IO (Chat)    :  3001
-  Socket.IO (Stream)  :  3002
-  Frontend (Vite Dev) :  5173
+ENV CONFIGURATION
+=================
+  backend/.env   ->  PORT, MONGODB_URI, JWT_SECRET
+  frontend/.env  ->  VITE_API_URL, VITE_STREAM_SOCKET_URL
 
 
 API ROUTES SUMMARY

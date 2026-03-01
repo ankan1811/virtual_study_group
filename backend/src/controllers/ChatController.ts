@@ -3,7 +3,7 @@
 import { Request, Response } from "express";
 import Chat from "../models/Chat";
 import jwt from "jsonwebtoken";
-import io from "../socketServer";
+import { getIO } from "../socketServer";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -64,7 +64,7 @@ export const addchat = async (req: Request, res: Response): Promise<void> => {
   const { room_id, message, user } = req.body;
 
   // Emit the chat message to the Socket.IO server
-  io.emit("chatMessage", { user, message });
+  getIO().emit("chatMessage", { user, message });
 
   res.status(200).json({ message: "Chat message sent successfully" });
 };

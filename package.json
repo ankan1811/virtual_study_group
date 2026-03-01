@@ -1,0 +1,10 @@
+{
+  "name": "virtual-study-group",
+  "version": "1.0.0",
+  "description": "Virtual Study Group - monorepo root",
+  "scripts": {
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev:backend": "npm start --prefix backend",
+    "install:all": "npm install --prefix backend && npm install --prefix frontend"
+  }
+}

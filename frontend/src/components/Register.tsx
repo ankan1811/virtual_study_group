@@ -25,7 +25,7 @@ export default function Register() {
     e.preventDefault();
     console.log(`{email:${email}} {name:${name}}`);
     await axios
-      .post("http://localhost:3000/auth/register", {
+      .post(`${import.meta.env.VITE_API_URL}/auth/register`, {
         name,
         email,
         password,
@@ -33,7 +33,7 @@ export default function Register() {
       .then(async (res) => {
         console.log(res);
         await axios
-          .post("http://localhost:3000/auth/login", {
+          .post(`${import.meta.env.VITE_API_URL}/auth/login`, {
             email,
             password,
           })
