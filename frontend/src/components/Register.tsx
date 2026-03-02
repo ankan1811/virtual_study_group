@@ -13,6 +13,7 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { login } from "../store/authStore/authSlice";
+import { connectSocket } from "../utils/socketInstance";
 export default function Register() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -30,18 +31,11 @@ export default function Register() {
         email,
         password,
       })
-      .then(async (res) => {
-        console.log(res);
-        await axios
-          .post(`${import.meta.env.VITE_API_URL}/auth/login`, {
-            email,
-            password,
-          })
-          .then((res) => {
-            dispatch(login(res.data.name));
-            localStorage.setItem("token", res.data.token);
-            navigate("/home");
-          });
+      .then((res) => {
+        dispatch(login({ name: res.data.name, userId: res.data.userId }));
+        localStorage.setItem("token", res.data.token);
+        connectSocket(res.data.token);
+        navigate("/home");
       })
       .catch((err) => {
         console.log(err);

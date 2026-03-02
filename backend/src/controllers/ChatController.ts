@@ -64,7 +64,7 @@ export const addchat = async (req: Request, res: Response): Promise<void> => {
   const { room_id, message, user } = req.body;
 
   // Emit the chat message to the Socket.IO server
-  getIO().emit("chatMessage", { user, message });
+  getIO()?.emit("chatMessage", { user, message });
 
   res.status(200).json({ message: "Chat message sent successfully" });
 };

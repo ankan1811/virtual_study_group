@@ -63,7 +63,7 @@ export default function Streampage() {
   return (
     <div className='flex justify-center'>
       <Navbar />
-      <div className='mt-20 bg-[#ACE2E1] xl:w-[1280px] w-full h-[80vh] flex flex-col rounded-md p-4 shadow-md'>
+      <div className='mt-6 bg-[#ACE2E1] xl:w-[1280px] w-full h-[80vh] flex flex-col rounded-md p-4 shadow-md'>
         <h3 className='text-4xl poppins-semibold flex items-center gap-3'>Streaming
           <Podcast className='text-red-500 h-10 w-10' />
         </h3>

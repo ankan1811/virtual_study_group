@@ -28,7 +28,11 @@ export const registerUser = async (
     const newUser: IUser = new User({ name, email, password: hashedPassword });
     await newUser.save();
 
-    res.status(201).json({ message: "User registered successfully" });
+    const token = jwt.sign(
+      { userId: newUser._id, email: newUser.email, name: newUser.name },
+      process.env.JWT_SECRET || ""
+    );
+    res.status(201).json({ token, name: newUser.name, userId: (newUser._id as any).toString() });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Failed to register user" });
@@ -58,7 +62,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       { userId: user._id, email: user.email, name: user.name },
       process.env.JWT_SECRET || ""
     );
-    res.status(200).json({ token, name: user.name });
+    res.status(200).json({ token, name: user.name, userId: (user._id as any).toString() });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Failed to log in" });

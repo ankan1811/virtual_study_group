@@ -1,6 +1,6 @@
 # Virtual Study Group
 
-A full-stack web application for creating virtual study group spaces with real-time video conferencing, live chat, streaming, and AI-powered study tools.
+A full-stack web application for creating virtual study group spaces with real-time video conferencing, live chat, AI-powered doubt solving, companion messaging, and collaborative study tools.
 
 ## Tech Stack
 
@@ -11,6 +11,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 | **Database**         | MongoDB (Mongoose)                     |
 | **Real-time**        | Socket.IO                              |
 | **Video Calls**      | Agora RTC SDK                          |
+| **AI**               | xAI Grok API (grok-3-mini)            |
 | **State Management** | Redux Toolkit                          |
 | **Styling**          | Tailwind CSS, shadcn/ui, Framer Motion |
 | **Auth**             | JWT + bcrypt                           |
@@ -25,13 +26,30 @@ A full-stack web application for creating virtual study group spaces with real-t
 - Login with JWT token-based authentication
 - Protected routes for authenticated users
 - Persistent auth state via Redux + localStorage
+- JWT rehydration on page refresh (no re-login needed)
 
-### Room Management
+### Personal Rooms & Invite System
 
-- Create new study rooms
-- Join existing rooms by room ID (private rooms)
-- View all users in a room
-- Room-based isolation for chat and calls
+- Every user has a personal room (`user_{userId}`) — no room IDs to remember
+- Only study companions can invite each other to rooms
+- Real-time invite notifications with accept/decline overlay
+- "Enter My Room" one-click access from the home page and sidebar
+
+### Study Companions
+
+- Send, accept, and decline companion requests (friend system)
+- Search for companions by name or email
+- Real-time presence tracking (online/offline status)
+- Companion bar on home page with avatar initials and status rings
+- Companion popover with quick actions: Message, Invite to Room
+- Real-time companion request notifications via overlays
+
+### Direct Messaging (DM)
+
+- Slide-in DM panel from companion avatars
+- Real-time messaging powered by Socket.IO
+- Deterministic socket room naming (`dm_{sortedUserIds}`)
+- Message history stored in MongoDB (last 50 loaded on open)
 
 ### Video Calling (Agora RTC)
 
@@ -44,9 +62,39 @@ A full-stack web application for creating virtual study group spaces with real-t
 ### Real-time Chat
 
 - Live in-room messaging powered by Socket.IO
-- Chat history persisted in MongoDB
+- Uses a singleton socket instance shared across all components
 - Visual distinction between your messages, others' messages, and bot messages
 - Bot welcome message on room join
+
+### AI Doubt Solver (Grok)
+
+- In-room AI panel accessible via the "AI Doubt" tab during calls
+- Powered by xAI Grok API (`grok-3-mini` model)
+- Text input with full conversation history
+- Voice input via Web Speech API (browser mic button)
+- Styled Q&A cards with Grok branding
+
+### Session Summary (Grok)
+
+- "Summary" tab in the call room generates an AI summary of the chat session
+- Sends all chat messages to Grok for analysis
+- One-click generation with loading state
+- Formatted summary card display
+
+### Home Page
+
+- Instagram-style companion presence bar with online/offline indicators
+- "Let's Study Together" gradient CTA card
+- Inshorts-style news feed with mock AI/Tech/Productivity articles
+- Category filter chips (All / AI / Tech / Productivity)
+- Animated card layout with accent color badges
+
+### Navigation
+
+- Collapsible sidebar (not a top bar) with framer-motion spring animation
+- Hamburger toggle at top-left
+- "My Room" menu item dispatches room entry and navigates to call
+- Active route highlighting
 
 ### Live Streaming (YouTube)
 
@@ -55,44 +103,17 @@ A full-stack web application for creating virtual study group spaces with real-t
 - YouTube Live stream key integration
 - H264/AAC encoding pipeline
 
-### AI Voice Interface (Skeleton)
-
-- Ask AI page with microphone input
-- P5.js real-time audio level visualization
-- Audio recording via MediaRecorder API
-- Blob-based audio upload flow
-
 ### UI/UX
 
-- Animated landing page with Framer Motion
+- Animated components with Framer Motion throughout
 - Responsive design with Tailwind CSS
 - Reusable shadcn/ui components (Button, Card, Input, Label, Select)
-- Dedicated navbars for general navigation and in-call view
+- Overlay notifications for invites and companion requests
+- Toast feedback for invite sent/error states
 
 ## Coming Soon
 
-### AI Auto Session Summary
-
-- End-of-session prompt asking what you studied
-- AI-generated bullet-point summary of the session
-- Key concepts extraction from session + chat history
-- Follow-up tasks and action items
-- Auto-generated quiz questions for revision
-- Persistent study log and revision bank in MongoDB
-
-### Live Doubt Solver
-
-- In-call doubt input during video sessions
-- AI-powered concept explanations with examples
-- Visual explanations and practice problem generation
-- Context-aware responses with difficulty levels:
-  - "Explain like I'm preparing for CAT"
-  - "Explain for MiM interview level"
-
-### Planned Improvements
-
 - Screen sharing in video calls
-- Random room matching logic
 - Full streaming pipeline (frontend-to-backend wiring)
 - Session analytics dashboard
 - Study streak tracking
@@ -104,6 +125,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 - Node.js (v18+)
 - MongoDB instance (local or Atlas)
 - Agora account (for video call App ID)
+- xAI API key (for Grok AI features — [get one free](https://console.x.ai))
 
 ### Quick Start (Monorepo)
 
@@ -130,8 +152,10 @@ npm install
 Create a `.env` file in `backend/` with:
 
 ```
-MONGO_URI=your_mongodb_connection_string
+MONGODB_URI=your_mongodb_connection_string
+PORT=7002
 JWT_SECRET=your_jwt_secret
+GROK_API_KEY=your_xai_api_key
 ```
 
 Start the server:
@@ -140,14 +164,18 @@ Start the server:
 npm start
 ```
 
-Configure ports via `backend/.env` (`PORT`) and `frontend/.env` (`VITE_API_URL`, `VITE_STREAM_SOCKET_URL`).
-
 ### Frontend Setup
 
 ```bash
 cd frontend
 npm install
 npm run dev
+```
+
+Create a `.env` file in `frontend/` with:
+
+```
+VITE_API_URL=http://localhost:7002
 ```
 
 ## Routes
@@ -161,7 +189,23 @@ npm run dev
 | `/room/call` | Video Call Room |      Yes      |
 | `/stream`    | Live Streaming  |      Yes      |
 | `/ask`       | Ask AI (Voice)  |      Yes      |
-| `/demo`      | AI Demo         |      Yes      |
+
+## API Endpoints
+
+| Method | Endpoint               | Description                  |
+| ------ | ---------------------- | ---------------------------- |
+| POST   | `/auth/register`       | Register a new user          |
+| POST   | `/auth/login`          | Login and receive JWT        |
+| POST   | `/companion/request`   | Send companion request       |
+| POST   | `/companion/accept`    | Accept companion request     |
+| POST   | `/companion/decline`   | Decline companion request    |
+| GET    | `/companion/list`      | Get accepted companions      |
+| GET    | `/companion/pending`   | Get pending requests         |
+| GET    | `/user/search?q=`     | Search users by name/email   |
+| GET    | `/news`                | Get news feed articles       |
+| POST   | `/ai/ask`              | Ask Grok a study question    |
+| POST   | `/ai/summary`          | Generate session summary     |
+| GET    | `/dm/:companionId`     | Get DM history               |
 
 ## License
 

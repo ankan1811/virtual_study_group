@@ -13,6 +13,7 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { login } from "../store/authStore/authSlice";
+import { connectSocket } from "../utils/socketInstance";
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -30,8 +31,9 @@ export default function Login() {
         password,
       })
       .then((res) => {
-        dispatch(login({ name: res.data.name }));
+        dispatch(login({ name: res.data.name, userId: res.data.userId }));
         localStorage.setItem("token", res.data.token);
+        connectSocket(res.data.token);
         navigate("/home");
       });
   };

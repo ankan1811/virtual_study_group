@@ -5,6 +5,11 @@ import bodyParser from "body-parser";
 import roomRoutes from "./routes/roomRoutes";
 import authRoutes from "./routes/authRoutes";
 import chatRoutes from "./routes/chatRoutes";
+import companionRoutes from "./routes/companionRoutes";
+import userRoutes from "./routes/userRoutes";
+import newsRoutes from "./routes/newsRoutes";
+import aiRoutes from "./routes/aiRoutes";
+import dmRoutes from "./routes/dmRoutes";
 import dotenv from "dotenv";
 import path from "path";
 import cors from "cors";
@@ -32,6 +37,11 @@ app.use(bodyParser.json());
 app.use("/auth", authRoutes);
 app.use("/room", roomRoutes);
 app.use("/chat", chatRoutes);
+app.use("/companion", companionRoutes);
+app.use("/user", userRoutes);
+app.use("/news", newsRoutes);
+app.use("/ai", aiRoutes);
+app.use("/dm", dmRoutes);
 
 // Attach Socket.IO to the same HTTP server (no separate port needed)
 initSocketServer(httpServer);
