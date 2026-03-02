@@ -23,6 +23,12 @@ virtual_study_group/
 |       |-- socketServer.ts          # Socket.IO server with JWT auth middleware.
 |       |                              Handles: room chat, invites (companion-gated),
 |       |                              companion events, DM rooms, presence tracking.
+|       |                              DM events: dm:send (echoes _id+tempId for delivery
+|       |                              ack), dm:markRead (marks read + emits dm:readUpdate
+|       |                              to sender), dm:join.
+|       |                              Notification events: notification:new (pushed to
+|       |                              recipient on companion_request, companion_accepted,
+|       |                              room_invite). saveAndEmitNotification() helper.
 |       |                              Exports: getIO(), getSocketIdForUser()
 |       |                              Uses userSocketMap (userId -> socketId)
 |       |
@@ -44,8 +50,14 @@ virtual_study_group/
 |       |   |                          POST /ai/ask (question -> answer)
 |       |   |                          POST /ai/summary (messages -> summary)
 |       |   |                          Model: grok-3-mini, baseURL: api.x.ai/v1
-|       |   |-- DmController.ts      # Get DM history between two users.
-|       |   |                          Returns last 50 messages sorted by createdAt
+|       |   |-- DmController.ts      # getDmHistory: last 50 messages with _id + read
+|       |   |                          state. getUnreadCounts: unread count per sender
+|       |   |                          (for restoring green rings on refresh).
+|       |   |                          markDmRead: marks sender's messages as read +
+|       |   |                          emits dm:readUpdate to sender via socket.
+|       |   |-- NotificationController.ts  # getNotifications (last 50), markRead (single),
+|       |   |                          markAllRead, deleteNotification. All scoped to
+|       |   |                          authenticated user via verifyToken middleware.
 |       |   |-- NewsController.ts    # Returns 12 mock news articles across
 |       |                              AI, Tech, Productivity categories
 |       |
@@ -57,7 +69,11 @@ virtual_study_group/
 |       |   |                          /companion/decline, /companion/list, /companion/pending
 |       |   |-- userRoutes.ts        # /user/search?q=
 |       |   |-- aiRoutes.ts          # /ai/ask, /ai/summary
-|       |   |-- dmRoutes.ts          # /dm/:companionId
+|       |   |-- dmRoutes.ts          # GET /dm/unread-counts (before /:companionId to
+|       |   |                          avoid shadowing), GET /dm/:companionId,
+|       |   |                          PATCH /dm/:companionId/read
+|       |   |-- notificationRoutes.ts # GET /notifications, PATCH /:id/read,
+|       |   |                          PATCH /read-all, DELETE /:id
 |       |   |-- newsRoutes.ts        # /news
 |       |
 |       |-- models/                  # Mongoose schemas and models
@@ -66,7 +82,13 @@ virtual_study_group/
 |       |   |-- Chat.ts              # Chat model: sendBy (User ref), message, room_id (Room ref)
 |       |   |-- Companion.ts         # Companion model: requester, recipient (User refs),
 |       |   |                          status ('pending'|'accepted'). Unique compound index
-|       |   |-- DirectMessage.ts     # DM model: from, to (User refs), content, timestamps
+|       |   |-- DirectMessage.ts     # DM model: from, to (User refs), content, read (bool,
+|       |   |                          default false), timestamps. Indexes: from+to, to+from,
+|       |   |                          to+read (for fast unread-count queries)
+|       |   |-- Notification.ts      # Notification model: recipient (User ref), type
+|       |   |                          ('companion_request'|'companion_accepted'|'room_invite'),
+|       |   |                          fromUserId, fromUserName, data (Mixed), read (bool).
+|       |   |                          TTL index on createdAt: auto-deleted after 10 days
 |       |
 |       |-- middlewares/             # Express middleware
 |           |-- middleware.ts        # JWT token verification - extracts userId from
@@ -129,8 +151,9 @@ virtual_study_group/
         |   |                            cards, fetched from /companion/pending,
         |   |                            real-time via companion:requestReceived)
         |   |                          - Study companions bar with online/offline
-        |   |                            dots and green ring for unread DMs
-        |   |                            (tracked via dm:receive socket listener)
+        |   |                            dots and green ring for unread DMs.
+        |   |                            unreadDmFrom restored from GET /dm/unread-counts
+        |   |                            on mount (survives refresh)
         |   |                          - "Ready to study?" CTA card
         |   |                          - News feed with category filters, controlled
         |   |                            by VITE_NEWS_IMAGES_ONLY env var
@@ -162,9 +185,17 @@ virtual_study_group/
         |   |-- ChatComponent.tsx    # Real-time chat widget - uses getSocket()
         |   |                          singleton, room-based messaging, lifts messages
         |   |                          to parent via onMessagesChange prop
-        |   |-- DmPanel.tsx          # Slide-in DM panel from right - loads history
-        |   |                          via GET /dm/:companionId, real-time via
-        |   |                          dm:join + dm:send + dm:receive socket events
+        |   |-- DmPanel.tsx          # Slide-in DM panel from right. Optimistic send
+        |   |                          (tempId), delivery states: sending/delivered/read.
+        |   |                          Tick icons: clock=sending, ✓=delivered, ✓✓=read.
+        |   |                          Emits dm:markRead on open (REST + socket).
+        |   |                          Filters dm:receive to current conversation only.
+        |   |                          Listens for dm:readUpdate to upgrade ticks.
+        |   |-- NotificationBell.tsx # Bell icon with unread badge in Navbar (top-right).
+        |   |                          Fetches GET /notifications on mount.
+        |   |                          Listens for notification:new socket events.
+        |   |                          Dropdown: type icons, relative timestamps, mark
+        |   |                          read on click, bulk "Mark all read", inline delete.
         |   |-- AiPanel.tsx          # AI panel with two modes:
         |   |                          - "ai" tab: Grok doubt solver (text + voice
         |   |                            via Web Speech API), Q&A history cards
@@ -193,8 +224,8 @@ virtual_study_group/
         |
         |-- store/                   # Redux Toolkit state management
         |   |-- authStore/
-        |   |   |-- store.ts         # Combined store config - 4 reducers: auth,
-        |   |   |                      room, invite, companion. Exports RootState,
+        |   |   |-- store.ts         # Combined store config - 5 reducers: auth, room,
+        |   |   |                      invite, companion, notification. Exports RootState,
         |   |   |                      AppDispatch, AuthState (backwards-compat alias)
         |   |   |-- authSlice.ts     # Auth slice: login/logout actions.
         |   |                          AuthUser: { name, userId, roomId }
@@ -206,10 +237,16 @@ virtual_study_group/
         |   |   |-- inviteSlice.ts   # Invite slice: { pendingInvite }.
         |   |                          Actions: receiveInvite, clearInvite
         |   |-- companionStore/
-        |       |-- companionSlice.ts # Companion slice: { companions, pendingRequests }.
-        |                              Actions: setCompanions, setOnline, setOffline,
-        |                              setPendingRequests, addPendingRequest,
-        |                              removePendingRequest, addCompanion
+        |   |   |-- companionSlice.ts # Companion slice: { companions, pendingRequests }.
+        |   |                          Actions: setCompanions, setOnline, setOffline,
+        |   |                          setPendingRequests, addPendingRequest,
+        |   |                          removePendingRequest, addCompanion
+        |   |-- notificationStore/
+        |       |-- notificationSlice.ts # Notification slice: { items: AppNotification[] }.
+        |                              Actions: setNotifications, addNotification,
+        |                              markOneRead, markAllReadLocal, removeNotification.
+        |                              AppNotification: { _id, type, fromUserId,
+        |                              fromUserName, data, read, createdAt }
         |
         |-- utils/                   # Utility functions
         |   |-- socketInstance.ts    # Socket.IO singleton - connectSocket(token),
@@ -260,7 +297,15 @@ API ROUTES SUMMARY
     POST   /ai/summary             Generate AI summary of chat messages
 
   DMs:
-    GET    /dm/:companionId         Get DM history (last 50 messages)
+    GET    /dm/unread-counts        Get unread message count per companion (for badge restore)
+    GET    /dm/:companionId         Get DM history (last 50, includes _id + read state)
+    PATCH  /dm/:companionId/read    Mark all messages from companion as read
+
+  Notifications:
+    GET    /notifications           Get all notifications for current user (last 50)
+    PATCH  /notifications/:id/read  Mark a single notification as read
+    PATCH  /notifications/read-all  Mark all notifications as read
+    DELETE /notifications/:id       Delete a notification
 
   News:
     GET    /news                    Get mock news feed articles
@@ -290,8 +335,15 @@ SOCKET EVENTS
 
   DMs:
     dm:join               Client joins DM room (dm_{sortedIds})
-    dm:send               Client sends DM message
-    dm:receive            Server broadcasts DM to room
+    dm:send               Client sends DM (payload: toUserId, content, tempId)
+    dm:receive            Server broadcasts DM (payload: _id, from, fromName, content,
+                            createdAt, read, tempId). Sender receives this as delivery ack.
+    dm:markRead           Client signals they opened a DM panel (marks messages as read)
+    dm:readUpdate         Server notifies sender their messages were read (payload: byUserId)
+
+  Notifications:
+    notification:new      Server pushes new notification to recipient if online
+                            (payload: _id, type, fromUserId, fromUserName, data, read, createdAt)
 
 
 DATABASE COLLECTIONS
@@ -301,4 +353,8 @@ DATABASE COLLECTIONS
   chats            ->  { sendBy: ObjectId -> User, message: String, room_id: ObjectId -> Room }
   companions       ->  { requester: ObjectId, recipient: ObjectId, status: 'pending'|'accepted' }
                        Unique compound index on { requester, recipient }
-  directmessages   ->  { from: ObjectId, to: ObjectId, content: String, timestamps }
+  directmessages   ->  { from: ObjectId, to: ObjectId, content: String, read: Boolean,
+                         timestamps }
+  notifications    ->  { recipient: ObjectId, type: String, fromUserId: String,
+                         fromUserName: String, data: Mixed, read: Boolean, timestamps }
+                       TTL index on createdAt: auto-deleted after 10 days

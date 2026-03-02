@@ -17,6 +17,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 | **Auth**             | JWT + bcrypt                           |
 | **Streaming**        | FFmpeg (RTMP to YouTube Live)          |
 | **Audio Viz**        | P5.js                                  |
+| **News Feed**        | Mock articles (AI / Tech / Productivity categories, 30-min cache) |
 
 ## Features
 
@@ -50,6 +51,25 @@ A full-stack web application for creating virtual study group spaces with real-t
 - Real-time messaging powered by Socket.IO
 - Deterministic socket room naming (`dm_{sortedUserIds}`)
 - Message history stored in MongoDB (last 50 loaded on open)
+- **Full message delivery pipeline**: `pending → delivered → read`
+  - 🕐 Clock = sending (optimistic, before server ack)
+  - ✓ Single tick = delivered (saved to DB)
+  - ✓✓ Double tick = read (recipient opened the panel)
+- Unread badge (green ring on avatar) **persists across refreshes** — restored from `GET /dm/unread-counts` on mount
+- `dm:markRead` socket event instantly notifies sender when recipient opens the conversation
+
+### Persistent Notifications
+
+- Bell icon in navbar with real-time unread badge
+- **Stored in MongoDB** with a 10-day TTL — notifications survive page refreshes and logouts
+- Three notification types:
+  - `companion_request` — someone sent you a companion request
+  - `companion_accepted` — your companion request was accepted
+  - `room_invite` — a companion invited you to their study room (including missed invites when offline)
+- Per-notification Read/Unread state — click to mark read, "Mark all read" bulk action
+- Real-time push via `notification:new` socket event when online
+- Fetched via `GET /notifications` on app load when offline delivery occurred
+- Animated dropdown with relative timestamps, per-type icons, and inline delete
 
 ### Video Calling (Agora RTC)
 
@@ -205,7 +225,13 @@ VITE_API_URL=http://localhost:7002
 | GET    | `/news`                | Get news feed articles       |
 | POST   | `/ai/ask`              | Ask Grok a study question    |
 | POST   | `/ai/summary`          | Generate session summary     |
-| GET    | `/dm/:companionId`     | Get DM history               |
+| GET    | `/dm/:companionId`          | Get DM history (includes `_id`, `read` state) |
+| GET    | `/dm/unread-counts`         | Get unread message count per companion         |
+| PATCH  | `/dm/:companionId/read`     | Mark all messages from companion as read       |
+| GET    | `/notifications`            | Get all notifications (last 50, newest first)  |
+| PATCH  | `/notifications/:id/read`   | Mark a notification as read                    |
+| PATCH  | `/notifications/read-all`   | Mark all notifications as read                 |
+| DELETE | `/notifications/:id`        | Delete a notification                          |
 
 ## License
 
