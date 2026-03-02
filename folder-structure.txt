@@ -121,10 +121,21 @@ virtual_study_group/
         |   |-- LandingPage.tsx      # Hero page with animated CTAs
         |   |-- AuthPage.tsx         # Auth layout wrapper with background image,
         |   |                          renders Login or Register as children
-        |   |-- RoomPage.tsx         # Home dashboard - companion presence bar,
-        |   |                          "Let's study together" CTA, Inshorts-style
-        |   |                          news feed with category filters, Add Companion
-        |   |                          modal with user search, DM panel integration
+        |   |-- RoomPage.tsx         # Home dashboard with:
+        |   |                          - Global people search bar (blurred dummy
+        |   |                            preview when logged out, live search when
+        |   |                            logged in with Add companion buttons)
+        |   |                          - Companion requests section (accept/decline
+        |   |                            cards, fetched from /companion/pending,
+        |   |                            real-time via companion:requestReceived)
+        |   |                          - Study companions bar with online/offline
+        |   |                            dots and green ring for unread DMs
+        |   |                            (tracked via dm:receive socket listener)
+        |   |                          - "Ready to study?" CTA card
+        |   |                          - News feed with category filters, controlled
+        |   |                            by VITE_NEWS_IMAGES_ONLY env var
+        |   |                          - Add Companion modal with user search
+        |   |                          - DM panel integration
         |   |-- RoomCallPage.tsx     # Video call page - Agora RTC integration,
         |   |                          mic/camera controls, remote user streams.
         |   |                          Tab panel: Chat / AI Doubt / Summary.
@@ -143,7 +154,10 @@ virtual_study_group/
         |   |                          after registration, dispatches + connectSocket
         |   |-- Navbar.tsx           # Collapsible sidebar (not top bar) - hamburger
         |   |                          toggle, framer-motion spring animation,
-        |   |                          "My Room" item, active route highlighting
+        |   |                          "My Room" item, active route highlighting.
+        |   |                          Profile avatar (top-right) with dropdown:
+        |   |                          My Profile, Settings, My Room, Ask AI,
+        |   |                          Logout. Login icon shown when logged out
         |   |-- NavbarCall.tsx       # Minimal navbar for in-call view with exit button
         |   |-- ChatComponent.tsx    # Real-time chat widget - uses getSocket()
         |   |                          singleton, room-based messaging, lifts messages
@@ -194,12 +208,15 @@ virtual_study_group/
         |   |-- companionStore/
         |       |-- companionSlice.ts # Companion slice: { companions, pendingRequests }.
         |                              Actions: setCompanions, setOnline, setOffline,
-        |                              addPendingRequest, removePendingRequest, addCompanion
+        |                              setPendingRequests, addPendingRequest,
+        |                              removePendingRequest, addCompanion
         |
         |-- utils/                   # Utility functions
         |   |-- socketInstance.ts    # Socket.IO singleton - connectSocket(token),
         |   |                          getSocket(), disconnectSocket(). All components
         |   |                          share one connection with JWT auth
+        |   |-- useDarkMode.ts      # Dark mode hook - toggles 'dark' class on
+        |   |                          document, persists preference
         |   |-- roomCallUtils.ts     # Room call utilities (empty, placeholder)
         |
         |-- helpers/                 # Helper scripts
@@ -209,7 +226,7 @@ virtual_study_group/
 ENV CONFIGURATION
 =================
   backend/.env   ->  MONGODB_URI, PORT, JWT_SECRET, GROK_API_KEY
-  frontend/.env  ->  VITE_API_URL
+  frontend/.env  ->  VITE_API_URL, VITE_STREAM_SOCKET_URL, VITE_NEWS_IMAGES_ONLY
 
 
 API ROUTES SUMMARY
