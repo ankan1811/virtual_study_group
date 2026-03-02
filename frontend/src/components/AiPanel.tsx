@@ -18,13 +18,8 @@ interface AiPanelProps {
   chatMessages: Message[];
 }
 
-// Web Speech API type declarations
-declare global {
-  interface Window {
-    SpeechRecognition: new () => SpeechRecognition;
-    webkitSpeechRecognition: new () => SpeechRecognition;
-  }
-}
+// Web Speech API type shim
+type SpeechRecognitionAny = any;
 
 export default function AiPanel({ tab, chatMessages }: AiPanelProps) {
   const [input, setInput] = useState("");
@@ -33,12 +28,12 @@ export default function AiPanel({ tab, chatMessages }: AiPanelProps) {
   const [summary, setSummary] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionAny>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const SpeechRecognitionAPI =
+  const SpeechRecognitionAPI: any =
     typeof window !== "undefined"
-      ? window.SpeechRecognition || window.webkitSpeechRecognition
+      ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
       : null;
 
   const startListening = () => {
@@ -46,7 +41,7 @@ export default function AiPanel({ tab, chatMessages }: AiPanelProps) {
     const recognition = new SpeechRecognitionAPI();
     recognition.lang = "en-US";
     recognition.interimResults = false;
-    recognition.onresult = (e: SpeechRecognitionEvent) => {
+    recognition.onresult = (e: any) => {
       const transcript = e.results[0][0].transcript;
       setInput((prev) => (prev ? prev + " " + transcript : transcript));
     };

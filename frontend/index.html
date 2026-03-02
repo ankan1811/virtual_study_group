@@ -7,6 +7,9 @@
 		<title>Virtual group study</title>
 	</head>
 	<body>
+		<script>
+			(function(){var t=localStorage.getItem('theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme:dark)').matches)){document.documentElement.classList.add('dark')}})();
+		</script>
 		<div id="root"></div>
 		<script src="https://cdn.jsdelivr.net/npm/p5@1.9.2/lib/p5.js"></script>
 		<script src="https://cdn.jsdelivr.net/npm/p5@1.9.2/lib/addons/p5.sound.js"></script>

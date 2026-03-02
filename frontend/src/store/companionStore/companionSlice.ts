@@ -23,13 +23,19 @@ const companionSlice = createSlice({
     setCompanions(state, action: PayloadAction<{ userId: string; name: string }[]>) {
       state.companions = action.payload.map((c) => ({ ...c, isOnline: false }));
     },
-    setOnline(state, action: PayloadAction<{ userId: string; name: string }>) {
-      const c = state.companions.find((c) => c.userId === action.payload.userId);
+    setOnline(state, action: PayloadAction<string>) {
+      const c = state.companions.find((c) => c.userId === action.payload);
       if (c) c.isOnline = true;
     },
-    setOffline(state, action: PayloadAction<{ userId: string }>) {
-      const c = state.companions.find((c) => c.userId === action.payload.userId);
+    setOffline(state, action: PayloadAction<string>) {
+      const c = state.companions.find((c) => c.userId === action.payload);
       if (c) c.isOnline = false;
+    },
+    setPendingRequests(
+      state,
+      action: PayloadAction<{ requesterId: string; requesterName: string }[]>
+    ) {
+      state.pendingRequests = action.payload;
     },
     addPendingRequest(
       state,
@@ -56,6 +62,7 @@ export const {
   setCompanions,
   setOnline,
   setOffline,
+  setPendingRequests,
   addPendingRequest,
   removePendingRequest,
   addCompanion,

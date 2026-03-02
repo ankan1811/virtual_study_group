@@ -3,12 +3,13 @@ VIRTUAL STUDY GROUP - FOLDER STRUCTURE
 
 virtual_study_group/
 |
-|-- readme.md                        # Project documentation (features, setup, routes)
+|-- README.md                        # Project documentation (features, setup, routes, API)
 |-- folder-structure.txt             # This file - explains the project structure
 |-- LICENSE                          # GNU General Public License v3.0
 |
 |-- backend/                         # Node.js + Express + TypeScript backend
-|   |-- .env                         # Environment variables (MONGO_URI, JWT_SECRET)
+|   |-- .env                         # Environment variables (MONGODB_URI, JWT_SECRET,
+|   |                                  PORT, GROK_API_KEY)
 |   |-- .gitignore                   # Git ignore rules for backend
 |   |-- package.json                 # Backend dependencies and scripts
 |   |-- tsconfig.json                # TypeScript configuration for backend
@@ -17,35 +18,59 @@ virtual_study_group/
 |       |
 |       |-- server.ts                # Main entry point - Express app setup, MongoDB
 |       |                              connection, CORS config, route mounting.
-|       |                              Port configured via backend/.env (PORT)
+|       |                              Registers all 8 route groups. Port via .env (PORT)
 |       |
-|       |-- socketServer.ts          # Socket.IO server for real-time chat.
-|       |                              Attached to the same HTTP server as Express.
-|       |                              Handles joinRoom and serverMessage events.
+|       |-- socketServer.ts          # Socket.IO server with JWT auth middleware.
+|       |                              Handles: room chat, invites (companion-gated),
+|       |                              companion events, DM rooms, presence tracking.
+|       |                              Exports: getIO(), getSocketIdForUser()
+|       |                              Uses userSocketMap (userId -> socketId)
 |       |
 |       |-- socketServer2.ts         # Socket.IO server for live streaming.
 |       |                              Spawns FFmpeg child process for RTMP output.
 |       |                              Handles binary stream data from frontend.
-|       |                              Port configured via frontend/.env (VITE_STREAM_SOCKET_URL)
 |       |
 |       |-- controllers/             # Request handlers (business logic)
-|       |   |-- AuthController.ts    # Register (bcrypt hash) and Login (JWT sign)
+|       |   |-- AuthController.ts    # Register (bcrypt hash) and Login (JWT sign).
+|       |   |                          Both return { token, name, userId }
 |       |   |-- RoomController.ts    # Create room, join room, get room users
 |       |   |-- ChatController.ts    # Add chat message, get chat history, get user name
+|       |   |-- CompanionController.ts # Send/accept/decline companion requests,
+|       |   |                          get companion list, get pending requests.
+|       |   |                          Emits real-time socket notifications
+|       |   |-- UserController.ts    # Search users by name/email (case-insensitive,
+|       |   |                          excludes self, limit 10)
+|       |   |-- AiController.ts      # Grok AI integration via OpenAI SDK.
+|       |   |                          POST /ai/ask (question -> answer)
+|       |   |                          POST /ai/summary (messages -> summary)
+|       |   |                          Model: grok-3-mini, baseURL: api.x.ai/v1
+|       |   |-- DmController.ts      # Get DM history between two users.
+|       |   |                          Returns last 50 messages sorted by createdAt
+|       |   |-- NewsController.ts    # Returns 12 mock news articles across
+|       |                              AI, Tech, Productivity categories
 |       |
 |       |-- routes/                  # Express route definitions
 |       |   |-- authRoutes.ts        # /auth/register, /auth/login
 |       |   |-- roomRoutes.ts        # /room/create, /room/join/:room_id, /room/users/:room_id
 |       |   |-- chatRoutes.ts        # /chat/join, /chat/add, /chat/view/:room_id
+|       |   |-- companionRoutes.ts   # /companion/request, /companion/accept,
+|       |   |                          /companion/decline, /companion/list, /companion/pending
+|       |   |-- userRoutes.ts        # /user/search?q=
+|       |   |-- aiRoutes.ts          # /ai/ask, /ai/summary
+|       |   |-- dmRoutes.ts          # /dm/:companionId
+|       |   |-- newsRoutes.ts        # /news
 |       |
 |       |-- models/                  # Mongoose schemas and models
 |       |   |-- User.ts              # User model: name, email (unique), password (hashed)
 |       |   |-- Room.ts              # Room model: users[] (references User)
 |       |   |-- Chat.ts              # Chat model: sendBy (User ref), message, room_id (Room ref)
+|       |   |-- Companion.ts         # Companion model: requester, recipient (User refs),
+|       |   |                          status ('pending'|'accepted'). Unique compound index
+|       |   |-- DirectMessage.ts     # DM model: from, to (User refs), content, timestamps
 |       |
 |       |-- middlewares/             # Express middleware
 |           |-- middleware.ts        # JWT token verification - extracts userId from
-|                                      Authorization header, attaches to request object
+|                                      Authorization header. Exports AuthenticatedRequest
 
 |
 |-- frontend/                        # React 18 + TypeScript + Vite frontend
@@ -56,7 +81,7 @@ virtual_study_group/
     |-- tsconfig.node.json           # TypeScript config for Vite/Node tooling
     |-- vite.config.ts               # Vite bundler configuration
     |-- postcss.config.js            # PostCSS config (used by Tailwind)
-    |-- tailwind.config.js           # Tailwind CSS configuration and theme
+    |-- tailwind.config.js           # Tailwind CSS config (ESM default export)
     |-- components.json              # shadcn/ui component configuration
     |-- index.html                   # HTML entry point for Vite
     |
@@ -77,8 +102,9 @@ virtual_study_group/
     |-- src/                         # Main application source code
         |
         |-- main.tsx                 # React app entry point, renders App into DOM
-        |-- App.tsx                  # Root component - React Router setup with all
-        |                              routes, Redux Provider wrapping the app
+        |-- App.tsx                  # Root component - split into AppInner + App.
+        |                              JWT rehydration on refresh, mounts overlays,
+        |                              Redux Provider + Router wrapping
         |-- App.css                  # Global app styles
         |-- index.css                # Tailwind directives and base styles
         |-- vite-env.d.ts            # Vite TypeScript type declarations
@@ -92,13 +118,17 @@ virtual_study_group/
         |   |-- react.svg            # React logo
         |
         |-- pages/                   # Top-level page components (one per route)
-        |   |-- LandingPage.tsx      # Hero page with animated CTAs - join random
-        |   |                          room or enter private room ID
+        |   |-- LandingPage.tsx      # Hero page with animated CTAs
         |   |-- AuthPage.tsx         # Auth layout wrapper with background image,
         |   |                          renders Login or Register as children
-        |   |-- RoomPage.tsx         # Room dashboard - create/join rooms with ID input
+        |   |-- RoomPage.tsx         # Home dashboard - companion presence bar,
+        |   |                          "Let's study together" CTA, Inshorts-style
+        |   |                          news feed with category filters, Add Companion
+        |   |                          modal with user search, DM panel integration
         |   |-- RoomCallPage.tsx     # Video call page - Agora RTC integration,
-        |   |                          mic/camera controls, remote user streams
+        |   |                          mic/camera controls, remote user streams.
+        |   |                          Tab panel: Chat / AI Doubt / Summary.
+        |   |                          RoomId from Redux (not localStorage)
         |   |-- Streampage.tsx       # Live streaming page - camera preview, YouTube
         |   |                          stream key input, start/stop controls
         |   |-- AskAiPage.tsx        # AI voice input page - mic component with
@@ -107,15 +137,31 @@ virtual_study_group/
         |                              interface with message display
         |
         |-- components/              # Reusable React components
-        |   |-- Login.tsx            # Login form - email/password, axios POST to
-        |   |                          /auth/login, stores JWT in localStorage
+        |   |-- Login.tsx            # Login form - email/password, dispatches
+        |   |                          login({ name, userId }), calls connectSocket
         |   |-- Register.tsx         # Register form - name/email/password, auto-login
-        |   |                          after registration
-        |   |-- Navbar.tsx           # Main navigation bar - links to Home, Streaming,
-        |   |                          Ask AI, Contact. Shows Login/Logout button
+        |   |                          after registration, dispatches + connectSocket
+        |   |-- Navbar.tsx           # Collapsible sidebar (not top bar) - hamburger
+        |   |                          toggle, framer-motion spring animation,
+        |   |                          "My Room" item, active route highlighting
         |   |-- NavbarCall.tsx       # Minimal navbar for in-call view with exit button
-        |   |-- ChatComponent.tsx    # Real-time chat widget - Socket.IO on port 7000,
-        |   |                          room-based messaging, styled message bubbles
+        |   |-- ChatComponent.tsx    # Real-time chat widget - uses getSocket()
+        |   |                          singleton, room-based messaging, lifts messages
+        |   |                          to parent via onMessagesChange prop
+        |   |-- DmPanel.tsx          # Slide-in DM panel from right - loads history
+        |   |                          via GET /dm/:companionId, real-time via
+        |   |                          dm:join + dm:send + dm:receive socket events
+        |   |-- AiPanel.tsx          # AI panel with two modes:
+        |   |                          - "ai" tab: Grok doubt solver (text + voice
+        |   |                            via Web Speech API), Q&A history cards
+        |   |                          - "summary" tab: generates session summary
+        |   |                            from chat messages via POST /ai/summary
+        |   |-- InviteNotificationOverlay.tsx  # Animated banner for incoming room
+        |   |                          invites. Accept navigates to /room/call,
+        |   |                          Decline dismisses. Socket: receiveInvite
+        |   |-- CompanionRequestOverlay.tsx    # Queue-based overlay for companion
+        |   |                          requests. Accept calls POST /companion/accept
+        |   |                          + emits companion:acceptNotify
         |   |-- Messages.tsx         # Placeholder message component for AI demo page
         |   |-- Stream.tsx           # Video stream grid - up to 5 video slots,
         |   |                          camera/mic/screenshare controls, expandable view
@@ -133,14 +179,27 @@ virtual_study_group/
         |
         |-- store/                   # Redux Toolkit state management
         |   |-- authStore/
-        |   |   |-- store.ts         # Auth store configuration with configureStore
-        |   |   |-- authSlice.ts     # Auth slice: login/logout actions,
-        |   |                          isAuthenticated + user state
+        |   |   |-- store.ts         # Combined store config - 4 reducers: auth,
+        |   |   |                      room, invite, companion. Exports RootState,
+        |   |   |                      AppDispatch, AuthState (backwards-compat alias)
+        |   |   |-- authSlice.ts     # Auth slice: login/logout actions.
+        |   |                          AuthUser: { name, userId, roomId }
         |   |-- RoomStore/
-        |       |-- store.ts         # Room store (placeholder, not yet implemented)
-        |       |-- roomSlice.ts     # Room slice (placeholder)
+        |   |   |-- store.ts         # Room store (legacy, unused - store is combined)
+        |   |   |-- roomSlice.ts     # Room slice: { currentRoomId, isOwner }.
+        |   |                          Actions: enterRoom, leaveRoom
+        |   |-- inviteStore/
+        |   |   |-- inviteSlice.ts   # Invite slice: { pendingInvite }.
+        |   |                          Actions: receiveInvite, clearInvite
+        |   |-- companionStore/
+        |       |-- companionSlice.ts # Companion slice: { companions, pendingRequests }.
+        |                              Actions: setCompanions, setOnline, setOffline,
+        |                              addPendingRequest, removePendingRequest, addCompanion
         |
         |-- utils/                   # Utility functions
+        |   |-- socketInstance.ts    # Socket.IO singleton - connectSocket(token),
+        |   |                          getSocket(), disconnectSocket(). All components
+        |   |                          share one connection with JWT auth
         |   |-- roomCallUtils.ts     # Room call utilities (empty, placeholder)
         |
         |-- helpers/                 # Helper scripts
@@ -149,15 +208,15 @@ virtual_study_group/
 
 ENV CONFIGURATION
 =================
-  backend/.env   ->  PORT, MONGODB_URI, JWT_SECRET
-  frontend/.env  ->  VITE_API_URL, VITE_STREAM_SOCKET_URL
+  backend/.env   ->  MONGODB_URI, PORT, JWT_SECRET, GROK_API_KEY
+  frontend/.env  ->  VITE_API_URL
 
 
 API ROUTES SUMMARY
 ==================
   Auth:
-    POST   /auth/register           Register new user
-    POST   /auth/login              Login and receive JWT
+    POST   /auth/register           Register new user (returns token, name, userId)
+    POST   /auth/login              Login (returns token, name, userId)
 
   Rooms:
     POST   /room/create             Create room or add user to existing room
@@ -169,9 +228,60 @@ API ROUTES SUMMARY
     POST   /chat/add                Send a chat message (emits via Socket.IO)
     GET    /chat/view/:room_id      Get chat history for a room
 
+  Companions:
+    POST   /companion/request       Send companion request
+    POST   /companion/accept        Accept companion request
+    POST   /companion/decline       Decline companion request
+    GET    /companion/list          Get accepted companions
+    GET    /companion/pending       Get pending requests
+
+  Users:
+    GET    /user/search?q=          Search users by name/email
+
+  AI (Grok):
+    POST   /ai/ask                  Ask Grok a study question
+    POST   /ai/summary             Generate AI summary of chat messages
+
+  DMs:
+    GET    /dm/:companionId         Get DM history (last 50 messages)
+
+  News:
+    GET    /news                    Get mock news feed articles
+
+
+SOCKET EVENTS
+=============
+  Room Chat:
+    joinRoom              Client joins a room (emits bot welcome)
+    serverMessage         Client sends message (broadcast to room)
+    message:{roomId}      Server sends message to room
+
+  Invites (companion-gated):
+    sendInvite            Client invites a companion to their room
+    receiveInvite         Server notifies target of invite
+    acceptInvite          Client accepts invite (joins room)
+    declineInvite         Client declines invite
+    inviteError           Server reports invite failure
+
+  Companions:
+    companion:sendRequest      Client sends companion request
+    companion:requestReceived  Server notifies target of request
+    companion:acceptNotify     Client notifies requester of acceptance
+    companion:accepted         Server confirms acceptance to requester
+    companion:online           Server broadcasts user online
+    companion:offline          Server broadcasts user offline
+
+  DMs:
+    dm:join               Client joins DM room (dm_{sortedIds})
+    dm:send               Client sends DM message
+    dm:receive            Server broadcasts DM to room
+
 
 DATABASE COLLECTIONS
 ====================
-  users    ->  { name, email (unique), password (bcrypt hash) }
-  rooms    ->  { users: [ObjectId -> User] }
-  chats    ->  { sendBy: ObjectId -> User, message: String, room_id: ObjectId -> Room }
+  users            ->  { name, email (unique), password (bcrypt hash) }
+  rooms            ->  { users: [ObjectId -> User] }
+  chats            ->  { sendBy: ObjectId -> User, message: String, room_id: ObjectId -> Room }
+  companions       ->  { requester: ObjectId, recipient: ObjectId, status: 'pending'|'accepted' }
+                       Unique compound index on { requester, recipient }
+  directmessages   ->  { from: ObjectId, to: ObjectId, content: String, timestamps }

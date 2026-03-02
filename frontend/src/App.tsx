@@ -2,8 +2,6 @@ import React, { useEffect } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import "./App.css";
 import AuthPage from "./pages/AuthPage";
-import Login from "./components/Login";
-import Register from "./components/Register";
 import RoomPage from "./pages/RoomPage";
 import RoomCallPage from "./pages/RoomCallPage";
 import LandingPage from "./pages/LandingPage";
@@ -45,22 +43,8 @@ function AppInner() {
         <Route element={<Streampage />} path="/stream" />
         <Route element={<AskAiPage />} path="/ask" />
         <Route element={<DemoAiPage />} path="/demo" />
-        <Route
-          element={
-            <AuthPage>
-              <Login />
-            </AuthPage>
-          }
-          path="/login"
-        />
-        <Route
-          element={
-            <AuthPage>
-              <Register />
-            </AuthPage>
-          }
-          path="/register"
-        />
+        <Route element={<AuthPage />} path="/login" />
+        <Route element={<AuthPage />} path="/register" />
         <Route element={<RoomCallPage />} path="/room/call" />
       </Routes>
     </BrowserRouter>

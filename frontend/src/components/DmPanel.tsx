@@ -87,17 +87,17 @@ export default function DmPanel({ companionId, companionName, onClose }: DmPanel
         animate={{ opacity: 1, x: 0 }}
         exit={{ opacity: 0, x: 320 }}
         transition={{ type: "spring", damping: 26, stiffness: 220 }}
-        className="fixed right-0 top-0 h-full w-80 bg-white shadow-2xl z-[120] flex flex-col border-l border-gray-100"
+        className="fixed right-0 top-0 h-full w-80 bg-white dark:bg-gray-900 shadow-2xl z-[120] flex flex-col border-l border-gray-100 dark:border-gray-800"
       >
         {/* Header */}
         <div className="h-1 w-full bg-gradient-to-r from-indigo-500 to-violet-500" />
-        <div className="flex items-center justify-between px-4 py-3.5 border-b border-gray-100">
+        <div className="flex items-center justify-between px-4 py-3.5 border-b border-gray-100 dark:border-gray-800">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white text-xs font-bold poppins-semibold">
               {getInitials(companionName)}
             </div>
             <div>
-              <p className="text-sm font-semibold text-gray-800 poppins-semibold leading-none">
+              <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 poppins-semibold leading-none">
                 {companionName}
               </p>
             </div>
@@ -118,7 +118,7 @@ export default function DmPanel({ companionId, companionName, onClose }: DmPanel
             </div>
           ) : messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center">
-              <p className="text-sm text-gray-400 poppins-regular">
+              <p className="text-sm text-gray-400 dark:text-gray-500 poppins-regular">
                 No messages yet.
                 <br />
                 Say hello!
@@ -136,7 +136,7 @@ export default function DmPanel({ companionId, companionName, onClose }: DmPanel
                     className={`max-w-[70%] px-3 py-2 rounded-2xl text-sm poppins-regular shadow-sm ${
                       isMe
                         ? "bg-indigo-600 text-white rounded-br-sm"
-                        : "bg-gray-100 text-gray-800 rounded-bl-sm"
+                        : "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-bl-sm"
                     }`}
                   >
                     <p>{msg.content}</p>
@@ -149,14 +149,14 @@ export default function DmPanel({ companionId, companionName, onClose }: DmPanel
         </div>
 
         {/* Input */}
-        <div className="px-3 py-3 border-t border-gray-100 flex gap-2 items-center">
+        <div className="px-3 py-3 border-t border-gray-100 dark:border-gray-800 flex gap-2 items-center">
           <input
             type="text"
             placeholder="Type a message..."
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="flex-1 px-3.5 py-2 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-transparent poppins-regular"
+            className="flex-1 px-3.5 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-transparent poppins-regular"
           />
           <button
             onClick={sendMessage}

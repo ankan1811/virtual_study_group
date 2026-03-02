@@ -10,11 +10,12 @@ import {
   ExternalLink,
   MessageCircle,
   DoorOpen,
-  BookOpen,
   Wifi,
   WifiOff,
   Loader2,
   CheckCircle,
+  Sparkles,
+  Bell,
 } from "lucide-react";
 import Navbar from "../components/Navbar";
 import DmPanel from "../components/DmPanel";
@@ -24,6 +25,9 @@ import {
   setOnline,
   setOffline,
   addPendingRequest,
+  setPendingRequests,
+  removePendingRequest,
+  addCompanion,
 } from "../store/companionStore/companionSlice";
 import { enterRoom } from "../store/RoomStore/roomSlice";
 import { getSocket } from "../utils/socketInstance";
@@ -36,6 +40,7 @@ interface NewsArticle {
   source: string;
   readTime: string;
   url: string;
+  imageUrl?: string;
   accentColor: string;
   publishedAt: string;
 }
@@ -46,20 +51,59 @@ interface SearchUser {
   email: string;
 }
 
+// Dummy companions shown when logged out
+const dummyCompanions = [
+  { userId: "d1", name: "Aarav Sharma", isOnline: true },
+  { userId: "d2", name: "Priya Patel", isOnline: true },
+  { userId: "d3", name: "Noah Williams", isOnline: false },
+  { userId: "d4", name: "Sakura Tanaka", isOnline: true },
+  { userId: "d5", name: "Liam Chen", isOnline: false },
+  { userId: "d6", name: "Emma Rodriguez", isOnline: true },
+  { userId: "d7", name: "Arjun Mehta", isOnline: false },
+  { userId: "d8", name: "Sofia Martinez", isOnline: true },
+];
+
+// Dummy companions that should show a green "unread" ring in logged-out preview
+const dummyUnreadIds = new Set(["d2", "d4", "d8"]);
+
+// Dummy search preview for logged-out state
+const dummySearchPeople = [
+  { userId: "sp1", name: "Rohan Gupta", email: "rohan.g@study.com" },
+  { userId: "sp2", name: "Chloe Martin", email: "chloe.m@study.com" },
+  { userId: "sp3", name: "Kiran Nair", email: "kiran.n@study.com" },
+];
+
 export default function RoomPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const user = useSelector((state: AuthState) => state.auth.user);
+  const isAuthenticated = useSelector(
+    (state: AuthState) => state.auth.isAuthenticated
+  );
   const companions = useSelector(
     (state: AuthState) => state.companion.companions
   );
+  const pendingRequests = useSelector(
+    (state: AuthState) => state.companion.pendingRequests
+  );
 
   const [news, setNews] = useState<NewsArticle[]>([]);
-  const [newsFilter, setNewsFilter] = useState<"All" | "AI" | "Tech" | "Productivity">("All");
+  const [newsFilter, setNewsFilter] = useState<
+    "All" | "AI" | "Tech" | "Productivity"
+  >("All");
   const [newsLoading, setNewsLoading] = useState(true);
 
   // DM panel state
-  const [dmTarget, setDmTarget] = useState<{ userId: string; name: string } | null>(null);
+  const [dmTarget, setDmTarget] = useState<{
+    userId: string;
+    name: string;
+  } | null>(null);
+  // Keep a ref so socket listeners can read current dmTarget without stale closure
+  const dmTargetRef = useRef<{ userId: string; name: string } | null>(null);
+  dmTargetRef.current = dmTarget;
+
+  // Unread DM tracking — userId set
+  const [unreadDmFrom, setUnreadDmFrom] = useState<Set<string>>(new Set());
 
   // Companion popover
   const [openPopover, setOpenPopover] = useState<string | null>(null);
@@ -72,62 +116,114 @@ export default function RoomPage() {
   const [sentRequests, setSentRequests] = useState<Set<string>>(new Set());
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Invite feedback
+  // Global people search (inline on page)
+  const [globalSearchQuery, setGlobalSearchQuery] = useState("");
+  const [globalSearchResults, setGlobalSearchResults] = useState<SearchUser[]>([]);
+  const [globalSearchLoading, setGlobalSearchLoading] = useState(false);
+  const globalSearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [globalSentRequests, setGlobalSentRequests] = useState<Set<string>>(new Set());
+
+  // Invite / status toast
   const [inviteStatus, setInviteStatus] = useState<{
     msg: string;
     type: "success" | "error";
   } | null>(null);
 
-  // Fetch companions + news on mount
+  // ── Fetch on mount ──────────────────────────────────────────────────────────
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    if (isAuthenticated) {
+      const token = localStorage.getItem("token");
 
-    axios
-      .get(`${import.meta.env.VITE_API_URL}/companion/list`, {
-        headers: { Authorization: token || "" },
-      })
-      .then((res) => {
-        dispatch(setCompanions(res.data));
-      })
-      .catch(console.error);
+      // Companion list — API returns { companions: [...] }
+      axios
+        .get(`${import.meta.env.VITE_API_URL}/companion/list`, {
+          headers: { Authorization: token || "" },
+        })
+        .then((res) => dispatch(setCompanions(res.data.companions || res.data)))
+        .catch(console.error);
 
+      // Pending companion requests
+      axios
+        .get(`${import.meta.env.VITE_API_URL}/companion/pending`, {
+          headers: { Authorization: token || "" },
+        })
+        .then((res) => {
+          const reqs = res.data.requests || res.data;
+          if (Array.isArray(reqs)) dispatch(setPendingRequests(reqs));
+        })
+        .catch(console.error);
+    }
+
+    // News — no auth needed
     axios
       .get(`${import.meta.env.VITE_API_URL}/news`)
       .then((res) => {
-        setNews(res.data);
+        const data = res.data;
+        setNews(Array.isArray(data) ? data : data.articles || []);
       })
       .catch(console.error)
       .finally(() => setNewsLoading(false));
-  }, [dispatch]);
+  }, [dispatch, isAuthenticated]);
 
-  // Socket presence listeners
+  // ── Socket listeners ────────────────────────────────────────────────────────
   useEffect(() => {
+    if (!isAuthenticated) return;
     const socket = getSocket();
     if (!socket) return;
 
-    const onOnline = ({ userId }: { userId: string }) => dispatch(setOnline(userId));
-    const onOffline = ({ userId }: { userId: string }) => dispatch(setOffline(userId));
+    const onOnline = ({ userId }: { userId: string }) =>
+      dispatch(setOnline(userId));
+    const onOffline = ({ userId }: { userId: string }) =>
+      dispatch(setOffline(userId));
     const onInviteError = ({ message }: { message: string }) => {
       setInviteStatus({ msg: message, type: "error" });
       setTimeout(() => setInviteStatus(null), 3000);
     };
-    const onRequestReceived = (data: { requesterId: string; requesterName: string }) => {
-      dispatch(addPendingRequest(data));
+    const onRequestReceived = (data: {
+      requesterId: string;
+      requesterName: string;
+    }) => dispatch(addPendingRequest(data));
+
+    const onCompanionAccepted = ({
+      acceptorId,
+      acceptorName,
+    }: {
+      acceptorId: string;
+      acceptorName: string;
+    }) => {
+      dispatch(addCompanion({ userId: acceptorId, name: acceptorName }));
+      setInviteStatus({
+        msg: `${acceptorName} accepted your companion request!`,
+        type: "success",
+      });
+      setTimeout(() => setInviteStatus(null), 4000);
+    };
+
+    // Mark companion as having unread DMs when panel isn't open for them
+    const onDmReceive = (msg: { from: string }) => {
+      if (!dmTargetRef.current || dmTargetRef.current.userId !== msg.from) {
+        setUnreadDmFrom((prev) => new Set(prev).add(msg.from));
+      }
     };
 
     socket.on("companion:online", onOnline);
     socket.on("companion:offline", onOffline);
     socket.on("inviteError", onInviteError);
     socket.on("companion:requestReceived", onRequestReceived);
+    socket.on("companion:accepted", onCompanionAccepted);
+    socket.on("dm:receive", onDmReceive);
 
     return () => {
       socket.off("companion:online", onOnline);
       socket.off("companion:offline", onOffline);
       socket.off("inviteError", onInviteError);
       socket.off("companion:requestReceived", onRequestReceived);
+      socket.off("companion:accepted", onCompanionAccepted);
+      socket.off("dm:receive", onDmReceive);
     };
-  }, [dispatch]);
+  }, [dispatch, isAuthenticated]);
 
+  // ── Actions ─────────────────────────────────────────────────────────────────
   const enterMyRoom = () => {
     if (!user?.roomId) return;
     dispatch(enterRoom({ roomId: user.roomId, isOwner: true }));
@@ -150,16 +246,19 @@ export default function RoomPage() {
   const openDm = (companionId: string, companionName: string) => {
     setDmTarget({ userId: companionId, name: companionName });
     setOpenPopover(null);
+    // Clear unread badge for this companion
+    setUnreadDmFrom((prev) => {
+      const next = new Set(prev);
+      next.delete(companionId);
+      return next;
+    });
   };
 
-  // Search users (debounced)
+  // Modal search (debounced)
   const handleSearchChange = (q: string) => {
     setSearchQuery(q);
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
-    if (!q.trim()) {
-      setSearchResults([]);
-      return;
-    }
+    if (!q.trim()) { setSearchResults([]); return; }
     setSearchLoading(true);
     searchTimeout.current = setTimeout(async () => {
       const token = localStorage.getItem("token");
@@ -169,15 +268,32 @@ export default function RoomPage() {
           { headers: { Authorization: token || "" } }
         );
         setSearchResults(res.data);
-      } catch {
-        setSearchResults([]);
-      } finally {
-        setSearchLoading(false);
-      }
+      } catch { setSearchResults([]); }
+      finally { setSearchLoading(false); }
     }, 400);
   };
 
-  const sendCompanionRequest = async (targetUserId: string) => {
+  // Global page search (debounced)
+  const handleGlobalSearch = (q: string) => {
+    setGlobalSearchQuery(q);
+    if (globalSearchTimeout.current) clearTimeout(globalSearchTimeout.current);
+    if (!q.trim()) { setGlobalSearchResults([]); return; }
+    if (!isAuthenticated) return;
+    setGlobalSearchLoading(true);
+    globalSearchTimeout.current = setTimeout(async () => {
+      const token = localStorage.getItem("token");
+      try {
+        const res = await axios.get(
+          `${import.meta.env.VITE_API_URL}/user/search?q=${encodeURIComponent(q)}`,
+          { headers: { Authorization: token || "" } }
+        );
+        setGlobalSearchResults(res.data);
+      } catch { setGlobalSearchResults([]); }
+      finally { setGlobalSearchLoading(false); }
+    }, 400);
+  };
+
+  const sendCompanionRequest = async (targetUserId: string, fromModal = false) => {
     const token = localStorage.getItem("token");
     try {
       await axios.post(
@@ -185,42 +301,75 @@ export default function RoomPage() {
         { targetUserId },
         { headers: { Authorization: token || "" } }
       );
-      setSentRequests((prev) => new Set(prev).add(targetUserId));
-      // Also emit via socket for real-time notification
-      const socket = getSocket();
-      socket?.emit("companion:sendRequest", { targetUserId });
+      if (fromModal) setSentRequests((prev) => new Set(prev).add(targetUserId));
+      else setGlobalSentRequests((prev) => new Set(prev).add(targetUserId));
+      getSocket()?.emit("companion:sendRequest", { targetUserId });
     } catch (err: any) {
-      console.error("Request error:", err.response?.data?.message || err.message);
+      console.error(err.response?.data?.message || err.message);
     }
   };
 
+  const handleAcceptRequest = async (requesterId: string) => {
+    const token = localStorage.getItem("token");
+    try {
+      await axios.post(
+        `${import.meta.env.VITE_API_URL}/companion/accept`,
+        { requesterId },
+        { headers: { Authorization: token || "" } }
+      );
+      dispatch(removePendingRequest(requesterId));
+      // Refresh companion list
+      const res = await axios.get(`${import.meta.env.VITE_API_URL}/companion/list`, {
+        headers: { Authorization: token || "" },
+      });
+      dispatch(setCompanions(res.data.companions || res.data));
+    } catch (err: any) { console.error(err); }
+  };
+
+  const handleDeclineRequest = async (requesterId: string) => {
+    const token = localStorage.getItem("token");
+    try {
+      await axios.post(
+        `${import.meta.env.VITE_API_URL}/companion/decline`,
+        { requesterId },
+        { headers: { Authorization: token || "" } }
+      );
+      dispatch(removePendingRequest(requesterId));
+    } catch (err: any) { console.error(err); }
+  };
+
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+  const imagesOnly = import.meta.env.VITE_NEWS_IMAGES_ONLY === "true";
+  const baseNews = imagesOnly ? news.filter((a) => a.imageUrl) : news;
   const filteredNews =
-    newsFilter === "All" ? news : news.filter((a) => a.category === newsFilter);
+    newsFilter === "All" ? baseNews : baseNews.filter((a) => a.category === newsFilter);
 
   const getInitials = (name: string) =>
-    name
-      .split(" ")
-      .slice(0, 2)
-      .map((w) => w[0])
-      .join("")
-      .toUpperCase();
+    name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 
   const avatarColors = [
-    "bg-violet-500",
-    "bg-indigo-500",
-    "bg-teal-500",
-    "bg-rose-500",
-    "bg-amber-500",
-    "bg-cyan-500",
+    "bg-violet-500", "bg-indigo-500", "bg-teal-500", "bg-rose-500",
+    "bg-amber-500", "bg-cyan-500", "bg-fuchsia-500", "bg-sky-500",
   ];
   const getAvatarColor = (userId: string) =>
     avatarColors[userId.charCodeAt(userId.length - 1) % avatarColors.length];
 
+  const displayCompanions = isAuthenticated && companions.length > 0 ? companions : null;
+  const showDummy = !isAuthenticated || companions.length === 0;
+  const companionList = displayCompanions || (showDummy ? dummyCompanions : []);
+
+  // Show global results panel when logged in, query is non-empty, and not mid-debounce
+  const showGlobalResults =
+    isAuthenticated &&
+    globalSearchQuery.length > 0 &&
+    (globalSearchResults.length > 0 || !globalSearchLoading);
+
+  // ── Render ───────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors">
       <Navbar />
 
-      {/* Invite status toast */}
+      {/* Status toast */}
       <AnimatePresence>
         {inviteStatus && (
           <motion.div
@@ -237,124 +386,309 @@ export default function RoomPage() {
       </AnimatePresence>
 
       <div className="max-w-5xl mx-auto px-4 pt-16 pb-10 space-y-8">
-        {/* ── Companion Presence Bar ── */}
+
+        {/* ── People Search ─────────────────────────────────────────────────── */}
         <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-widest poppins-semibold">
-              Study Companions
-            </h2>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-1.5 text-xs poppins-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
-            >
-              <UserPlus size={13} />
-              Add Companion
-            </button>
+          <div className="relative">
+            <Search
+              size={15}
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 z-10 pointer-events-none"
+            />
+            <input
+              type="text"
+              placeholder="Search people to find study partners..."
+              value={globalSearchQuery}
+              onChange={(e) => handleGlobalSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700/60 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm poppins-regular focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-700 focus:border-transparent shadow-sm transition-shadow"
+            />
+            {globalSearchLoading && (
+              <Loader2
+                size={14}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 animate-spin text-indigo-400"
+              />
+            )}
           </div>
 
-          {companions.length === 0 ? (
-            <div className="bg-white border border-dashed border-gray-200 rounded-2xl p-6 text-center">
-              <BookOpen size={28} className="text-gray-300 mx-auto mb-2" />
-              <p className="text-sm text-gray-400 poppins-regular">
-                No companions yet.{" "}
-                <button
-                  onClick={() => setShowAddModal(true)}
-                  className="text-indigo-500 hover:underline font-medium"
-                >
-                  Find study companions →
-                </button>
-              </p>
-            </div>
-          ) : (
-            <div className="flex gap-4 overflow-x-auto pb-1 scrollbar-none">
-              {companions.map((c) => (
-                <div key={c.userId} className="relative flex-shrink-0">
-                  <button
-                    onClick={() =>
-                      setOpenPopover(openPopover === c.userId ? null : c.userId)
-                    }
-                    className="flex flex-col items-center gap-1.5 group"
-                  >
-                    <div className="relative">
-                      <div
-                        className={`w-14 h-14 rounded-full flex items-center justify-center text-white text-sm font-bold poppins-semibold ${getAvatarColor(
-                          c.userId
-                        )} ring-2 ring-offset-2 transition-all ${
-                          c.isOnline ? "ring-emerald-400" : "ring-gray-200"
-                        }`}
-                      >
-                        {getInitials(c.name)}
-                      </div>
-                      <span
-                        className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-white ${
-                          c.isOnline ? "bg-emerald-400" : "bg-gray-300"
-                        }`}
-                      />
-                    </div>
-                    <span className="text-[11px] text-gray-600 poppins-regular max-w-[56px] truncate">
-                      {c.name.split(" ")[0]}
-                    </span>
-                  </button>
-
-                  {/* Popover */}
-                  <AnimatePresence>
-                    {openPopover === c.userId && (
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.92, y: 8 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.92, y: 8 }}
-                        transition={{ type: "spring", damping: 24, stiffness: 300 }}
-                        className="absolute top-[76px] left-1/2 -translate-x-1/2 z-50 bg-white rounded-2xl shadow-xl border border-gray-100 p-3 w-44 space-y-1"
-                      >
-                        <p className="text-xs font-semibold text-gray-700 poppins-semibold px-1 truncate">
-                          {c.name}
-                        </p>
-                        <p className="text-[10px] flex items-center gap-1 px-1 mb-2">
-                          {c.isOnline ? (
-                            <>
-                              <Wifi size={10} className="text-emerald-500" />
-                              <span className="text-emerald-600">Online</span>
-                            </>
+          {/* Logged-in results dropdown */}
+          <AnimatePresence>
+            {showGlobalResults && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.15 }}
+                className="mt-2 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-lg overflow-hidden"
+              >
+                {globalSearchResults.length === 0 ? (
+                  <p className="text-sm text-center py-5 text-gray-400 dark:text-gray-500 poppins-regular">
+                    No results for &ldquo;{globalSearchQuery}&rdquo;
+                  </p>
+                ) : (
+                  <div className="divide-y divide-gray-50 dark:divide-gray-800/80">
+                    {globalSearchResults.slice(0, 6).map((u) => {
+                      const isCompanion = companions.some((c) => c.userId === u.userId);
+                      const isSent =
+                        globalSentRequests.has(u.userId) || sentRequests.has(u.userId);
+                      return (
+                        <div
+                          key={u.userId}
+                          className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold poppins-semibold ${getAvatarColor(u.userId)}`}
+                            >
+                              {getInitials(u.name)}
+                            </div>
+                            <div>
+                              <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 poppins-semibold">
+                                {u.name}
+                              </p>
+                              <p className="text-xs text-gray-400 dark:text-gray-500 poppins-regular">
+                                {u.email}
+                              </p>
+                            </div>
+                          </div>
+                          {isCompanion ? (
+                            <span className="text-xs text-emerald-600 poppins-semibold flex items-center gap-1">
+                              <CheckCircle size={12} /> Companion
+                            </span>
+                          ) : isSent ? (
+                            <span className="text-xs text-gray-400 poppins-regular">Sent</span>
                           ) : (
-                            <>
-                              <WifiOff size={10} className="text-gray-400" />
-                              <span className="text-gray-400">Offline</span>
-                            </>
+                            <button
+                              onClick={() => sendCompanionRequest(u.userId, false)}
+                              className="flex items-center gap-1.5 text-xs poppins-semibold text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-lg transition-colors"
+                            >
+                              <UserPlus size={11} /> Add
+                            </button>
                           )}
-                        </p>
-                        <button
-                          onClick={() => openDm(c.userId, c.name)}
-                          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors poppins-regular"
-                        >
-                          <MessageCircle size={13} />
-                          Message
-                        </button>
-                        <button
-                          onClick={() => inviteCompanion(c.userId)}
-                          disabled={!c.isOnline}
-                          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors poppins-regular disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          <DoorOpen size={13} />
-                          Invite to My Room
-                        </button>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Logged-out dummy preview */}
+          {!isAuthenticated && (
+            <div className="relative mt-3">
+              <div className="flex gap-3 overflow-x-hidden pb-1 select-none blur-sm pointer-events-none">
+                {dummySearchPeople.map((p) => (
+                  <div
+                    key={p.userId}
+                    className="flex-shrink-0 flex items-center gap-2.5 bg-white dark:bg-gray-900 rounded-xl px-3 py-2.5 border border-gray-100 dark:border-gray-800 shadow-sm"
+                  >
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ${getAvatarColor(p.userId)}`}
+                    >
+                      {getInitials(p.name)}
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-800 dark:text-gray-200">
+                        {p.name}
+                      </p>
+                      <p className="text-[10px] text-gray-400">{p.email}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-r from-gray-50/30 via-gray-50/70 to-gray-50/30 dark:from-gray-950/30 dark:via-gray-950/70 dark:to-gray-950/30">
+                <button
+                  onClick={() => navigate("/login")}
+                  className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm px-4 py-2 rounded-full text-xs text-indigo-600 dark:text-indigo-400 poppins-semibold shadow-md border border-indigo-100 dark:border-indigo-900/50 hover:shadow-lg transition-shadow"
+                >
+                  Login to search for study partners
+                </button>
+              </div>
             </div>
           )}
         </section>
 
-        {/* Close popover on outside click */}
-        {openPopover && (
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setOpenPopover(null)}
-          />
+        {/* ── Companion Requests ────────────────────────────────────────────── */}
+        {isAuthenticated && pendingRequests.length > 0 && (
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <Bell size={14} className="text-amber-500" />
+              <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest poppins-semibold">
+                Companion Requests
+              </h2>
+              <span className="bg-amber-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center poppins-bold leading-none">
+                {pendingRequests.length}
+              </span>
+            </div>
+            <div className="space-y-2">
+              <AnimatePresence initial={false}>
+                {pendingRequests.map((req) => (
+                  <motion.div
+                    key={req.requesterId}
+                    initial={{ opacity: 0, x: -16 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 16, height: 0, marginBottom: 0 }}
+                    transition={{ type: "spring", damping: 24, stiffness: 280 }}
+                    className="flex items-center justify-between bg-white dark:bg-gray-900 rounded-2xl border border-amber-100 dark:border-amber-900/30 shadow-sm px-4 py-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold poppins-semibold ${getAvatarColor(req.requesterId)}`}
+                      >
+                        {getInitials(req.requesterName)}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 poppins-semibold">
+                          {req.requesterName}
+                        </p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 poppins-regular">
+                          Wants to study with you
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleAcceptRequest(req.requesterId)}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs poppins-semibold transition-colors"
+                      >
+                        Accept
+                      </button>
+                      <button
+                        onClick={() => handleDeclineRequest(req.requesterId)}
+                        className="px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs poppins-semibold transition-colors"
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+          </section>
         )}
 
-        {/* ── "Let's Study Together" CTA ── */}
+        {/* ── Companion Presence Bar ────────────────────────────────────────── */}
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest poppins-semibold">
+              Study Companions
+            </h2>
+            {isAuthenticated && (
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="flex items-center gap-1.5 text-xs poppins-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors"
+              >
+                <UserPlus size={13} />
+                Add Companion
+              </button>
+            )}
+          </div>
+
+          <div className={`relative ${showDummy ? "mt-3" : ""}`}>
+            <div className="flex gap-4 overflow-x-auto pb-1 scrollbar-none">
+              {companionList.map((c) => (
+                <div key={c.userId} className="relative flex-shrink-0">
+                  <button
+                    onClick={() => {
+                      if (!isAuthenticated) { navigate("/login"); return; }
+                      if (showDummy) return;
+                      setOpenPopover(openPopover === c.userId ? null : c.userId);
+                    }}
+                    className="flex flex-col items-center gap-1.5 group"
+                  >
+                    <div className="relative">
+                      {/* Avatar — green ring = unread, subtle grey ring = default */}
+                      <div
+                        className={`w-14 h-14 rounded-full flex items-center justify-center text-white text-sm font-bold poppins-semibold ${getAvatarColor(c.userId)} transition-all duration-300 ${
+                          (showDummy ? dummyUnreadIds.has(c.userId) : unreadDmFrom.has(c.userId))
+                            ? "ring-[3px] ring-emerald-400"
+                            : "ring-2 ring-gray-300 dark:ring-gray-700"
+                        }`}
+                      >
+                        {getInitials(c.name)}
+                      </div>
+
+                      {/* Online dot */}
+                      <span
+                        className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-gray-50 dark:border-gray-950 ${
+                          c.isOnline ? "bg-emerald-400" : "bg-gray-300 dark:bg-gray-600"
+                        }`}
+                      />
+                    </div>
+                    <span className="text-[11px] text-gray-600 dark:text-gray-400 poppins-regular max-w-[56px] truncate">
+                      {c.name.split(" ")[0]}
+                    </span>
+                  </button>
+
+                  {/* Popover — only for real companions when logged in */}
+                  {isAuthenticated && !showDummy && (
+                    <AnimatePresence>
+                      {openPopover === c.userId && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.92, y: 8 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.92, y: 8 }}
+                          transition={{ type: "spring", damping: 24, stiffness: 300 }}
+                          className="absolute top-[76px] left-1/2 -translate-x-1/2 z-50 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 p-3 w-44 space-y-1"
+                        >
+                          <p className="text-xs font-semibold text-gray-700 dark:text-gray-200 poppins-semibold px-1 truncate">
+                            {c.name}
+                          </p>
+                          <p className="text-[10px] flex items-center gap-1 px-1 mb-2">
+                            {c.isOnline ? (
+                              <>
+                                <Wifi size={10} className="text-emerald-500" />
+                                <span className="text-emerald-600">Online</span>
+                              </>
+                            ) : (
+                              <>
+                                <WifiOff size={10} className="text-gray-400" />
+                                <span className="text-gray-400">Offline</span>
+                              </>
+                            )}
+                          </p>
+                          <button
+                            onClick={() => openDm(c.userId, c.name)}
+                            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors poppins-regular"
+                          >
+                            <MessageCircle size={13} />
+                            Message
+                            {unreadDmFrom.has(c.userId) && (
+                              <span className="ml-auto w-2 h-2 rounded-full bg-emerald-400" />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => inviteCompanion(c.userId)}
+                            disabled={!c.isOnline}
+                            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-gray-700 dark:text-gray-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors poppins-regular disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            <DoorOpen size={13} />
+                            Invite to My Room
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Logged-out overlay hint */}
+            {!isAuthenticated && (
+              <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-r from-white/0 via-white/60 to-white/0 dark:from-gray-950/0 dark:via-gray-950/60 dark:to-gray-950/0 pointer-events-none">
+                <span className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm px-4 py-2 rounded-full text-xs text-gray-500 dark:text-gray-400 poppins-semibold shadow-sm pointer-events-auto">
+                  Login to connect with study companions
+                </span>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Close popover on outside click */}
+        {openPopover && (
+          <div className="fixed inset-0 z-40" onClick={() => setOpenPopover(null)} />
+        )}
+
+        {/* ── CTA ──────────────────────────────────────────────────────────── */}
         <motion.section
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -363,27 +697,41 @@ export default function RoomPage() {
         >
           <div>
             <h2 className="text-2xl font-bold poppins-bold leading-tight">
-              Ready to study?
+              {isAuthenticated ? "Ready to study?" : "Let's study together"}
             </h2>
             <p className="text-indigo-200 text-sm mt-1 poppins-regular">
-              Your personal room is always ready.
+              {isAuthenticated
+                ? "Your personal room is always ready."
+                : "Join thousands of students studying smarter, together."}
             </p>
           </div>
-          <motion.button
-            onClick={enterMyRoom}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.97 }}
-            className="flex items-center gap-2 bg-white text-indigo-700 px-5 py-2.5 rounded-xl text-sm font-bold poppins-bold shadow-md hover:bg-indigo-50 transition-colors"
-          >
-            Enter My Room
-            <DoorOpen size={16} />
-          </motion.button>
+          {isAuthenticated ? (
+            <motion.button
+              onClick={enterMyRoom}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.97 }}
+              className="flex items-center gap-2 bg-white text-indigo-700 px-5 py-2.5 rounded-xl text-sm font-bold poppins-bold shadow-md hover:bg-indigo-50 transition-colors"
+            >
+              Enter My Room
+              <DoorOpen size={16} />
+            </motion.button>
+          ) : (
+            <motion.button
+              onClick={() => navigate("/login")}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.97 }}
+              className="flex items-center gap-2 bg-white text-indigo-700 px-5 py-2.5 rounded-xl text-sm font-bold poppins-bold shadow-md hover:bg-indigo-50 transition-colors"
+            >
+              Get Started
+              <Sparkles size={16} />
+            </motion.button>
+          )}
         </motion.section>
 
-        {/* ── News Feed ── */}
+        {/* ── News Feed ────────────────────────────────────────────────────── */}
         <section>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-widest poppins-semibold">
+            <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest poppins-semibold">
               Trending Now
             </h2>
             <div className="flex gap-1.5">
@@ -394,7 +742,7 @@ export default function RoomPage() {
                   className={`px-3 py-1 rounded-full text-xs poppins-semibold transition-all ${
                     newsFilter === cat
                       ? "bg-indigo-600 text-white shadow-sm"
-                      : "bg-white text-gray-500 border border-gray-200 hover:border-indigo-300 hover:text-indigo-600"
+                      : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-600 hover:text-indigo-600 dark:hover:text-indigo-400"
                   }`}
                 >
                   {cat}
@@ -410,57 +758,63 @@ export default function RoomPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {filteredNews.map((article, i) => (
-                <motion.div
+                <motion.a
                   key={article.id}
+                  href={article.url}
+                  target="_blank"
+                  rel="noreferrer"
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.04 }}
-                  className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden"
+                  className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 overflow-hidden group block"
                 >
-                  <div
-                    className="h-1.5 w-full"
-                    style={{ background: article.accentColor }}
-                  />
+                  {article.imageUrl && (
+                    <div className="h-36 overflow-hidden">
+                      <img
+                        src={article.imageUrl}
+                        alt=""
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                    </div>
+                  )}
+                  {!article.imageUrl && (
+                    <div className="h-1.5 w-full" style={{ background: article.accentColor }} />
+                  )}
                   <div className="p-5">
                     <span
                       className="text-[11px] font-bold px-2.5 py-1 rounded-full poppins-semibold"
-                      style={{
-                        background: article.accentColor + "18",
-                        color: article.accentColor,
-                      }}
+                      style={{ background: article.accentColor + "18", color: article.accentColor }}
                     >
                       {article.category}
                     </span>
-                    <h3 className="text-base font-bold mt-3 text-gray-900 leading-snug poppins-bold">
+                    <h3 className="text-base font-bold mt-3 text-gray-900 dark:text-gray-100 leading-snug poppins-bold line-clamp-2">
                       {article.title}
                     </h3>
-                    <p className="text-sm text-gray-500 mt-2 leading-relaxed poppins-regular">
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 leading-relaxed poppins-regular line-clamp-3">
                       {article.summary}
                     </p>
                     <div className="flex items-center justify-between mt-4">
-                      <span className="text-xs text-gray-400 poppins-regular">
+                      <span className="text-xs text-gray-400 dark:text-gray-500 poppins-regular">
                         {article.source} · {article.readTime} · {article.publishedAt}
                       </span>
-                      <a
-                        href={article.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs font-semibold text-indigo-600 flex items-center gap-1 hover:text-indigo-800 transition-colors poppins-semibold"
-                      >
-                        Read more <ExternalLink size={11} />
-                      </a>
+                      <span className="text-xs font-semibold text-indigo-600 flex items-center gap-1 group-hover:text-indigo-800 transition-colors poppins-semibold">
+                        Read <ExternalLink size={11} />
+                      </span>
                     </div>
                   </div>
-                </motion.div>
+                </motion.a>
               ))}
             </div>
           )}
         </section>
       </div>
 
-      {/* ── Add Companion Modal ── */}
+      {/* ── Add Companion Modal ───────────────────────────────────────────────── */}
       <AnimatePresence>
-        {showAddModal && (
+        {showAddModal && isAuthenticated && (
           <>
             <motion.div
               initial={{ opacity: 0 }}
@@ -476,22 +830,21 @@ export default function RoomPage() {
               transition={{ type: "spring", damping: 26, stiffness: 280 }}
               className="fixed inset-0 flex items-center justify-center z-[160] pointer-events-none"
             >
-              <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md mx-4 pointer-events-auto overflow-hidden">
+              <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-md mx-4 pointer-events-auto overflow-hidden">
                 <div className="h-1 w-full bg-gradient-to-r from-indigo-500 to-violet-500" />
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-bold text-gray-900 poppins-bold">
+                    <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 poppins-bold">
                       Add Study Companion
                     </h2>
                     <button
                       onClick={() => setShowAddModal(false)}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors"
+                      className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 transition-colors"
                     >
                       <X size={16} />
                     </button>
                   </div>
 
-                  {/* Search input */}
                   <div className="relative">
                     <Search
                       size={15}
@@ -502,7 +855,7 @@ export default function RoomPage() {
                       placeholder="Search by name or email..."
                       value={searchQuery}
                       onChange={(e) => handleSearchChange(e.target.value)}
-                      className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm poppins-regular focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-transparent"
+                      className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm poppins-regular focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-transparent"
                     />
                     {searchLoading && (
                       <Loader2
@@ -512,7 +865,6 @@ export default function RoomPage() {
                     )}
                   </div>
 
-                  {/* Results */}
                   <div className="mt-3 space-y-1.5 max-h-64 overflow-y-auto">
                     {searchResults.length === 0 && searchQuery && !searchLoading && (
                       <p className="text-sm text-gray-400 text-center py-4 poppins-regular">
@@ -525,21 +877,19 @@ export default function RoomPage() {
                       return (
                         <div
                           key={u.userId}
-                          className="flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors"
+                          className="flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                         >
                           <div className="flex items-center gap-3">
                             <div
-                              className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold ${getAvatarColor(
-                                u.userId
-                              )}`}
+                              className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold ${getAvatarColor(u.userId)}`}
                             >
                               {getInitials(u.name)}
                             </div>
                             <div>
-                              <p className="text-sm font-semibold text-gray-800 poppins-semibold">
+                              <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 poppins-semibold">
                                 {u.name}
                               </p>
-                              <p className="text-xs text-gray-400 poppins-regular">
+                              <p className="text-xs text-gray-400 dark:text-gray-500 poppins-regular">
                                 {u.email}
                               </p>
                             </div>
@@ -549,12 +899,10 @@ export default function RoomPage() {
                               <CheckCircle size={12} /> Companion
                             </span>
                           ) : isSent ? (
-                            <span className="text-xs text-gray-400 poppins-regular">
-                              Sent
-                            </span>
+                            <span className="text-xs text-gray-400 poppins-regular">Sent</span>
                           ) : (
                             <button
-                              onClick={() => sendCompanionRequest(u.userId)}
+                              onClick={() => sendCompanionRequest(u.userId, true)}
                               className="flex items-center gap-1.5 text-xs poppins-semibold text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-lg transition-colors"
                             >
                               <UserPlus size={11} /> Add
@@ -571,7 +919,7 @@ export default function RoomPage() {
         )}
       </AnimatePresence>
 
-      {/* ── DM Panel ── */}
+      {/* ── DM Panel ─────────────────────────────────────────────────────────── */}
       {dmTarget && (
         <DmPanel
           companionId={dmTarget.userId}
