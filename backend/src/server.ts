@@ -10,6 +10,7 @@ import userRoutes from "./routes/userRoutes";
 import newsRoutes from "./routes/newsRoutes";
 import aiRoutes from "./routes/aiRoutes";
 import dmRoutes from "./routes/dmRoutes";
+import notificationRoutes from "./routes/notificationRoutes";
 import dotenv from "dotenv";
 import path from "path";
 import cors from "cors";
@@ -42,6 +43,7 @@ app.use("/user", userRoutes);
 app.use("/news", newsRoutes);
 app.use("/ai", aiRoutes);
 app.use("/dm", dmRoutes);
+app.use("/notifications", notificationRoutes);
 
 // Attach Socket.IO to the same HTTP server (no separate port needed)
 initSocketServer(httpServer);

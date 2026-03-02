@@ -154,6 +154,21 @@ export default function RoomPage() {
         .catch(console.error);
     }
 
+    // Restore unread DM badges from DB so the green rings survive a refresh
+    if (isAuthenticated) {
+      const token = localStorage.getItem("token");
+      axios
+        .get(`${import.meta.env.VITE_API_URL}/dm/unread-counts`, {
+          headers: { Authorization: token || "" },
+        })
+        .then((res) => {
+          const counts: Record<string, number> = res.data.counts || {};
+          const withUnread = Object.keys(counts).filter((id) => counts[id] > 0);
+          if (withUnread.length > 0) setUnreadDmFrom(new Set(withUnread));
+        })
+        .catch(() => {});
+    }
+
     // News — no auth needed
     axios
       .get(`${import.meta.env.VITE_API_URL}/news`)

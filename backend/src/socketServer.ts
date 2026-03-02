@@ -3,6 +3,7 @@ import http from 'http';
 import jwt from 'jsonwebtoken';
 import Companion from './models/Companion';
 import DirectMessage from './models/DirectMessage';
+import Notification, { NotificationType } from './models/Notification';
 
 let io: Server;
 const userSocketMap = new Map<string, string>(); // userId → socketId
@@ -44,6 +45,39 @@ export function getSocketIdForUser(userId: string): string | undefined {
 
 export function getIO(): Server | undefined {
   return io;
+}
+
+// Persist a notification and push it to the recipient's socket if online
+async function saveAndEmitNotification(
+  recipientId: string,
+  type: NotificationType,
+  fromUserId: string,
+  fromUserName: string,
+  data?: Record<string, any>
+) {
+  try {
+    const notif = await Notification.create({
+      recipient: recipientId,
+      type,
+      fromUserId,
+      fromUserName,
+      data,
+    });
+    const targetSocketId = userSocketMap.get(recipientId);
+    if (targetSocketId) {
+      io.to(targetSocketId).emit('notification:new', {
+        _id: notif._id,
+        type: notif.type,
+        fromUserId: notif.fromUserId,
+        fromUserName: notif.fromUserName,
+        data: notif.data,
+        read: false,
+        createdAt: notif.createdAt,
+      });
+    }
+  } catch (err) {
+    console.error('Notification save error:', err);
+  }
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
@@ -119,12 +153,19 @@ export function initSocketServer(httpServer: http.Server): Server {
           socket.emit('inviteError', { message: 'You can only invite study companions' });
           return;
         }
+
         const targetSocketId = userSocketMap.get(targetUserId);
+
         if (!targetSocketId) {
-          socket.emit('inviteError', { message: 'User is currently offline' });
+          // Offline: store notification so they see it on next login
+          await saveAndEmitNotification(targetUserId, 'room_invite', userId, inviterName, { roomId });
+          socket.emit('inviteError', { message: 'User is offline — invite saved as notification' });
           return;
         }
+
+        // Online: send live invite overlay + persist for the bell
         io.to(targetSocketId).emit('receiveInvite', { roomId, inviterName, inviterUserId: userId });
+        await saveAndEmitNotification(targetUserId, 'room_invite', userId, inviterName, { roomId });
       }
     );
 
@@ -147,7 +188,7 @@ export function initSocketServer(httpServer: http.Server): Server {
 
     // ── Companion requests ──────────────────────────────────────────────────
 
-    socket.on('companion:sendRequest', ({ targetUserId }: { targetUserId: string }) => {
+    socket.on('companion:sendRequest', async ({ targetUserId }: { targetUserId: string }) => {
       const targetSocketId = userSocketMap.get(targetUserId);
       if (targetSocketId) {
         io.to(targetSocketId).emit('companion:requestReceived', {
@@ -155,9 +196,11 @@ export function initSocketServer(httpServer: http.Server): Server {
           requesterName: userName,
         });
       }
+      // Persist so recipient sees it after refresh / next login
+      await saveAndEmitNotification(targetUserId, 'companion_request', userId, userName);
     });
 
-    socket.on('companion:acceptNotify', ({ requesterId }: { requesterId: string }) => {
+    socket.on('companion:acceptNotify', async ({ requesterId }: { requesterId: string }) => {
       const requesterSocketId = userSocketMap.get(requesterId);
       if (requesterSocketId) {
         io.to(requesterSocketId).emit('companion:accepted', {
@@ -165,6 +208,8 @@ export function initSocketServer(httpServer: http.Server): Server {
           acceptorName: userName,
         });
       }
+      // Notify the original requester that their request was accepted
+      await saveAndEmitNotification(requesterId, 'companion_accepted', userId, userName);
     });
 
     // ── Direct messages ─────────────────────────────────────────────────────
@@ -176,21 +221,43 @@ export function initSocketServer(httpServer: http.Server): Server {
 
     socket.on(
       'dm:send',
-      async ({ toUserId, content }: { toUserId: string; content: string }) => {
+      async ({ toUserId, content, tempId }: { toUserId: string; content: string; tempId?: string }) => {
         try {
           const dmRoom = ['dm', ...[userId, toUserId].sort()].join('_');
           const msg = await DirectMessage.create({ from: userId, to: toUserId, content });
+          // Broadcast to dm room — sender also receives this as a delivery ack
           io.to(dmRoom).emit('dm:receive', {
+            _id: msg._id.toString(),
             from: userId,
             fromName: userName,
             content,
             createdAt: msg.createdAt,
+            read: false,
+            tempId, // echoed back so sender can match their optimistic message
           });
         } catch (err) {
           console.error('DM save error:', err);
         }
       }
     );
+
+    // Recipient tells server they opened the DM panel — mark sender's messages as read
+    socket.on('dm:markRead', async ({ toUserId }: { toUserId: string }) => {
+      try {
+        const result = await DirectMessage.updateMany(
+          { from: toUserId, to: userId, read: false },
+          { read: true }
+        );
+        if (result.modifiedCount > 0) {
+          const senderSocketId = userSocketMap.get(toUserId);
+          if (senderSocketId) {
+            io.to(senderSocketId).emit('dm:readUpdate', { byUserId: userId });
+          }
+        }
+      } catch (err) {
+        console.error('dm:markRead error:', err);
+      }
+    });
 
     // ── Disconnect ──────────────────────────────────────────────────────────
 

@@ -24,6 +24,7 @@ import { logout } from "../store/authStore/authSlice";
 import { enterRoom } from "../store/RoomStore/roomSlice";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDarkMode } from "../utils/useDarkMode";
+import NotificationBell from "./NotificationBell";
 
 const navItems = [
   { title: "Home", path: "/home", icon: Home },
@@ -81,8 +82,9 @@ export default function Navbar() {
         </button>
       </div>
 
-      {/* ── Profile avatar — top right ─────────────────────────────────────── */}
-      <div className="fixed top-4 right-4 z-50">
+      {/* ── Notification bell + profile avatar — top right ──────────────────── */}
+      <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
+        <NotificationBell />
         {isAuthenticated && user ? (
           <div className="relative">
             <button

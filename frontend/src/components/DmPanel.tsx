@@ -1,22 +1,40 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
-import { X, Send, Loader2 } from "lucide-react";
+import { X, Send, Loader2, Check, CheckCheck, Clock } from "lucide-react";
 import { useSelector } from "react-redux";
 import { AuthState } from "../store/authStore/store";
 import { getSocket } from "../utils/socketInstance";
 
+const API = import.meta.env.VITE_API_URL as string;
+
+// Status of a sent message from the current user's perspective
+type MsgStatus = "sending" | "delivered" | "read";
+
 interface DmMessage {
+  _id?: string;
+  tempId?: string; // local-only id for optimistic messages
   from: string;
   fromName: string;
   content: string;
   createdAt: string;
+  read?: boolean;
+  status?: MsgStatus; // only meaningful for outgoing messages
 }
 
 interface DmPanelProps {
   companionId: string;
   companionName: string;
   onClose: () => void;
+}
+
+function DeliveryTick({ status }: { status: MsgStatus }) {
+  if (status === "sending")
+    return <Clock size={10} className="text-white/50 flex-shrink-0" />;
+  if (status === "delivered")
+    return <Check size={10} className="text-white/70 flex-shrink-0" />;
+  // read
+  return <CheckCheck size={10} className="text-indigo-200 flex-shrink-0" />;
 }
 
 export default function DmPanel({ companionId, companionName, onClose }: DmPanelProps) {
@@ -26,7 +44,17 @@ export default function DmPanel({ companionId, companionName, onClose }: DmPanel
   const [loading, setLoading] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Load history + join DM socket room
+  const markRead = useCallback(() => {
+    const token = localStorage.getItem("token");
+    // REST — handles cases where socket isn't ready yet
+    axios
+      .patch(`${API}/dm/${companionId}/read`, {}, { headers: { Authorization: token || "" } })
+      .catch(() => {});
+    // Socket — notifies sender in real-time
+    getSocket()?.emit("dm:markRead", { toUserId: companionId });
+  }, [companionId]);
+
+  // Load history + join DM socket room + mark as read
   useEffect(() => {
     const token = localStorage.getItem("token");
     const socket = getSocket();
@@ -34,24 +62,78 @@ export default function DmPanel({ companionId, companionName, onClose }: DmPanel
     socket?.emit("dm:join", { toUserId: companionId });
 
     axios
-      .get(`${import.meta.env.VITE_API_URL}/dm/${companionId}`, {
-        headers: { Authorization: token || "" },
-      })
+      .get(`${API}/dm/${companionId}`, { headers: { Authorization: token || "" } })
       .then((res) => {
-        setMessages(res.data);
+        const msgs: DmMessage[] = (res.data.messages || []).map((m: any) => ({
+          _id: m._id,
+          from: m.from,
+          fromName: m.fromName,
+          content: m.content,
+          createdAt: m.createdAt,
+          read: m.read,
+          // Derive delivery status for my outgoing messages from the persisted read flag
+          status: m.from === user?.userId
+            ? (m.read ? ("read" as MsgStatus) : ("delivered" as MsgStatus))
+            : undefined,
+        }));
+        setMessages(msgs);
+        markRead();
       })
       .catch(console.error)
       .finally(() => setLoading(false));
 
-    const handleReceive = (msg: DmMessage) => {
-      setMessages((prev) => [...prev, msg]);
+    // Handle incoming DMs and delivery acks for our own sent messages
+    const handleReceive = (msg: any) => {
+      // Ignore messages not part of this conversation
+      if (msg.from !== companionId && msg.from !== user?.userId) return;
+
+      if (msg.from === user?.userId) {
+        // Server ack for our optimistic message — match by tempId, upgrade status
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.tempId === msg.tempId
+              ? { ...m, _id: msg._id, status: "delivered" as MsgStatus, tempId: undefined }
+              : m
+          )
+        );
+      } else {
+        // Incoming message from companion
+        setMessages((prev) => [
+          ...prev,
+          {
+            _id: msg._id,
+            from: msg.from,
+            fromName: msg.fromName,
+            content: msg.content,
+            createdAt: msg.createdAt,
+            read: false,
+          },
+        ]);
+        // Panel is open, mark immediately
+        markRead();
+      }
+    };
+
+    // Companion opened our conversation — upgrade all delivered → read
+    const handleReadUpdate = ({ byUserId }: { byUserId: string }) => {
+      if (byUserId !== companionId) return;
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.from === user?.userId && m.status === "delivered"
+            ? { ...m, status: "read" as MsgStatus }
+            : m
+        )
+      );
     };
 
     socket?.on("dm:receive", handleReceive);
+    socket?.on("dm:readUpdate", handleReadUpdate);
+
     return () => {
       socket?.off("dm:receive", handleReceive);
+      socket?.off("dm:readUpdate", handleReadUpdate);
     };
-  }, [companionId]);
+  }, [companionId, user?.userId, markRead]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -59,10 +141,24 @@ export default function DmPanel({ companionId, companionName, onClose }: DmPanel
   }, [messages]);
 
   const sendMessage = () => {
-    if (!input.trim()) return;
+    if (!input.trim() || !user) return;
     const socket = getSocket();
-    socket?.emit("dm:send", { toUserId: companionId, content: input.trim() });
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const content = input.trim();
+
+    // Show optimistically before server ack
+    const optimistic: DmMessage = {
+      tempId,
+      from: user.userId,
+      fromName: user.name,
+      content,
+      createdAt: new Date().toISOString(),
+      status: "sending",
+    };
+    setMessages((prev) => [...prev, optimistic]);
     setInput("");
+
+    socket?.emit("dm:send", { toUserId: companionId, content, tempId });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -73,12 +169,7 @@ export default function DmPanel({ companionId, companionName, onClose }: DmPanel
   };
 
   const getInitials = (name: string) =>
-    name
-      .split(" ")
-      .slice(0, 2)
-      .map((w) => w[0])
-      .join("")
-      .toUpperCase();
+    name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 
   return (
     <AnimatePresence>
@@ -96,15 +187,13 @@ export default function DmPanel({ companionId, companionName, onClose }: DmPanel
             <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white text-xs font-bold poppins-semibold">
               {getInitials(companionName)}
             </div>
-            <div>
-              <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 poppins-semibold leading-none">
-                {companionName}
-              </p>
-            </div>
+            <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 poppins-semibold leading-none">
+              {companionName}
+            </p>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors"
+            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 transition-colors"
           >
             <X size={15} />
           </button>
@@ -129,17 +218,22 @@ export default function DmPanel({ companionId, companionName, onClose }: DmPanel
               const isMe = msg.from === user?.userId;
               return (
                 <div
-                  key={i}
+                  key={msg._id ?? msg.tempId ?? i}
                   className={`flex ${isMe ? "justify-end" : "justify-start"}`}
                 >
                   <div
-                    className={`max-w-[70%] px-3 py-2 rounded-2xl text-sm poppins-regular shadow-sm ${
+                    className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm poppins-regular shadow-sm transition-opacity ${
                       isMe
                         ? "bg-indigo-600 text-white rounded-br-sm"
                         : "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-bl-sm"
-                    }`}
+                    } ${msg.status === "sending" ? "opacity-60" : ""}`}
                   >
-                    <p>{msg.content}</p>
+                    <p className="leading-snug">{msg.content}</p>
+                    {isMe && msg.status && (
+                      <div className="flex justify-end mt-0.5">
+                        <DeliveryTick status={msg.status} />
+                      </div>
+                    )}
                   </div>
                 </div>
               );

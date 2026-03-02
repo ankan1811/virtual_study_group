@@ -3,6 +3,7 @@ import authReducer from "./authSlice";
 import roomReducer from "../RoomStore/roomSlice";
 import inviteReducer from "../inviteStore/inviteSlice";
 import companionReducer from "../companionStore/companionSlice";
+import notificationReducer from "../notificationStore/notificationSlice";
 
 const store = configureStore({
   reducer: {
@@ -10,6 +11,7 @@ const store = configureStore({
     room: roomReducer,
     invite: inviteReducer,
     companion: companionReducer,
+    notification: notificationReducer,
   },
 });
 
