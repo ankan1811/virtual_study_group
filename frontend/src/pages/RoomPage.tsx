@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -584,7 +584,7 @@ export default function RoomPage() {
           </div>
 
           <div className={`relative ${showDummy ? "mt-3" : ""}`}>
-            <div className="flex gap-4 overflow-x-auto pb-1 scrollbar-none">
+            <div className="flex gap-4 overflow-x-auto pt-1 pb-1 scrollbar-none">
               {companionList.map((c) => (
                 <div key={c.userId} className="relative flex-shrink-0">
                   <button
