@@ -11,7 +11,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 | **Database**         | MongoDB (Mongoose)                     |
 | **Real-time**        | Socket.IO                              |
 | **Video Calls**      | Agora RTC SDK                          |
-| **AI**               | xAI Grok API (grok-3-mini)            |
+| **AI**               | Switchable: Google Gemini 2.5 Flash (default) / xAI Grok |
 | **State Management** | Redux Toolkit                          |
 | **Styling**          | Tailwind CSS, shadcn/ui, Framer Motion |
 | **Auth**             | JWT + bcrypt                           |
@@ -106,18 +106,21 @@ A full-stack web application for creating virtual study group spaces with real-t
 - Visual distinction between your messages, others' messages, and bot messages
 - Bot welcome message on room join
 
-### AI Doubt Solver (Grok)
+### AI Doubt Solver
 
 - In-room AI panel accessible via the "AI Doubt" tab during calls
-- Powered by xAI Grok API (`grok-3-mini` model)
+- Switchable AI provider via `AI_PROVIDER` env variable:
+  - **Gemini 2.5 Flash** (default) — Google's free tier (250 requests/day, resets daily)
+  - **Grok 3 Mini** — xAI's API (fallback option)
+- Both providers use the OpenAI-compatible SDK — no code changes needed to switch
 - Text input with full conversation history
 - Voice input via Web Speech API (browser mic button)
-- Styled Q&A cards with Grok branding
+- Styled Q&A cards with generic "AI Assistant" branding
 
-### Session Summary (Grok)
+### Session Summary
 
 - "Summary" tab in the call room generates an AI summary of the chat session
-- Sends all chat messages to Grok for analysis
+- Uses the same switchable AI provider as the Doubt Solver
 - One-click generation with loading state
 - Formatted summary card display
 
@@ -167,7 +170,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 - Node.js (v18+)
 - MongoDB instance (local or Atlas)
 - Agora account (for video call App ID)
-- xAI API key (for Grok AI features — [get one free](https://console.x.ai))
+- Google AI Studio API key (for Gemini AI — [get one free](https://aistudio.google.com)) or xAI API key (for Grok — [get one free](https://console.x.ai))
 
 ### Quick Start (Monorepo)
 
@@ -197,7 +200,9 @@ Create a `.env` file in `backend/` with:
 MONGODB_URI=your_mongodb_connection_string
 PORT=7002
 JWT_SECRET=your_jwt_secret
-GROK_API_KEY=your_xai_api_key
+AI_PROVIDER=gemini                # "gemini" (default) or "grok"
+GEMINI_API_KEY=your_gemini_key    # from https://aistudio.google.com
+GROK_API_KEY=your_xai_api_key     # from https://console.x.ai (optional, for grok provider)
 ```
 
 Start the server:
@@ -249,8 +254,8 @@ VITE_API_URL=http://localhost:7002
 | PUT    | `/user/profile`        | Update profile (name, bio) — re-issues JWT               |
 | GET    | `/user/search?q=`     | Search users by name/email   |
 | GET    | `/news`                | Get news feed articles       |
-| POST   | `/ai/ask`              | Ask Grok a study question    |
-| POST   | `/ai/summary`          | Generate session summary     |
+| POST   | `/ai/ask`              | Ask AI a study question (Gemini/Grok) |
+| POST   | `/ai/summary`          | Generate AI session summary  |
 | GET    | `/dm/recent`                | Get recent chats (last message per companion, sorted by time) |
 | GET    | `/dm/:companionId`          | Get DM history (includes `_id`, `read` state) |
 | GET    | `/dm/unread-counts`         | Get unread message count per companion         |
