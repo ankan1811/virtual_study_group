@@ -4,19 +4,19 @@ A full-stack web application for creating virtual study group spaces with real-t
 
 ## Tech Stack
 
-| Layer                | Technology                             |
-| -------------------- | -------------------------------------- |
-| **Backend**          | Node.js, Express, TypeScript           |
-| **Frontend**         | React 18, TypeScript, Vite             |
-| **Database**         | MongoDB (Mongoose)                     |
-| **Real-time**        | Socket.IO                              |
-| **Video Calls**      | Agora RTC SDK                          |
-| **AI**               | Switchable: Google Gemini 2.5 Flash (default) / xAI Grok |
-| **State Management** | Redux Toolkit                          |
-| **Styling**          | Tailwind CSS, shadcn/ui, Framer Motion |
-| **Auth**             | JWT + bcrypt                           |
-| **Streaming**        | FFmpeg (RTMP to YouTube Live)          |
-| **Audio Viz**        | P5.js                                  |
+| Layer                | Technology                                                        |
+| -------------------- | ----------------------------------------------------------------- |
+| **Backend**          | Node.js, Express, TypeScript                                      |
+| **Frontend**         | React 18, TypeScript, Vite                                        |
+| **Database**         | MongoDB (Mongoose)                                                |
+| **Real-time**        | Socket.IO                                                         |
+| **Video Calls**      | Agora RTC SDK                                                     |
+| **AI**               | Switchable: Google Gemini 2.5 Pro (default) / xAI Grok            |
+| **State Management** | Redux Toolkit                                                     |
+| **Styling**          | Tailwind CSS, shadcn/ui, Framer Motion                            |
+| **Auth**             | JWT + bcrypt                                                      |
+| **Streaming**        | FFmpeg (RTMP to YouTube Live)                                     |
+| **Audio Viz**        | P5.js                                                             |
 | **News Feed**        | Mock articles (AI / Tech / Productivity categories, 30-min cache) |
 
 ## Features
@@ -110,7 +110,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 
 - In-room AI panel accessible via the "AI Doubt" tab during calls
 - Switchable AI provider via `AI_PROVIDER` env variable:
-  - **Gemini 2.5 Flash** (default) — Google's free tier (250 requests/day, resets daily)
+  - **Gemini 2.5 Pro** (default) — Google's free tier (250 requests/day, resets daily)
   - **Grok 3 Mini** — xAI's API (fallback option)
 - Both providers use the OpenAI-compatible SDK — no code changes needed to switch
 - Text input with full conversation history
@@ -241,29 +241,29 @@ VITE_API_URL=http://localhost:7002
 
 ## API Endpoints
 
-| Method | Endpoint               | Description                  |
-| ------ | ---------------------- | ---------------------------- |
-| POST   | `/auth/register`       | Register a new user          |
-| POST   | `/auth/login`          | Login and receive JWT        |
-| POST   | `/companion/request`   | Send companion request       |
-| POST   | `/companion/accept`    | Accept companion request     |
-| POST   | `/companion/decline`   | Decline companion request    |
-| GET    | `/companion/list`      | Get accepted companions      |
-| GET    | `/companion/pending`   | Get pending requests         |
-| GET    | `/user/profile`        | Get authenticated user's profile (name, email, bio, companion count) |
-| PUT    | `/user/profile`        | Update profile (name, bio) — re-issues JWT               |
-| GET    | `/user/search?q=`     | Search users by name/email   |
-| GET    | `/news`                | Get news feed articles       |
-| POST   | `/ai/ask`              | Ask AI a study question (Gemini/Grok) |
-| POST   | `/ai/summary`          | Generate AI session summary  |
-| GET    | `/dm/recent`                | Get recent chats (last message per companion, sorted by time) |
-| GET    | `/dm/:companionId`          | Get DM history (includes `_id`, `read` state) |
-| GET    | `/dm/unread-counts`         | Get unread message count per companion         |
-| PATCH  | `/dm/:companionId/read`     | Mark all messages from companion as read       |
-| GET    | `/notifications`            | Get all notifications (last 50, newest first)  |
-| PATCH  | `/notifications/:id/read`   | Mark a notification as read                    |
-| PATCH  | `/notifications/read-all`   | Mark all notifications as read                 |
-| DELETE | `/notifications/:id`        | Delete a notification                          |
+| Method | Endpoint                  | Description                                                          |
+| ------ | ------------------------- | -------------------------------------------------------------------- |
+| POST   | `/auth/register`          | Register a new user                                                  |
+| POST   | `/auth/login`             | Login and receive JWT                                                |
+| POST   | `/companion/request`      | Send companion request                                               |
+| POST   | `/companion/accept`       | Accept companion request                                             |
+| POST   | `/companion/decline`      | Decline companion request                                            |
+| GET    | `/companion/list`         | Get accepted companions                                              |
+| GET    | `/companion/pending`      | Get pending requests                                                 |
+| GET    | `/user/profile`           | Get authenticated user's profile (name, email, bio, companion count) |
+| PUT    | `/user/profile`           | Update profile (name, bio) — re-issues JWT                           |
+| GET    | `/user/search?q=`         | Search users by name/email                                           |
+| GET    | `/news`                   | Get news feed articles                                               |
+| POST   | `/ai/ask`                 | Ask AI a study question (Gemini/Grok)                                |
+| POST   | `/ai/summary`             | Generate AI session summary                                          |
+| GET    | `/dm/recent`              | Get recent chats (last message per companion, sorted by time)        |
+| GET    | `/dm/:companionId`        | Get DM history (includes `_id`, `read` state)                        |
+| GET    | `/dm/unread-counts`       | Get unread message count per companion                               |
+| PATCH  | `/dm/:companionId/read`   | Mark all messages from companion as read                             |
+| GET    | `/notifications`          | Get all notifications (last 50, newest first)                        |
+| PATCH  | `/notifications/:id/read` | Mark a notification as read                                          |
+| PATCH  | `/notifications/read-all` | Mark all notifications as read                                       |
+| DELETE | `/notifications/:id`      | Delete a notification                                                |
 
 ## License
 
