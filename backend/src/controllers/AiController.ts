@@ -2,11 +2,48 @@ import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/middleware';
 import OpenAI from 'openai';
 
-const grok = new OpenAI({
-  apiKey: process.env.GROK_API_KEY || '',
-  baseURL: 'https://api.x.ai/v1',
-});
+// ── Provider config ──────────────────────────────────────────────
+const providers = {
+  gemini: {
+    baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+    model: 'gemini-2.5-flash',
+    getApiKey: () => process.env.GEMINI_API_KEY || '',
+  },
+  grok: {
+    baseURL: 'https://api.x.ai/v1',
+    model: 'grok-3-mini',
+    getApiKey: () => process.env.GROK_API_KEY || '',
+  },
+} as const;
 
+type ProviderName = keyof typeof providers;
+
+// ── Lazy-initialized client ──────────────────────────────────────
+// Uses a getter so process.env is read AFTER dotenv.config() runs
+// (module-level code executes before dotenv.config in server.ts)
+let _client: OpenAI | null = null;
+let _model: string = '';
+
+function getClient(): OpenAI {
+  if (!_client) {
+    const name = (process.env.AI_PROVIDER || 'gemini') as ProviderName;
+    const config = providers[name] || providers.gemini;
+    _client = new OpenAI({
+      apiKey: config.getApiKey(),
+      baseURL: config.baseURL,
+    });
+    _model = config.model;
+    console.log(`AI provider initialized: ${name} (model: ${_model})`);
+  }
+  return _client;
+}
+
+function getModel(): string {
+  getClient();
+  return _model;
+}
+
+// ── Controllers ──────────────────────────────────────────────────
 export const askDoubt = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { question } = req.body as { question: string };
@@ -16,8 +53,8 @@ export const askDoubt = async (req: AuthenticatedRequest, res: Response): Promis
       return;
     }
 
-    const completion = await grok.chat.completions.create({
-      model: 'grok-3-mini',
+    const completion = await getClient().chat.completions.create({
+      model: getModel(),
       messages: [
         {
           role: 'system',
@@ -32,7 +69,7 @@ export const askDoubt = async (req: AuthenticatedRequest, res: Response): Promis
     const answer = completion.choices[0]?.message?.content || 'Sorry, I could not generate an answer.';
     res.status(200).json({ answer });
   } catch (error: any) {
-    console.error('Grok API error:', error?.message);
+    console.error('AI API error:', error?.message);
     res.status(500).json({ error: 'AI is currently unavailable. Please try again later.' });
   }
 };
@@ -51,8 +88,8 @@ export const summarizeSession = async (req: AuthenticatedRequest, res: Response)
       .map((m) => `${m.sentby}: ${m.msg}`)
       .join('\n');
 
-    const completion = await grok.chat.completions.create({
-      model: 'grok-3-mini',
+    const completion = await getClient().chat.completions.create({
+      model: getModel(),
       messages: [
         {
           role: 'system',
@@ -70,7 +107,7 @@ export const summarizeSession = async (req: AuthenticatedRequest, res: Response)
     const summary = completion.choices[0]?.message?.content || 'Could not generate summary.';
     res.status(200).json({ summary });
   } catch (error: any) {
-    console.error('Grok API error:', error?.message);
+    console.error('AI API error:', error?.message);
     res.status(500).json({ error: 'AI is currently unavailable. Please try again later.' });
   }
 };

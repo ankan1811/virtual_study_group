@@ -181,7 +181,7 @@ export default function AiPanel({ tab, chatMessages }: AiPanelProps) {
               <Sparkles size={28} className="text-indigo-400" />
             </div>
             <p className="text-sm text-gray-500 poppins-regular">
-              Ask any study question — Grok AI will answer
+              Ask any study question — AI will answer
             </p>
           </div>
         )}
@@ -204,7 +204,7 @@ export default function AiPanel({ tab, chatMessages }: AiPanelProps) {
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <Sparkles size={11} className="text-indigo-500" />
                     <span className="text-[10px] font-semibold text-indigo-500 poppins-semibold">
-                      Grok AI
+                      AI Assistant
                     </span>
                   </div>
                   <p className="whitespace-pre-wrap">{qa.answer}</p>
