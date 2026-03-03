@@ -4,9 +4,30 @@ import jwt from 'jsonwebtoken';
 import Companion from './models/Companion';
 import DirectMessage from './models/DirectMessage';
 import Notification, { NotificationType } from './models/Notification';
+import { RATE_LIMIT_CONFIG } from './middlewares/rateLimiter';
 
 let io: Server;
 const userSocketMap = new Map<string, string>(); // userId → socketId
+
+// ── Socket event throttling ──────────────────────────────────────────────────
+// Map<userId, Map<eventName, lastTimestamp>>
+const socketThrottles = new Map<string, Map<string, number>>();
+
+/** Returns true if the event should be BLOCKED (too frequent). */
+function isSocketThrottled(userId: string, eventName: string, minIntervalMs: number): boolean {
+  const now = Date.now();
+  let userMap = socketThrottles.get(userId);
+  if (!userMap) {
+    userMap = new Map();
+    socketThrottles.set(userId, userMap);
+  }
+  const lastTime = userMap.get(eventName) || 0;
+  if (now - lastTime < minIntervalMs) {
+    return true;
+  }
+  userMap.set(eventName, now);
+  return false;
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -144,6 +165,10 @@ export function initSocketServer(httpServer: http.Server): Server {
         roomId: string;
         inviterName: string;
       }) => {
+        if (isSocketThrottled(userId, 'sendInvite', RATE_LIMIT_CONFIG.SOCKET_INVITE_INTERVAL_MS)) {
+          socket.emit('inviteError', { message: 'Please wait before sending another invite' });
+          return;
+        }
         if (targetUserId === userId) {
           socket.emit('inviteError', { message: 'Cannot invite yourself' });
           return;
@@ -189,6 +214,10 @@ export function initSocketServer(httpServer: http.Server): Server {
     // ── Companion requests ──────────────────────────────────────────────────
 
     socket.on('companion:sendRequest', async ({ targetUserId }: { targetUserId: string }) => {
+      if (isSocketThrottled(userId, 'companion:sendRequest', RATE_LIMIT_CONFIG.SOCKET_COMPANION_REQ_INTERVAL_MS)) {
+        socket.emit('companion:error', { message: 'Please wait before sending another request' });
+        return;
+      }
       const targetSocketId = userSocketMap.get(targetUserId);
       if (targetSocketId) {
         io.to(targetSocketId).emit('companion:requestReceived', {
@@ -222,6 +251,10 @@ export function initSocketServer(httpServer: http.Server): Server {
     socket.on(
       'dm:send',
       async ({ toUserId, content, tempId }: { toUserId: string; content: string; tempId?: string }) => {
+        if (isSocketThrottled(userId, 'dm:send', RATE_LIMIT_CONFIG.SOCKET_DM_INTERVAL_MS)) {
+          socket.emit('dm:error', { message: 'Sending messages too quickly' });
+          return;
+        }
         try {
           const dmRoom = ['dm', ...[userId, toUserId].sort()].join('_');
           const msg = await DirectMessage.create({ from: userId, to: toUserId, content });
@@ -263,6 +296,7 @@ export function initSocketServer(httpServer: http.Server): Server {
 
     socket.on('disconnect', async () => {
       userSocketMap.delete(userId);
+      socketThrottles.delete(userId);
       console.log(`User ${userName} disconnected`);
       const updatedCompanionIds = await getAcceptedCompanionIds(userId);
       updatedCompanionIds.forEach((cId) => {

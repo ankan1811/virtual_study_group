@@ -15,9 +15,11 @@ import dotenv from "dotenv";
 import path from "path";
 import cors from "cors";
 import { initSocketServer } from "./socketServer";
+import { globalLimiter } from "./middlewares/rateLimiter";
 dotenv.config({ path: path.join(__dirname, "../.env") });
 
 const app = express();
+app.set("trust proxy", 1);
 const httpServer = http.createServer(app);
 const PORT = process.env.PORT || 3000;
 
@@ -33,6 +35,7 @@ mongoose
 
 app.use(cors());
 app.use(bodyParser.json());
+app.use(globalLimiter);
 
 // Routes
 app.use("/auth", authRoutes);
