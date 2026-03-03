@@ -25,6 +25,7 @@ import { logout } from "../store/authStore/authSlice";
 import { enterRoom } from "../store/RoomStore/roomSlice";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDarkMode } from "../utils/useDarkMode";
+import { disconnectSocket } from "../utils/socketInstance";
 import NotificationBell from "./NotificationBell";
 
 const navItems = [
@@ -181,8 +182,11 @@ export default function Navbar() {
                     <div className="border-t border-gray-100 dark:border-gray-700 py-1.5">
                       <button
                         onClick={() => {
+                          localStorage.removeItem("token");
+                          disconnectSocket();
                           dispatch(logout());
                           setShowProfile(false);
+                          navigate("/login");
                         }}
                         className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors poppins-regular"
                       >
@@ -311,8 +315,11 @@ export default function Navbar() {
               {isAuthenticated ? (
                 <button
                   onClick={() => {
+                    localStorage.removeItem("token");
+                    disconnectSocket();
                     dispatch(logout());
                     close();
+                    navigate("/login");
                   }}
                   className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all duration-150 group poppins-regular text-sm font-medium"
                 >

@@ -14,7 +14,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 | **AI**               | Switchable: Google Gemini 2.5 Pro (default) / xAI Grok            |
 | **State Management** | Redux Toolkit                                                     |
 | **Styling**          | Tailwind CSS, shadcn/ui, Framer Motion                            |
-| **Auth**             | JWT + bcrypt                                                      |
+| **Auth**             | JWT + bcrypt + nodemailer (password reset)                        |
 | **Streaming**        | FFmpeg (RTMP to YouTube Live)                                     |
 | **Audio Viz**        | P5.js                                                             |
 | **News Feed**        | Mock articles (AI / Tech / Productivity categories, 30-min cache) |
@@ -28,6 +28,9 @@ A full-stack web application for creating virtual study group spaces with real-t
 - Protected routes for authenticated users
 - Persistent auth state via Redux + localStorage
 - JWT rehydration on page refresh (no re-login needed)
+- **Logout** — clears JWT from localStorage, disconnects socket, resets Redux state, redirects to login
+- **Forgot Password** — email-based reset flow via nodemailer (SMTP). Generates a secure hashed token (SHA-256) with 1-hour expiry. Styled HTML email with reset link
+- **Reset Password** — token-validated page with new password + confirm password. Auto-redirects to login on success
 
 ### Personal Rooms & Invite System
 
@@ -162,6 +165,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 - Full streaming pipeline (frontend-to-backend wiring)
 - Session analytics dashboard
 - Study streak tracking
+- Change password from profile (logged-in users)
 
 ## Getting Started
 
@@ -203,6 +207,11 @@ JWT_SECRET=your_jwt_secret
 AI_PROVIDER=gemini                # "gemini" (default) or "grok"
 GEMINI_API_KEY=your_gemini_key    # from https://aistudio.google.com
 GROK_API_KEY=your_xai_api_key     # from https://console.x.ai (optional, for grok provider)
+SMTP_HOST=smtp.gmail.com          # SMTP server for password reset emails
+SMTP_PORT=587                     # SMTP port (587 for TLS)
+SMTP_USER=your-email@gmail.com    # SMTP sender email
+SMTP_PASS=your-app-password       # SMTP password (Gmail: use App Password)
+FRONTEND_URL=http://localhost:5175 # Frontend URL for reset links
 ```
 
 Start the server:
@@ -232,6 +241,8 @@ VITE_API_URL=http://localhost:7002
 | `/`          | Landing Page    |      No       |
 | `/login`     | Login           |      No       |
 | `/register`  | Register        |      No       |
+| `/forgot-password` | Forgot Password |  No       |
+| `/reset-password`  | Reset Password  |  No       |
 | `/home`      | Room Dashboard  |      Yes      |
 | `/profile`   | User Profile    |      Yes      |
 | `/chats`     | Recent Chats    |      Yes      |
@@ -245,6 +256,8 @@ VITE_API_URL=http://localhost:7002
 | ------ | ------------------------- | -------------------------------------------------------------------- |
 | POST   | `/auth/register`          | Register a new user                                                  |
 | POST   | `/auth/login`             | Login and receive JWT                                                |
+| POST   | `/auth/forgot-password`   | Send password reset email (nodemailer)                               |
+| POST   | `/auth/reset-password`    | Reset password with token                                            |
 | POST   | `/companion/request`      | Send companion request                                               |
 | POST   | `/companion/accept`       | Accept companion request                                             |
 | POST   | `/companion/decline`      | Decline companion request                                            |

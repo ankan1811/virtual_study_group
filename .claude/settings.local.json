@@ -6,7 +6,10 @@
       "Bash(npm install date-fns --save)",
       "Bash(npx tsc --noEmit)",
       "WebFetch(domain:docs.x.ai)",
-      "WebFetch(domain:ai.google.dev)"
+      "WebFetch(domain:ai.google.dev)",
+      "Bash(xargs grep -l \"export\\\\|router\\\\.\")",
+      "Bash(npm install nodemailer)",
+      "Bash(npm install -D @types/nodemailer)"
     ]
   }
 }

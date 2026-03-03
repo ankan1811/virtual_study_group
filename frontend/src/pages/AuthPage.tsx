@@ -1,6 +1,6 @@
 import React, { MouseEventHandler, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import axios from "axios";
 import {
@@ -291,6 +291,17 @@ export default function AuthPage() {
                 </button>
               </div>
             </div>
+
+            {mode === "login" && (
+              <div className="flex justify-end -mt-1">
+                <Link
+                  to="/forgot-password"
+                  className="text-xs text-indigo-600 dark:text-indigo-400 font-medium hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors poppins-regular"
+                >
+                  Forgot Password?
+                </Link>
+              </div>
+            )}
 
             <button
               type="submit"
