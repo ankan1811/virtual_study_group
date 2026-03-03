@@ -64,7 +64,64 @@ const dummyCompanions = [
 ];
 
 // Dummy companions that should show a green "unread" ring in logged-out preview
-const dummyUnreadIds = new Set(["d2", "d4", "d8"]);
+// d3 (Noah) is offline + unread = green ring but white/gray online dot
+const dummyUnreadIds = new Set(["d2", "d3", "d4", "d8"]);
+
+// Dummy news articles for logged-out preview
+const dummyNews: NewsArticle[] = [
+  {
+    id: "dn1",
+    title: "How AI is Transforming Study Habits in 2026",
+    summary:
+      "New research shows students using AI-powered tools retain 40% more information. From adaptive flashcards to real-time doubt solving, the classroom of the future is here.",
+    category: "AI",
+    source: "TechCrunch",
+    readTime: "4 min",
+    url: "#",
+    imageUrl: "https://images.unsplash.com/photo-1677442135703-1787eea5ce01?w=600&h=300&fit=crop",
+    accentColor: "#6366f1",
+    publishedAt: "Today",
+  },
+  {
+    id: "dn2",
+    title: "The Pomodoro Technique Gets a Digital Upgrade",
+    summary:
+      "Virtual study rooms are combining timed focus sessions with social accountability. Groups that study together stay consistent 3x longer than solo learners.",
+    category: "Productivity",
+    source: "Lifehacker",
+    readTime: "3 min",
+    url: "#",
+    imageUrl: "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=600&h=300&fit=crop",
+    accentColor: "#f59e0b",
+    publishedAt: "Yesterday",
+  },
+  {
+    id: "dn3",
+    title: "WebRTC & Real-Time Collaboration: What's New",
+    summary:
+      "Low-latency video calling combined with shared whiteboards is redefining remote education. Here's what developers need to know about the latest APIs.",
+    category: "Tech",
+    source: "Dev.to",
+    readTime: "5 min",
+    url: "#",
+    imageUrl: "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&h=300&fit=crop",
+    accentColor: "#10b981",
+    publishedAt: "2 days ago",
+  },
+  {
+    id: "dn4",
+    title: "Why Peer Learning Outperforms Solo Study",
+    summary:
+      "A Stanford meta-analysis across 120 studies confirms: explaining concepts to peers is the single most effective revision strategy for long-term retention.",
+    category: "Productivity",
+    source: "Harvard Ed Review",
+    readTime: "6 min",
+    url: "#",
+    imageUrl: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=600&h=300&fit=crop",
+    accentColor: "#f59e0b",
+    publishedAt: "3 days ago",
+  },
+];
 
 // Dummy search preview for logged-out state
 const dummySearchPeople = [
@@ -169,15 +226,19 @@ export default function RoomPage() {
         .catch(() => {});
     }
 
-    // News — no auth needed
-    axios
-      .get(`${import.meta.env.VITE_API_URL}/news`)
-      .then((res) => {
-        const data = res.data;
-        setNews(Array.isArray(data) ? data : data.articles || []);
-      })
-      .catch(console.error)
-      .finally(() => setNewsLoading(false));
+    // News — only fetch from API when logged in; logged-out uses dummyNews
+    if (isAuthenticated) {
+      axios
+        .get(`${import.meta.env.VITE_API_URL}/news`)
+        .then((res) => {
+          const data = res.data;
+          setNews(Array.isArray(data) ? data : data.articles || []);
+        })
+        .catch(console.error)
+        .finally(() => setNewsLoading(false));
+    } else {
+      setNewsLoading(false);
+    }
   }, [dispatch, isAuthenticated]);
 
   // ── Socket listeners ────────────────────────────────────────────────────────
@@ -690,7 +751,7 @@ export default function RoomPage() {
             {/* Logged-out overlay hint */}
             {!isAuthenticated && (
               <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-r from-white/0 via-white/60 to-white/0 dark:from-gray-950/0 dark:via-gray-950/60 dark:to-gray-950/0 pointer-events-none">
-                <span className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm px-4 py-2 rounded-full text-xs text-gray-500 dark:text-gray-400 poppins-semibold shadow-sm pointer-events-auto">
+                <span className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm px-4 py-2 rounded-full text-xs text-indigo-600 dark:text-indigo-400 poppins-semibold shadow-md border border-indigo-100 dark:border-indigo-900/50 hover:shadow-lg transition-shadow">
                   Login to connect with study companions
                 </span>
               </div>
@@ -753,7 +814,7 @@ export default function RoomPage() {
               {(["All", "AI", "Tech", "Productivity"] as const).map((cat) => (
                 <button
                   key={cat}
-                  onClick={() => setNewsFilter(cat)}
+                  onClick={() => isAuthenticated && setNewsFilter(cat)}
                   className={`px-3 py-1 rounded-full text-xs poppins-semibold transition-all ${
                     newsFilter === cat
                       ? "bg-indigo-600 text-white shadow-sm"
@@ -770,7 +831,63 @@ export default function RoomPage() {
             <div className="flex justify-center py-12">
               <Loader2 size={28} className="animate-spin text-indigo-400" />
             </div>
+          ) : !isAuthenticated ? (
+            /* ── Logged-out: blurred dummy cards + overlay ── */
+            <div className="relative">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 blur-sm select-none pointer-events-none">
+                {dummyNews.map((article) => (
+                  <div
+                    key={article.id}
+                    className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden"
+                  >
+                    {article.imageUrl && (
+                      <div className="h-36 overflow-hidden">
+                        <img
+                          src={article.imageUrl}
+                          alt=""
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+                    {!article.imageUrl && (
+                      <div className="h-1.5 w-full" style={{ background: article.accentColor }} />
+                    )}
+                    <div className="p-5">
+                      <span
+                        className="text-[11px] font-bold px-2.5 py-1 rounded-full poppins-semibold"
+                        style={{ background: article.accentColor + "18", color: article.accentColor }}
+                      >
+                        {article.category}
+                      </span>
+                      <h3 className="text-base font-bold mt-3 text-gray-900 dark:text-gray-100 leading-snug poppins-bold line-clamp-2">
+                        {article.title}
+                      </h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 leading-relaxed poppins-regular line-clamp-3">
+                        {article.summary}
+                      </p>
+                      <div className="flex items-center justify-between mt-4">
+                        <span className="text-xs text-gray-400 dark:text-gray-500 poppins-regular">
+                          {article.source} · {article.readTime} · {article.publishedAt}
+                        </span>
+                        <span className="text-xs font-semibold text-indigo-600 flex items-center gap-1 poppins-semibold">
+                          Read <ExternalLink size={11} />
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-gray-50/30 via-gray-50/70 to-gray-50/30 dark:from-gray-950/30 dark:via-gray-950/70 dark:to-gray-950/30 rounded-2xl">
+                <button
+                  onClick={() => navigate("/login")}
+                  className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm px-5 py-2.5 rounded-full text-xs text-indigo-600 dark:text-indigo-400 poppins-semibold shadow-md border border-indigo-100 dark:border-indigo-900/50 hover:shadow-lg transition-shadow"
+                >
+                  Login to read trending articles
+                </button>
+              </div>
+            </div>
           ) : (
+            /* ── Logged-in: real articles ── */
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {filteredNews.map((article, i) => (
                 <motion.a
