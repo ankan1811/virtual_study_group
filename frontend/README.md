@@ -117,9 +117,11 @@ Requires the backend running on port 7002 (see `backend/README.md` or `backend/.
 | `companion:accepted` | Server → Client | Someone accepted your request |
 | `dm:receive` | Server → Client | Incoming DM (also used for unread tracking) |
 | `dm:join` | Client → Server | Join a DM room |
-| `dm:send` | Client → Server | Send a DM message |
-| `sendInvite` | Client → Server | Invite companion to room |
+| `dm:send` | Client → Server | Send a DM message (throttled: 200ms) |
+| `sendInvite` | Client → Server | Invite companion to room (throttled: 3s) |
 | `receiveInvite` | Server → Client | Incoming room invite |
-| `inviteError` | Server → Client | Invite failed |
+| `inviteError` | Server → Client | Invite failed or throttled |
 | `joinRoom` | Client → Server | Join a chat room |
 | `serverMessage` | Client → Server | Send chat message |
+| `dm:error` | Server → Client | DM send throttled (too frequent) |
+| `companion:error` | Server → Client | Companion request throttled (too frequent) |

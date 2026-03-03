@@ -18,11 +18,18 @@ virtual_study_group/
 |       |
 |       |-- server.ts                # Main entry point - Express app setup, MongoDB
 |       |                              connection, CORS config, route mounting.
-|       |                              Registers all 8 route groups. Port via .env (PORT)
+|       |                              Registers all 9 route groups. Port via .env (PORT).
+|       |                              Applies global rate limiter (200 req/IP/15min).
+|       |                              Sets trust proxy for correct IP behind proxies
 |       |
 |       |-- socketServer.ts          # Socket.IO server with JWT auth middleware.
 |       |                              Handles: room chat, invites (companion-gated),
 |       |                              companion events, DM rooms, presence tracking.
+|       |                              Per-user event throttling via socketThrottles map:
+|       |                              dm:send (200ms), companion:sendRequest (5s),
+|       |                              sendInvite (3s). Throttle intervals read from
+|       |                              RATE_LIMIT_CONFIG. Emits dm:error, companion:error,
+|       |                              inviteError on throttle. Cleanup on disconnect.
 |       |                              DM events: dm:send (echoes _id+tempId for delivery
 |       |                              ack), dm:markRead (marks read + emits dm:readUpdate
 |       |                              to sender), dm:join.
@@ -78,14 +85,15 @@ virtual_study_group/
 |       |
 |       |-- routes/                  # Express route definitions
 |       |   |-- authRoutes.ts        # /auth/register, /auth/login,
-|       |   |                          /auth/forgot-password, /auth/reset-password
+|       |   |                          /auth/forgot-password, /auth/reset-password.
+|       |   |                          Dual-layer rate limiting: per-email + per-IP
 |       |   |-- roomRoutes.ts        # /room/create, /room/join/:room_id, /room/users/:room_id
 |       |   |-- chatRoutes.ts        # /chat/join, /chat/add, /chat/view/:room_id
 |       |   |-- companionRoutes.ts   # /companion/request, /companion/accept,
 |       |   |                          /companion/decline, /companion/list, /companion/pending
 |       |   |-- userRoutes.ts        # GET /user/profile, PUT /user/profile,
-|       |   |                          GET /user/search?q=
-|       |   |-- aiRoutes.ts          # /ai/ask, /ai/summary
+|       |   |                          GET /user/search?q= (per-user rate limited)
+|       |   |-- aiRoutes.ts          # /ai/ask, /ai/summary (per-user rate limited)
 |       |   |-- dmRoutes.ts          # GET /dm/recent (recent chats aggregation),
 |       |   |                          GET /dm/unread-counts (before /:companionId to
 |       |   |                          avoid shadowing), GET /dm/:companionId,
@@ -112,7 +120,19 @@ virtual_study_group/
 |       |
 |       |-- middlewares/             # Express middleware
 |           |-- middleware.ts        # JWT token verification - extracts userId from
-|                                      Authorization header. Exports AuthenticatedRequest
+|           |                          Authorization header. Exports AuthenticatedRequest
+|           |-- rateLimiter.ts       # Rate limiting middleware (express-rate-limit).
+|                                      RATE_LIMIT_CONFIG: single configurable constants
+|                                      object for all thresholds. Exports 7 limiters:
+|                                      authEmailLimiter (7/email/15min),
+|                                      authIpLimiter (15/IP/15min),
+|                                      resetEmailLimiter (3/email/15min),
+|                                      resetIpLimiter (5/IP/15min),
+|                                      aiLimiter (20/user/15min),
+|                                      searchLimiter (30/user/1min),
+|                                      globalLimiter (200/IP/15min).
+|                                      Also exports RATE_LIMIT_CONFIG for socket
+|                                      throttle intervals used by socketServer.ts
 
 |
 |-- frontend/                        # React 18 + TypeScript + Vite frontend
@@ -364,24 +384,26 @@ SOCKET EVENTS
     serverMessage         Client sends message (broadcast to room)
     message:{roomId}      Server sends message to room
 
-  Invites (companion-gated):
+  Invites (companion-gated, throttled 3s):
     sendInvite            Client invites a companion to their room
     receiveInvite         Server notifies target of invite
     acceptInvite          Client accepts invite (joins room)
     declineInvite         Client declines invite
-    inviteError           Server reports invite failure
+    inviteError           Server reports invite failure or throttle
 
-  Companions:
+  Companions (sendRequest throttled 5s):
     companion:sendRequest      Client sends companion request
+    companion:error            Server reports companion request throttle
     companion:requestReceived  Server notifies target of request
     companion:acceptNotify     Client notifies requester of acceptance
     companion:accepted         Server confirms acceptance to requester
     companion:online           Server broadcasts user online
     companion:offline          Server broadcasts user offline
 
-  DMs:
+  DMs (dm:send throttled 200ms):
     dm:join               Client joins DM room (dm_{sortedIds})
     dm:send               Client sends DM (payload: toUserId, content, tempId)
+    dm:error              Server reports DM send throttle
     dm:receive            Server broadcasts DM (payload: _id, from, fromName, content,
                             createdAt, read, tempId). Sender receives this as delivery ack.
     dm:markRead           Client signals they opened a DM panel (marks messages as read)

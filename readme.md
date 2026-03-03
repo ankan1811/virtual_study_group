@@ -15,6 +15,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 | **State Management** | Redux Toolkit                                                     |
 | **Styling**          | Tailwind CSS, shadcn/ui, Framer Motion                            |
 | **Auth**             | JWT + bcrypt + nodemailer (password reset)                        |
+| **Rate Limiting**    | express-rate-limit (per-user + per-IP, configurable thresholds)   |
 | **Streaming**        | FFmpeg (RTMP to YouTube Live)                                     |
 | **Audio Viz**        | P5.js                                                             |
 | **News Feed**        | Mock articles (AI / Tech / Productivity categories, 30-min cache) |
@@ -151,6 +152,24 @@ A full-stack web application for creating virtual study group spaces with real-t
 - YouTube Live stream key integration
 - H264/AAC encoding pipeline
 
+### Rate Limiting & Security
+
+- **User-specific rate limiting** via `express-rate-limit` with all thresholds defined in a single `RATE_LIMIT_CONFIG` object for easy tuning
+- **Dual-layer protection on auth endpoints** — both per-email and per-IP limits applied simultaneously:
+  - Login & Register: 7 attempts per email / 15 attempts per IP per 15-minute window
+  - Forgot & Reset Password: 3 per email / 5 per IP per 15-minute window
+- **Per-userId rate limiting on authenticated endpoints:**
+  - AI Doubt Solver & Session Summary: 20 requests per user per 15 minutes (protects expensive API quotas)
+  - User Search: 30 requests per user per minute (prevents enumeration)
+- **Global safety net:** 200 requests per IP per 15 minutes across all routes
+- **Socket event throttling** (per-user, in-memory):
+  - `dm:send`: 200ms minimum interval (prevents message flooding)
+  - `companion:sendRequest`: 5s minimum interval (prevents notification spam)
+  - `sendInvite`: 3s minimum interval (prevents invite spam)
+- Throttled socket events emit error responses (`dm:error`, `companion:error`, `inviteError`)
+- HTTP 429 responses include `RateLimit-*` standard headers
+- `trust proxy` enabled for correct client IP detection behind reverse proxies
+
 ### UI/UX
 
 - Animated components with Framer Motion throughout
@@ -254,10 +273,10 @@ VITE_API_URL=http://localhost:7002
 
 | Method | Endpoint                  | Description                                                          |
 | ------ | ------------------------- | -------------------------------------------------------------------- |
-| POST   | `/auth/register`          | Register a new user                                                  |
-| POST   | `/auth/login`             | Login and receive JWT                                                |
-| POST   | `/auth/forgot-password`   | Send password reset email (nodemailer)                               |
-| POST   | `/auth/reset-password`    | Reset password with token                                            |
+| POST   | `/auth/register`          | Register a new user (rate limited: per-email + per-IP)               |
+| POST   | `/auth/login`             | Login and receive JWT (rate limited: per-email + per-IP)             |
+| POST   | `/auth/forgot-password`   | Send password reset email (rate limited: per-email + per-IP)         |
+| POST   | `/auth/reset-password`    | Reset password with token (rate limited: per-email + per-IP)         |
 | POST   | `/companion/request`      | Send companion request                                               |
 | POST   | `/companion/accept`       | Accept companion request                                             |
 | POST   | `/companion/decline`      | Decline companion request                                            |
@@ -265,10 +284,10 @@ VITE_API_URL=http://localhost:7002
 | GET    | `/companion/pending`      | Get pending requests                                                 |
 | GET    | `/user/profile`           | Get authenticated user's profile (name, email, bio, companion count) |
 | PUT    | `/user/profile`           | Update profile (name, bio) — re-issues JWT                           |
-| GET    | `/user/search?q=`         | Search users by name/email                                           |
+| GET    | `/user/search?q=`         | Search users by name/email (rate limited: per-user)                  |
 | GET    | `/news`                   | Get news feed articles                                               |
-| POST   | `/ai/ask`                 | Ask AI a study question (Gemini/Grok)                                |
-| POST   | `/ai/summary`             | Generate AI session summary                                          |
+| POST   | `/ai/ask`                 | Ask AI a study question (rate limited: per-user)                     |
+| POST   | `/ai/summary`             | Generate AI session summary (rate limited: per-user)                 |
 | GET    | `/dm/recent`              | Get recent chats (last message per companion, sorted by time)        |
 | GET    | `/dm/:companionId`        | Get DM history (includes `_id`, `read` state)                        |
 | GET    | `/dm/unread-counts`       | Get unread message count per companion                               |
