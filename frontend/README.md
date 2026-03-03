@@ -28,8 +28,27 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
 - **Add Companion Modal** — search users by name/email, send companion requests
 - **DM Panel** — slide-in panel for real-time direct messaging with a companion
 
+### User Profile (`ProfilePage`)
+- Accessible from the profile avatar dropdown ("My Profile") — navigates to `/profile`
+- Gradient banner with large initials-based avatar circle, user name, and "Student" label
+- **Editable fields:** name (inline input) and bio (textarea)
+- **Read-only:** email display
+- Stats row showing companion count and email
+- Save button calls `PUT /user/profile`, re-issues JWT, updates Redux auth state with new name
+- Styled with Tailwind + Framer Motion (consistent with existing pages)
+
+### Chats (`ChatsPage`)
+- WhatsApp-style recent conversations list at `/chats`, accessible from sidebar ("Chats" nav item)
+- Fetches `GET /dm/recent` on mount — aggregated last message per conversation partner, sorted by most recent
+- Each conversation row shows: companion avatar (initials), name, last message preview (truncated, with "You:" prefix for sent messages), relative timestamp (via `date-fns`), unread badge count
+- **Bold styling** for unread conversations, muted grey for read
+- Search bar to filter conversations by companion name
+- Clicking a row opens the existing `DmPanel` as a slide-in overlay
+- **Real-time updates:** listens to `dm:receive` socket event to bump new messages to the top of the list
+- Empty state when no conversations yet
+
 ### Navbar
-- **Sidebar** (left) — hamburger toggle, slide-in panel with navigation links, dark mode toggle, logout
+- **Sidebar** (left) — hamburger toggle, slide-in panel with navigation links (Home, Chats, My Room, Streaming, Ask AI, Contact us), dark mode toggle, logout
 - **Profile Avatar** (top-right) — gradient circle with user initials. Click opens a dropdown with: My Profile, Settings, My Room, Ask AI, Logout. Logged-out users see a login icon button.
 - **Dark Mode Toggle** — persistent toggle in both the floating top-left button and inside the sidebar
 
@@ -50,7 +69,7 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
 
 | Slice | State | Key Actions |
 |-------|-------|-------------|
-| `auth` | `isAuthenticated`, `user` | `login`, `logout` |
+| `auth` | `isAuthenticated`, `user` | `login`, `logout`, `updateName` |
 | `room` | `currentRoomId`, `isOwner` | `enterRoom`, `leaveRoom` |
 | `invite` | `pendingInvite` | `receiveInvite`, `clearInvite` |
 | `companion` | `companions[]`, `pendingRequests[]` | `setCompanions`, `setOnline`, `setOffline`, `setPendingRequests`, `addPendingRequest`, `removePendingRequest`, `addCompanion` |

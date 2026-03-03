@@ -44,13 +44,19 @@ virtual_study_group/
 |       |   |-- CompanionController.ts # Send/accept/decline companion requests,
 |       |   |                          get companion list, get pending requests.
 |       |   |                          Emits real-time socket notifications
-|       |   |-- UserController.ts    # Search users by name/email (case-insensitive,
+|       |   |-- UserController.ts    # getProfile: returns name, email, bio, avatar,
+|       |   |                          companionCount for authenticated user.
+|       |   |                          updateProfile: updates name/bio, re-issues JWT.
+|       |   |                          searchUsers: search by name/email (case-insensitive,
 |       |   |                          excludes self, limit 10)
 |       |   |-- AiController.ts      # Grok AI integration via OpenAI SDK.
 |       |   |                          POST /ai/ask (question -> answer)
 |       |   |                          POST /ai/summary (messages -> summary)
 |       |   |                          Model: grok-3-mini, baseURL: api.x.ai/v1
-|       |   |-- DmController.ts      # getDmHistory: last 50 messages with _id + read
+|       |   |-- DmController.ts      # getRecentChats: aggregation pipeline returning
+|       |   |                          last message per conversation partner, sorted
+|       |   |                          by most recent, with unread counts.
+|       |   |                          getDmHistory: last 50 messages with _id + read
 |       |   |                          state. getUnreadCounts: unread count per sender
 |       |   |                          (for restoring green rings on refresh).
 |       |   |                          markDmRead: marks sender's messages as read +
@@ -67,9 +73,11 @@ virtual_study_group/
 |       |   |-- chatRoutes.ts        # /chat/join, /chat/add, /chat/view/:room_id
 |       |   |-- companionRoutes.ts   # /companion/request, /companion/accept,
 |       |   |                          /companion/decline, /companion/list, /companion/pending
-|       |   |-- userRoutes.ts        # /user/search?q=
+|       |   |-- userRoutes.ts        # GET /user/profile, PUT /user/profile,
+|       |   |                          GET /user/search?q=
 |       |   |-- aiRoutes.ts          # /ai/ask, /ai/summary
-|       |   |-- dmRoutes.ts          # GET /dm/unread-counts (before /:companionId to
+|       |   |-- dmRoutes.ts          # GET /dm/recent (recent chats aggregation),
+|       |   |                          GET /dm/unread-counts (before /:companionId to
 |       |   |                          avoid shadowing), GET /dm/:companionId,
 |       |   |                          PATCH /dm/:companionId/read
 |       |   |-- notificationRoutes.ts # GET /notifications, PATCH /:id/read,
@@ -77,7 +85,8 @@ virtual_study_group/
 |       |   |-- newsRoutes.ts        # /news
 |       |
 |       |-- models/                  # Mongoose schemas and models
-|       |   |-- User.ts              # User model: name, email (unique), password (hashed)
+|       |   |-- User.ts              # User model: name, email (unique), password (hashed),
+|       |   |                          bio (default ''), avatar (default '')
 |       |   |-- Room.ts              # Room model: users[] (references User)
 |       |   |-- Chat.ts              # Chat model: sendBy (User ref), message, room_id (Room ref)
 |       |   |-- Companion.ts         # Companion model: requester, recipient (User refs),
@@ -159,6 +168,15 @@ virtual_study_group/
         |   |                            by VITE_NEWS_IMAGES_ONLY env var
         |   |                          - Add Companion modal with user search
         |   |                          - DM panel integration
+        |   |-- ProfilePage.tsx      # User profile page - gradient banner, large
+        |   |                          initials avatar, editable name/bio, email
+        |   |                          display, companion count stats. Calls
+        |   |                          GET/PUT /user/profile, re-issues JWT on save
+        |   |-- ChatsPage.tsx        # WhatsApp-style recent chats list. Fetches
+        |   |                          GET /dm/recent on mount. Each row: companion
+        |   |                          avatar, name, last message preview, timestamp,
+        |   |                          unread badge. Click opens DmPanel. Real-time
+        |   |                          updates via dm:receive socket event
         |   |-- RoomCallPage.tsx     # Video call page - Agora RTC integration,
         |   |                          mic/camera controls, remote user streams.
         |   |                          Tab panel: Chat / AI Doubt / Summary.
@@ -176,8 +194,9 @@ virtual_study_group/
         |   |-- Register.tsx         # Register form - name/email/password, auto-login
         |   |                          after registration, dispatches + connectSocket
         |   |-- Navbar.tsx           # Collapsible sidebar (not top bar) - hamburger
-        |   |                          toggle, framer-motion spring animation,
-        |   |                          "My Room" item, active route highlighting.
+        |   |                          toggle, framer-motion spring animation.
+        |   |                          Nav items: Home, Chats, My Room, Streaming,
+        |   |                          Ask AI, Contact us. Active route highlighting.
         |   |                          Profile avatar (top-right) with dropdown:
         |   |                          My Profile, Settings, My Room, Ask AI,
         |   |                          Logout. Login icon shown when logged out
@@ -227,7 +246,7 @@ virtual_study_group/
         |   |   |-- store.ts         # Combined store config - 5 reducers: auth, room,
         |   |   |                      invite, companion, notification. Exports RootState,
         |   |   |                      AppDispatch, AuthState (backwards-compat alias)
-        |   |   |-- authSlice.ts     # Auth slice: login/logout actions.
+        |   |   |-- authSlice.ts     # Auth slice: login/logout/updateName actions.
         |   |                          AuthUser: { name, userId, roomId }
         |   |-- RoomStore/
         |   |   |-- store.ts         # Room store (legacy, unused - store is combined)
@@ -290,6 +309,8 @@ API ROUTES SUMMARY
     GET    /companion/pending       Get pending requests
 
   Users:
+    GET    /user/profile             Get authenticated user's profile (name, email, bio, companionCount)
+    PUT    /user/profile             Update profile (name, bio) — re-issues JWT
     GET    /user/search?q=          Search users by name/email
 
   AI (Grok):
@@ -297,6 +318,7 @@ API ROUTES SUMMARY
     POST   /ai/summary             Generate AI summary of chat messages
 
   DMs:
+    GET    /dm/recent               Get recent chats (last message per companion, sorted by time)
     GET    /dm/unread-counts        Get unread message count per companion (for badge restore)
     GET    /dm/:companionId         Get DM history (last 50, includes _id + read state)
     PATCH  /dm/:companionId/read    Mark all messages from companion as read
@@ -348,7 +370,7 @@ SOCKET EVENTS
 
 DATABASE COLLECTIONS
 ====================
-  users            ->  { name, email (unique), password (bcrypt hash) }
+  users            ->  { name, email (unique), password (bcrypt hash), bio, avatar }
   rooms            ->  { users: [ObjectId -> User] }
   chats            ->  { sendBy: ObjectId -> User, message: String, room_id: ObjectId -> Room }
   companions       ->  { requester: ObjectId, recipient: ObjectId, status: 'pending'|'accepted' }

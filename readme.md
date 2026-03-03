@@ -45,6 +45,15 @@ A full-stack web application for creating virtual study group spaces with real-t
 - Companion popover with quick actions: Message, Invite to Room
 - Real-time companion request notifications via overlays
 
+### User Profile
+
+- Profile page accessible from the profile avatar dropdown ("My Profile")
+- Gradient banner with large initials-based avatar, name, and "Student" label
+- Editable name and bio with inline edit/save mode
+- Stats row showing companion count and email
+- Profile updates re-issue JWT and sync Redux state instantly
+- Extended User model with `bio` and `avatar` fields
+
 ### Direct Messaging (DM)
 
 - Slide-in DM panel from companion avatars
@@ -57,6 +66,17 @@ A full-stack web application for creating virtual study group spaces with real-t
   - ✓✓ Double tick = read (recipient opened the panel)
 - Unread badge (green ring on avatar) **persists across refreshes** — restored from `GET /dm/unread-counts` on mount
 - `dm:markRead` socket event instantly notifies sender when recipient opens the conversation
+
+### Chats Page (Recent Conversations)
+
+- WhatsApp-style recent chats list accessible from the sidebar ("Chats" nav item)
+- Shows all DM conversations sorted by most recent message (descending)
+- Each row displays: companion avatar (initials), name, last message preview, relative timestamp, unread badge count
+- Bold styling for unread conversations, muted for read
+- Search bar to filter conversations by companion name
+- Clicking a chat row opens the DM panel as a slide-in overlay
+- Real-time updates: new messages bump conversations to the top via `dm:receive` socket event
+- Aggregation pipeline on backend groups messages by conversation partner
 
 ### Persistent Notifications
 
@@ -113,7 +133,9 @@ A full-stack web application for creating virtual study group spaces with real-t
 
 - Collapsible sidebar (not a top bar) with framer-motion spring animation
 - Hamburger toggle at top-left
+- Sidebar items: Home, Chats, My Room, Streaming, Ask AI, Contact us
 - "My Room" menu item dispatches room entry and navigates to call
+- Profile avatar dropdown with: My Profile, Settings, My Room, Ask AI, Logout
 - Active route highlighting
 
 ### Live Streaming (YouTube)
@@ -206,6 +228,8 @@ VITE_API_URL=http://localhost:7002
 | `/login`     | Login           |      No       |
 | `/register`  | Register        |      No       |
 | `/home`      | Room Dashboard  |      Yes      |
+| `/profile`   | User Profile    |      Yes      |
+| `/chats`     | Recent Chats    |      Yes      |
 | `/room/call` | Video Call Room |      Yes      |
 | `/stream`    | Live Streaming  |      Yes      |
 | `/ask`       | Ask AI (Voice)  |      Yes      |
@@ -221,10 +245,13 @@ VITE_API_URL=http://localhost:7002
 | POST   | `/companion/decline`   | Decline companion request    |
 | GET    | `/companion/list`      | Get accepted companions      |
 | GET    | `/companion/pending`   | Get pending requests         |
+| GET    | `/user/profile`        | Get authenticated user's profile (name, email, bio, companion count) |
+| PUT    | `/user/profile`        | Update profile (name, bio) — re-issues JWT               |
 | GET    | `/user/search?q=`     | Search users by name/email   |
 | GET    | `/news`                | Get news feed articles       |
 | POST   | `/ai/ask`              | Ask Grok a study question    |
 | POST   | `/ai/summary`          | Generate session summary     |
+| GET    | `/dm/recent`                | Get recent chats (last message per companion, sorted by time) |
 | GET    | `/dm/:companionId`          | Get DM history (includes `_id`, `read` state) |
 | GET    | `/dm/unread-counts`         | Get unread message count per companion         |
 | PATCH  | `/dm/:companionId/read`     | Mark all messages from companion as read       |

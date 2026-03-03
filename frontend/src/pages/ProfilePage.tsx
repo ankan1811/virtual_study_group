@@ -21,7 +21,6 @@ const API = import.meta.env.VITE_API_URL;
 export default function ProfilePage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const user = useSelector((s: AuthState) => s.auth.user);
   const isAuthenticated = useSelector((s: AuthState) => s.auth.isAuthenticated);
 
   const [name, setName] = useState("");
