@@ -4,7 +4,9 @@
       "Bash(npm start)",
       "Bash(npm run dev)",
       "Bash(npm install date-fns --save)",
-      "Bash(npx tsc --noEmit)"
+      "Bash(npx tsc --noEmit)",
+      "WebFetch(domain:docs.x.ai)",
+      "WebFetch(domain:ai.google.dev)"
     ]
   }
 }
