@@ -36,9 +36,16 @@ virtual_study_group/
 |       |                              Spawns FFmpeg child process for RTMP output.
 |       |                              Handles binary stream data from frontend.
 |       |
+|       |-- utils/                   # Backend utility modules
+|       |   |-- sendEmail.ts         # Nodemailer transporter — sends emails via SMTP.
+|       |                              Uses SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS
+|       |                              env vars. Exports sendEmail(to, subject, html)
+|       |
 |       |-- controllers/             # Request handlers (business logic)
-|       |   |-- AuthController.ts    # Register (bcrypt hash) and Login (JWT sign).
-|       |   |                          Both return { token, name, userId }
+|       |   |-- AuthController.ts    # Register (bcrypt hash), Login (JWT sign),
+|       |   |                          ForgotPassword (SHA-256 hashed token + nodemailer),
+|       |   |                          ResetPassword (token validation + password update).
+|       |   |                          All return JSON responses
 |       |   |-- RoomController.ts    # Create room, join room, get room users
 |       |   |-- ChatController.ts    # Add chat message, get chat history, get user name
 |       |   |-- CompanionController.ts # Send/accept/decline companion requests,
@@ -70,7 +77,8 @@ virtual_study_group/
 |       |                              AI, Tech, Productivity categories
 |       |
 |       |-- routes/                  # Express route definitions
-|       |   |-- authRoutes.ts        # /auth/register, /auth/login
+|       |   |-- authRoutes.ts        # /auth/register, /auth/login,
+|       |   |                          /auth/forgot-password, /auth/reset-password
 |       |   |-- roomRoutes.ts        # /room/create, /room/join/:room_id, /room/users/:room_id
 |       |   |-- chatRoutes.ts        # /chat/join, /chat/add, /chat/view/:room_id
 |       |   |-- companionRoutes.ts   # /companion/request, /companion/accept,
@@ -88,7 +96,8 @@ virtual_study_group/
 |       |
 |       |-- models/                  # Mongoose schemas and models
 |       |   |-- User.ts              # User model: name, email (unique), password (hashed),
-|       |   |                          bio (default ''), avatar (default '')
+|       |   |                          bio (default ''), avatar (default ''),
+|       |   |                          passwordResetToken, passwordResetExpires
 |       |   |-- Room.ts              # Room model: users[] (references User)
 |       |   |-- Chat.ts              # Chat model: sendBy (User ref), message, room_id (Room ref)
 |       |   |-- Companion.ts         # Companion model: requester, recipient (User refs),
@@ -152,8 +161,15 @@ virtual_study_group/
         |
         |-- pages/                   # Top-level page components (one per route)
         |   |-- LandingPage.tsx      # Hero page with animated CTAs
-        |   |-- AuthPage.tsx         # Auth layout wrapper with background image,
-        |   |                          renders Login or Register as children
+        |   |-- AuthPage.tsx         # Auth layout wrapper with Login/Register tabs.
+        |   |                          Includes "Forgot Password?" link (login mode)
+        |   |-- ForgotPasswordPage.tsx # Email input form for password reset.
+        |   |                          Matches AuthPage visual style (gradient panel).
+        |   |                          POST /auth/forgot-password, success confirmation
+        |   |-- ResetPasswordPage.tsx # New password + confirm password form.
+        |   |                          Reads token/email from URL params.
+        |   |                          POST /auth/reset-password, auto-redirect on success.
+        |   |                          Handles invalid/expired link states
         |   |-- RoomPage.tsx         # Home dashboard with:
         |   |                          - Global people search bar (blurred dummy
         |   |                            preview when logged out, live search when
@@ -201,7 +217,9 @@ virtual_study_group/
         |   |                          Ask AI, Contact us. Active route highlighting.
         |   |                          Profile avatar (top-right) with dropdown:
         |   |                          My Profile, Settings, My Room, Ask AI,
-        |   |                          Logout. Login icon shown when logged out
+        |   |                          Logout. Login icon shown when logged out.
+        |   |                          Logout: clears localStorage token, disconnects
+        |   |                          socket, resets Redux, redirects to /login
         |   |-- NavbarCall.tsx       # Minimal navbar for in-call view with exit button
         |   |-- ChatComponent.tsx    # Real-time chat widget - uses getSocket()
         |   |                          singleton, room-based messaging, lifts messages
@@ -284,7 +302,8 @@ virtual_study_group/
 
 ENV CONFIGURATION
 =================
-  backend/.env   ->  MONGODB_URI, PORT, JWT_SECRET, AI_PROVIDER, GEMINI_API_KEY, GROK_API_KEY
+  backend/.env   ->  MONGODB_URI, PORT, JWT_SECRET, AI_PROVIDER, GEMINI_API_KEY, GROK_API_KEY,
+                     SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, FRONTEND_URL
   frontend/.env  ->  VITE_API_URL, VITE_STREAM_SOCKET_URL, VITE_NEWS_IMAGES_ONLY
 
 
@@ -293,6 +312,8 @@ API ROUTES SUMMARY
   Auth:
     POST   /auth/register           Register new user (returns token, name, userId)
     POST   /auth/login              Login (returns token, name, userId)
+    POST   /auth/forgot-password    Send password reset email (hashed token, 1hr expiry)
+    POST   /auth/reset-password     Reset password with token + email + new password
 
   Rooms:
     POST   /room/create             Create room or add user to existing room
@@ -373,7 +394,8 @@ SOCKET EVENTS
 
 DATABASE COLLECTIONS
 ====================
-  users            ->  { name, email (unique), password (bcrypt hash), bio, avatar }
+  users            ->  { name, email (unique), password (bcrypt hash), bio, avatar,
+                         passwordResetToken, passwordResetExpires }
   rooms            ->  { users: [ObjectId -> User] }
   chats            ->  { sendBy: ObjectId -> User, message: String, room_id: ObjectId -> Room }
   companions       ->  { requester: ObjectId, recipient: ObjectId, status: 'pending'|'accepted' }

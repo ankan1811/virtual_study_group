@@ -51,6 +51,21 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
 - **Sidebar** (left) — hamburger toggle, slide-in panel with navigation links (Home, Chats, My Room, Streaming, Ask AI, Contact us), dark mode toggle, logout
 - **Profile Avatar** (top-right) — gradient circle with user initials. Click opens a dropdown with: My Profile, Settings, My Room, Ask AI, Logout. Logged-out users see a login icon button.
 - **Dark Mode Toggle** — persistent toggle in both the floating top-left button and inside the sidebar
+- **Logout** — properly clears JWT from localStorage, disconnects socket, resets Redux state, redirects to `/login`
+
+### Forgot Password (`ForgotPasswordPage`)
+- Email input form matching the AuthPage visual style (gradient left panel, form right)
+- Submits to `POST /auth/forgot-password`
+- Success state shows "Check your email" confirmation with the entered email
+- Back to Sign In link
+
+### Reset Password (`ResetPasswordPage`)
+- Reads `token` and `email` from URL query params (from the email link)
+- New password + confirm password fields with show/hide toggles
+- Client-side validation (min 6 chars, match check)
+- Submits to `POST /auth/reset-password`
+- Success state with auto-redirect to login after 3 seconds
+- Invalid/missing link detection with "Request New Link" CTA
 
 ### Room Call (`RoomCallPage`)
 - Agora RTC video/audio with mic/camera controls
@@ -69,7 +84,7 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
 
 | Slice | State | Key Actions |
 |-------|-------|-------------|
-| `auth` | `isAuthenticated`, `user` | `login`, `logout`, `updateName` |
+| `auth` | `isAuthenticated`, `user` | `login`, `logout` (+ token/socket cleanup), `updateName` |
 | `room` | `currentRoomId`, `isOwner` | `enterRoom`, `leaveRoom` |
 | `invite` | `pendingInvite` | `receiveInvite`, `clearInvite` |
 | `companion` | `companions[]`, `pendingRequests[]` | `setCompanions`, `setOnline`, `setOffline`, `setPendingRequests`, `addPendingRequest`, `removePendingRequest`, `addCompanion` |
