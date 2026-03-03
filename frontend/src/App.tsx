@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import "./App.css";
 import AuthPage from "./pages/AuthPage";
 import RoomPage from "./pages/RoomPage";
@@ -38,7 +38,7 @@ function AppInner() {
       <InviteNotificationOverlay />
       <CompanionRequestOverlay />
       <Routes>
-        <Route element={<LandingPage />} path="/" />
+        <Route element={<Navigate to="/home" replace />} path="/" />
         <Route element={<RoomPage />} path="/home" />
         <Route element={<Streampage />} path="/stream" />
         <Route element={<AskAiPage />} path="/ask" />
