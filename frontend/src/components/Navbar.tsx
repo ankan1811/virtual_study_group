@@ -12,6 +12,7 @@ import {
   Menu,
   ChevronRight,
   DoorOpen,
+  MessageCircle,
   Moon,
   Sun,
   User,
@@ -28,6 +29,7 @@ import NotificationBell from "./NotificationBell";
 
 const navItems = [
   { title: "Home", path: "/home", icon: Home },
+  { title: "Chats", path: "/chats", icon: MessageCircle },
   { title: "My Room", path: "/room/call", icon: DoorOpen },
   { title: "Streaming", path: "/stream", icon: Video },
   { title: "Ask AI", path: "/ask", icon: Bot },

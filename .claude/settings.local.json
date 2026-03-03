@@ -3,7 +3,8 @@
     "allow": [
       "Bash(npm start)",
       "Bash(npm run dev)",
-      "Bash(npm install date-fns --save)"
+      "Bash(npm install date-fns --save)",
+      "Bash(npx tsc --noEmit)"
     ]
   }
 }

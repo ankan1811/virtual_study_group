@@ -10,6 +10,8 @@ import store from "./store/authStore/store";
 import Streampage from "./pages/Streampage";
 import AskAiPage from "./pages/AskAiPage";
 import DemoAiPage from "./pages/DemoAiPage";
+import ProfilePage from "./pages/ProfilePage";
+import ChatsPage from "./pages/ChatsPage";
 import { login } from "./store/authStore/authSlice";
 import { connectSocket } from "./utils/socketInstance";
 import InviteNotificationOverlay from "./components/InviteNotificationOverlay";
@@ -45,6 +47,8 @@ function AppInner() {
         <Route element={<DemoAiPage />} path="/demo" />
         <Route element={<AuthPage />} path="/login" />
         <Route element={<AuthPage />} path="/register" />
+        <Route element={<ProfilePage />} path="/profile" />
+        <Route element={<ChatsPage />} path="/chats" />
         <Route element={<RoomCallPage />} path="/room/call" />
       </Routes>
     </BrowserRouter>

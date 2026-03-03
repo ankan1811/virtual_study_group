@@ -1,7 +1,66 @@
 import { Response } from 'express';
+import mongoose, { PipelineStage } from 'mongoose';
 import DirectMessage from '../models/DirectMessage';
+import User from '../models/User';
 import { AuthenticatedRequest } from '../middlewares/middleware';
 import { getSocketIdForUser, getIO } from '../socketServer';
+
+export const getRecentChats = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const me = new mongoose.Types.ObjectId(req.user.userId);
+
+    const pipeline: PipelineStage[] = [
+      { $match: { $or: [{ from: me }, { to: me }] } },
+      { $sort: { createdAt: -1 } },
+      {
+        $addFields: {
+          companion: { $cond: [{ $eq: ['$from', me] }, '$to', '$from'] },
+          isMine: { $eq: ['$from', me] },
+        },
+      },
+      {
+        $group: {
+          _id: '$companion',
+          lastMessage: { $first: '$content' },
+          lastMessageAt: { $first: '$createdAt' },
+          isMine: { $first: '$isMine' },
+          unreadCount: {
+            $sum: {
+              $cond: [
+                { $and: [{ $eq: ['$to', me] }, { $eq: ['$read', false] }] },
+                1,
+                0,
+              ],
+            },
+          },
+        },
+      },
+      { $sort: { lastMessageAt: -1 } },
+      { $limit: 50 },
+    ];
+
+    const results = await DirectMessage.aggregate(pipeline);
+
+    // Look up companion names
+    const companionIds = results.map((r) => r._id);
+    const users = await User.find({ _id: { $in: companionIds } }).select('name');
+    const nameMap = new Map(users.map((u) => [(u._id as any).toString(), u.name]));
+
+    const chats = results.map((r) => ({
+      companionId: r._id.toString(),
+      companionName: nameMap.get(r._id.toString()) || 'Unknown',
+      lastMessage: r.lastMessage,
+      lastMessageAt: r.lastMessageAt,
+      unreadCount: r.unreadCount,
+      isMine: r.isMine,
+    }));
+
+    res.json({ chats });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to get recent chats' });
+  }
+};
 
 export const getDmHistory = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
