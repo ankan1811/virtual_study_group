@@ -68,13 +68,15 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
 - Invalid/missing link detection with "Request New Link" CTA
 
 ### Room Call (`RoomCallPage`)
-- Agora RTC video/audio with mic/camera controls
+- Agora RTC video/audio with mic/camera controls (App ID via `VITE_AGORA_APP_ID` env var)
 - Tab panel: Chat / AI Doubt Solver / Session Summary
 - Room ID from Redux state (not URL or localStorage)
+- Bot messages in chat support clickable URLs (Linkify helper) with special styling for summary notifications
 
 ### AI Integration
-- **Doubt Solver** — text + voice input (Web Speech API), powered by Grok (xAI) via `grok-3-mini`
+- **Doubt Solver** — text + voice input (Web Speech API), powered by switchable AI (Gemini/Grok)
 - **Session Summary** — generates AI summary from chat messages
+- **Save Summary** — one-click save to Cloudflare R2 (S3-compatible) as a styled HTML document. Returns a presigned download URL (valid 7 days). After saving, a VSG Bot message is broadcast to the room chat with the download link so all participants can access it.
 
 ### Live Streaming (`Streampage`)
 - Camera preview, YouTube RTMP stream key input, start/stop controls
@@ -95,6 +97,7 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
 VITE_API_URL=http://localhost:7002          # Backend API base URL
 VITE_STREAM_SOCKET_URL=http://localhost:3002 # Streaming socket server
 VITE_NEWS_IMAGES_ONLY=true                   # "true" = only show news with images, "false" = show all
+VITE_AGORA_APP_ID=your_agora_app_id         # Agora RTC App ID (from https://console.agora.io)
 ```
 
 ## Getting Started

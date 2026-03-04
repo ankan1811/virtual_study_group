@@ -11,7 +11,8 @@ A full-stack web application for creating virtual study group spaces with real-t
 | **Database**         | MongoDB (Mongoose)                                                |
 | **Real-time**        | Socket.IO                                                         |
 | **Video Calls**      | Agora RTC SDK                                                     |
-| **AI**               | Switchable: Google Gemini 2.5 Pro (default) / xAI Grok            |
+| **AI**               | Switchable: Google Gemini 2.5 Flash (default) / xAI Grok          |
+| **Cloud Storage**    | Cloudflare R2 (S3-compatible, free tier) for summary persistence  |
 | **State Management** | Redux Toolkit                                                     |
 | **Styling**          | Tailwind CSS, shadcn/ui, Framer Motion                            |
 | **Auth**             | JWT + bcrypt + nodemailer (password reset)                        |
@@ -98,6 +99,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 ### Video Calling (Agora RTC)
 
 - Real-time video and audio calls using Agora SDK
+- Agora App ID loaded from environment variable (`VITE_AGORA_APP_ID`) — no longer hardcoded
 - Multi-user video grid supporting up to 5 participants
 - Camera toggle (on/off)
 - Microphone toggle (mute/unmute)
@@ -109,12 +111,14 @@ A full-stack web application for creating virtual study group spaces with real-t
 - Uses a singleton socket instance shared across all components
 - Visual distinction between your messages, others' messages, and bot messages
 - Bot welcome message on room join
+- **Linkify helper** — URLs in bot messages render as clickable links (e.g., summary download links)
+- Summary bot messages get special styling (violet background, rounded border) distinct from regular bot messages
 
 ### AI Doubt Solver
 
 - In-room AI panel accessible via the "AI Doubt" tab during calls
 - Switchable AI provider via `AI_PROVIDER` env variable:
-  - **Gemini 2.5 Pro** (default) — Google's free tier (250 requests/day, resets daily)
+  - **Gemini 2.5 Flash** (default) — Google's free tier (250 requests/day, resets daily)
   - **Grok 3 Mini** — xAI's API (fallback option)
 - Both providers use the OpenAI-compatible SDK — no code changes needed to switch
 - Text input with full conversation history
@@ -127,6 +131,12 @@ A full-stack web application for creating virtual study group spaces with real-t
 - Uses the same switchable AI provider as the Doubt Solver
 - One-click generation with loading state
 - Formatted summary card display
+- **Save to Cloudflare R2** — "Save Summary" button uploads the summary as a beautifully styled HTML document to Cloudflare R2 (S3-compatible storage)
+  - Generates a presigned download URL valid for 7 days
+  - After saving, a **VSG Bot message** is broadcast to the room chat with the download link so all call participants can access it
+  - Saved summaries include: session date, user name, room ID, and formatted bullet-point content
+  - Button transitions to a green "Saved! View Summary" link after successful upload
+  - Re-generating a new summary resets the save state
 
 ### Home Page
 
@@ -194,6 +204,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 - MongoDB instance (local or Atlas)
 - Agora account (for video call App ID)
 - Google AI Studio API key (for Gemini AI — [get one free](https://aistudio.google.com)) or xAI API key (for Grok — [get one free](https://console.x.ai))
+- Cloudflare account with R2 bucket + API token (for summary storage — [free tier](https://developers.cloudflare.com/r2/))
 
 ### Quick Start (Monorepo)
 
@@ -226,6 +237,11 @@ JWT_SECRET=your_jwt_secret
 AI_PROVIDER=gemini                # "gemini" (default) or "grok"
 GEMINI_API_KEY=your_gemini_key    # from https://aistudio.google.com
 GROK_API_KEY=your_xai_api_key     # from https://console.x.ai (optional, for grok provider)
+R2_ACCOUNT_ID=your_cloudflare_id  # Cloudflare account ID (from dashboard URL)
+R2_ACCESS_KEY_ID=your_r2_key      # R2 API token access key
+R2_SECRET_ACCESS_KEY=your_r2_secret # R2 API token secret key
+R2_BUCKET_NAME=study-summaries    # R2 bucket name for saved summaries
+AGORA_APP_ID=your_agora_app_id   # Agora RTC App ID
 SMTP_HOST=smtp.gmail.com          # SMTP server for password reset emails
 SMTP_PORT=587                     # SMTP port (587 for TLS)
 SMTP_USER=your-email@gmail.com    # SMTP sender email
@@ -251,6 +267,7 @@ Create a `.env` file in `frontend/` with:
 
 ```
 VITE_API_URL=http://localhost:7002
+VITE_AGORA_APP_ID=your_agora_app_id   # Agora RTC App ID
 ```
 
 ## Routes
@@ -288,6 +305,7 @@ VITE_API_URL=http://localhost:7002
 | GET    | `/news`                   | Get news feed articles                                               |
 | POST   | `/ai/ask`                 | Ask AI a study question (rate limited: per-user)                     |
 | POST   | `/ai/summary`             | Generate AI session summary (rate limited: per-user)                 |
+| POST   | `/ai/save-summary`        | Save summary to Cloudflare R2, broadcast link to room chat           |
 | GET    | `/dm/recent`              | Get recent chats (last message per companion, sorted by time)        |
 | GET    | `/dm/:companionId`        | Get DM history (includes `_id`, `read` state)                        |
 | GET    | `/dm/unread-counts`       | Get unread message count per companion                               |

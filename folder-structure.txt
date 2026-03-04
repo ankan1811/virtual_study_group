@@ -9,7 +9,9 @@ virtual_study_group/
 |
 |-- backend/                         # Node.js + Express + TypeScript backend
 |   |-- .env                         # Environment variables (MONGODB_URI, JWT_SECRET,
-|   |                                  PORT, AI_PROVIDER, GEMINI_API_KEY, GROK_API_KEY)
+|   |                                  PORT, AI_PROVIDER, GEMINI_API_KEY, GROK_API_KEY,
+|   |                                  R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY,
+|   |                                  R2_BUCKET_NAME, AGORA_APP_ID)
 |   |-- .gitignore                   # Git ignore rules for backend
 |   |-- package.json                 # Backend dependencies and scripts
 |   |-- tsconfig.json                # TypeScript configuration for backend
@@ -69,6 +71,14 @@ virtual_study_group/
 |       |   |                          singleton. Default: Gemini 2.5 Flash.
 |       |   |                          POST /ai/ask (question -> answer)
 |       |   |                          POST /ai/summary (messages -> summary)
+|       |   |-- SummaryController.ts # Save AI summary to Cloudflare R2 (S3-compatible).
+|       |   |                          Builds styled HTML document with purple gradient
+|       |   |                          header, metadata (user, room, date), and formatted
+|       |   |                          bullet-point content. Uploads via @aws-sdk/client-s3.
+|       |   |                          Returns presigned download URL (7-day expiry).
+|       |   |                          Broadcasts VSG Bot message with link to room chat
+|       |   |                          via Socket.IO so all participants can access it.
+|       |   |                          POST /ai/save-summary (summary + roomId -> url)
 |       |   |-- DmController.ts      # getRecentChats: aggregation pipeline returning
 |       |   |                          last message per conversation partner, sorted
 |       |   |                          by most recent, with unread counts.
@@ -93,7 +103,8 @@ virtual_study_group/
 |       |   |                          /companion/decline, /companion/list, /companion/pending
 |       |   |-- userRoutes.ts        # GET /user/profile, PUT /user/profile,
 |       |   |                          GET /user/search?q= (per-user rate limited)
-|       |   |-- aiRoutes.ts          # /ai/ask, /ai/summary (per-user rate limited)
+|       |   |-- aiRoutes.ts          # /ai/ask, /ai/summary (per-user rate limited),
+|       |   |                          /ai/save-summary (auth required, saves to R2)
 |       |   |-- dmRoutes.ts          # GET /dm/recent (recent chats aggregation),
 |       |   |                          GET /dm/unread-counts (before /:companionId to
 |       |   |                          avoid shadowing), GET /dm/:companionId,
@@ -218,7 +229,8 @@ virtual_study_group/
         |   |-- RoomCallPage.tsx     # Video call page - Agora RTC integration,
         |   |                          mic/camera controls, remote user streams.
         |   |                          Tab panel: Chat / AI Doubt / Summary.
-        |   |                          RoomId from Redux (not localStorage)
+        |   |                          RoomId from Redux (not localStorage).
+        |   |                          Agora App ID from VITE_AGORA_APP_ID env var
         |   |-- Streampage.tsx       # Live streaming page - camera preview, YouTube
         |   |                          stream key input, start/stop controls
         |   |-- AskAiPage.tsx        # AI voice input page - mic component with
@@ -243,7 +255,10 @@ virtual_study_group/
         |   |-- NavbarCall.tsx       # Minimal navbar for in-call view with exit button
         |   |-- ChatComponent.tsx    # Real-time chat widget - uses getSocket()
         |   |                          singleton, room-based messaging, lifts messages
-        |   |                          to parent via onMessagesChange prop
+        |   |                          to parent via onMessagesChange prop.
+        |   |                          Linkify helper renders URLs in bot messages as
+        |   |                          clickable links. Summary bot messages get special
+        |   |                          violet styling distinct from regular bot messages
         |   |-- DmPanel.tsx          # Slide-in DM panel from right. Optimistic send
         |   |                          (tempId), delivery states: sending/delivered/read.
         |   |                          Tick icons: clock=sending, ✓=delivered, ✓✓=read.
@@ -260,7 +275,11 @@ virtual_study_group/
         |   |                            via Web Speech API), Q&A history cards
         |   |                            Generic "AI Assistant" branding
         |   |                          - "summary" tab: generates session summary
-        |   |                            from chat messages via POST /ai/summary
+        |   |                            from chat messages via POST /ai/summary.
+        |   |                            "Save Summary" button uploads styled HTML
+        |   |                            to Cloudflare R2 via POST /ai/save-summary.
+        |   |                            Shows presigned download link after save.
+        |   |                            Broadcasts link to room chat as bot message
         |   |-- InviteNotificationOverlay.tsx  # Animated banner for incoming room
         |   |                          invites. Accept navigates to /room/call,
         |   |                          Decline dismisses. Socket: receiveInvite
@@ -323,8 +342,9 @@ virtual_study_group/
 ENV CONFIGURATION
 =================
   backend/.env   ->  MONGODB_URI, PORT, JWT_SECRET, AI_PROVIDER, GEMINI_API_KEY, GROK_API_KEY,
-                     SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, FRONTEND_URL
-  frontend/.env  ->  VITE_API_URL, VITE_STREAM_SOCKET_URL, VITE_NEWS_IMAGES_ONLY
+                     R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME,
+                     AGORA_APP_ID, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, FRONTEND_URL
+  frontend/.env  ->  VITE_API_URL, VITE_STREAM_SOCKET_URL, VITE_NEWS_IMAGES_ONLY, VITE_AGORA_APP_ID
 
 
 API ROUTES SUMMARY
@@ -360,6 +380,7 @@ API ROUTES SUMMARY
   AI (Gemini / Grok — switchable via AI_PROVIDER env var):
     POST   /ai/ask                  Ask AI a study question
     POST   /ai/summary             Generate AI summary of chat messages
+    POST   /ai/save-summary        Save summary to Cloudflare R2, broadcast link to room chat
 
   DMs:
     GET    /dm/recent               Get recent chats (last message per companion, sorted by time)
