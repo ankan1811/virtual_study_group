@@ -23,6 +23,9 @@ export const RATE_LIMIT_CONFIG = {
   SEARCH_WINDOW_MS:        1 * 60 * 1000,   // 1 minute
   SEARCH_MAX_PER_USER:     30,              // per authenticated user
 
+  // R2 summary uploads — per user per month
+  R2_MAX_UPLOADS_PER_MONTH: parseInt(process.env.R2_MAX_UPLOADS_PER_MONTH || '10', 10),
+
   // Global safety net — per IP
   GLOBAL_WINDOW_MS:        15 * 60 * 1000,  // 15 minutes
   GLOBAL_MAX_PER_IP:       200,             // per IP address

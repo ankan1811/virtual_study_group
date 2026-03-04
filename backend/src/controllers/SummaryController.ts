@@ -3,6 +3,8 @@ import { AuthenticatedRequest } from '../middlewares/middleware';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { getIO } from '../socketServer';
+import UploadCounter from '../models/UploadCounter';
+import { RATE_LIMIT_CONFIG } from '../middlewares/rateLimiter';
 
 // ── Lazy-initialized R2 client ──────────────────────────────────
 let _s3: S3Client | null = null;
@@ -136,6 +138,19 @@ export const saveSummary = async (req: AuthenticatedRequest, res: Response): Pro
       return;
     }
 
+    // ── Monthly upload limit check ──────────────────────────────
+    const now = new Date();
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const maxUploads = RATE_LIMIT_CONFIG.R2_MAX_UPLOADS_PER_MONTH;
+
+    const counter = await UploadCounter.findOne({ userId, monthKey });
+    if (counter && counter.count >= maxUploads) {
+      res.status(429).json({
+        error: `Monthly upload limit reached (${maxUploads}). Resets next month.`,
+      });
+      return;
+    }
+
     const timestamp = Date.now();
     const key = `summaries/${userId}/${roomId}_${timestamp}.html`;
     const html = buildSummaryHTML(summary, userName, roomId);
@@ -147,6 +162,13 @@ export const saveSummary = async (req: AuthenticatedRequest, res: Response): Pro
         Body: html,
         ContentType: 'text/html',
       })
+    );
+
+    // ── Increment monthly upload counter ──────────────────────────
+    await UploadCounter.findOneAndUpdate(
+      { userId, monthKey },
+      { $inc: { count: 1 } },
+      { upsert: true }
     );
 
     // Generate a presigned download URL (valid 7 days)
