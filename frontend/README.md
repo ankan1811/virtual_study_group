@@ -53,20 +53,6 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
 - **Dark Mode Toggle** — persistent toggle in both the floating top-left button and inside the sidebar
 - **Logout** — properly clears JWT from localStorage, disconnects socket, resets Redux state, redirects to `/login`
 
-### Forgot Password (`ForgotPasswordPage`)
-- Email input form matching the AuthPage visual style (gradient left panel, form right)
-- Submits to `POST /auth/forgot-password`
-- Success state shows "Check your email" confirmation with the entered email
-- Back to Sign In link
-
-### Reset Password (`ResetPasswordPage`)
-- Reads `token` and `email` from URL query params (from the email link)
-- New password + confirm password fields with show/hide toggles
-- Client-side validation (min 6 chars, match check)
-- Submits to `POST /auth/reset-password`
-- Success state with auto-redirect to login after 3 seconds
-- Invalid/missing link detection with "Request New Link" CTA
-
 ### Room Call (`RoomCallPage`)
 - Agora RTC video/audio with mic/camera controls (App ID via `VITE_AGORA_APP_ID` env var)
 - Tab panel: Chat / AI Doubt Solver / Session Summary

@@ -15,7 +15,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 | **Cloud Storage**    | Cloudflare R2 (S3-compatible, free tier) for summary persistence  |
 | **State Management** | Redux Toolkit                                                     |
 | **Styling**          | Tailwind CSS, shadcn/ui, Framer Motion                            |
-| **Auth**             | JWT + bcrypt + nodemailer (password reset)                        |
+| **Auth**             | Stateless OTP (HMAC-SHA256) + JWT + nodemailer                    |
 | **Rate Limiting**    | express-rate-limit (per-user + per-IP, configurable thresholds)   |
 | **Streaming**        | FFmpeg (RTMP to YouTube Live)                                     |
 | **Audio Viz**        | P5.js                                                             |
@@ -23,16 +23,18 @@ A full-stack web application for creating virtual study group spaces with real-t
 
 ## Features
 
-### Authentication
+### Authentication (OTP-based)
 
-- User registration with secure password hashing (bcrypt)
-- Login with JWT token-based authentication
+- **Passwordless OTP auth** — no passwords stored. Users verify email ownership via a 6-digit OTP on every login/register
+- **Stateless OTP** — HMAC-SHA256 signed hash (no OTP stored in DB). Server generates OTP + hash, emails OTP to user, client sends back OTP + hash for verification
+- **Configurable expiry** via `OTP_EXPIRY_MINUTES` env var (default: 5 minutes)
+- **Two-step frontend flow:** enter email → receive OTP → enter OTP → authenticated
+- Resend OTP with 30-second cooldown, "Change email" back button
+- JWT token-based session after successful OTP verification
 - Protected routes for authenticated users
 - Persistent auth state via Redux + localStorage
 - JWT rehydration on page refresh (no re-login needed)
 - **Logout** — clears JWT from localStorage, disconnects socket, resets Redux state, redirects to login
-- **Forgot Password** — email-based reset flow via nodemailer (SMTP). Generates a secure hashed token (SHA-256) with 1-hour expiry. Styled HTML email with reset link
-- **Reset Password** — token-validated page with new password + confirm password. Auto-redirects to login on success
 
 ### Personal Rooms & Invite System
 
@@ -167,7 +169,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 - **User-specific rate limiting** via `express-rate-limit` with all thresholds defined in a single `RATE_LIMIT_CONFIG` object for easy tuning
 - **Dual-layer protection on auth endpoints** — both per-email and per-IP limits applied simultaneously:
   - Login & Register: 7 attempts per email / 15 attempts per IP per 15-minute window
-  - Forgot & Reset Password: 3 per email / 5 per IP per 15-minute window
+  - Send OTP: 5 per email / 10 per IP per 15-minute window (tighter since it triggers email sends)
 - **Per-userId rate limiting on authenticated endpoints:**
   - AI Doubt Solver & Session Summary: 20 requests per user per 15 minutes (protects expensive API quotas)
   - User Search: 30 requests per user per minute (prevents enumeration)
@@ -194,7 +196,6 @@ A full-stack web application for creating virtual study group spaces with real-t
 - Full streaming pipeline (frontend-to-backend wiring)
 - Session analytics dashboard
 - Study streak tracking
-- Change password from profile (logged-in users)
 
 ## Getting Started
 
@@ -242,11 +243,12 @@ R2_ACCESS_KEY_ID=your_r2_key      # R2 API token access key
 R2_SECRET_ACCESS_KEY=your_r2_secret # R2 API token secret key
 R2_BUCKET_NAME=study-summaries    # R2 bucket name for saved summaries
 AGORA_APP_ID=your_agora_app_id   # Agora RTC App ID
-SMTP_HOST=smtp.gmail.com          # SMTP server for password reset emails
+SMTP_HOST=smtp.gmail.com          # SMTP server for OTP emails
 SMTP_PORT=587                     # SMTP port (587 for TLS)
 SMTP_USER=your-email@gmail.com    # SMTP sender email
 SMTP_PASS=your-app-password       # SMTP password (Gmail: use App Password)
-FRONTEND_URL=http://localhost:5175 # Frontend URL for reset links
+OTP_SECRET=your-random-hex-string # HMAC signing key for stateless OTP
+OTP_EXPIRY_MINUTES=5              # OTP validity duration (default: 5 minutes)
 ```
 
 Start the server:
@@ -277,8 +279,6 @@ VITE_AGORA_APP_ID=your_agora_app_id   # Agora RTC App ID
 | `/`          | Landing Page    |      No       |
 | `/login`     | Login           |      No       |
 | `/register`  | Register        |      No       |
-| `/forgot-password` | Forgot Password |  No       |
-| `/reset-password`  | Reset Password  |  No       |
 | `/home`      | Room Dashboard  |      Yes      |
 | `/profile`   | User Profile    |      Yes      |
 | `/chats`     | Recent Chats    |      Yes      |
@@ -290,10 +290,9 @@ VITE_AGORA_APP_ID=your_agora_app_id   # Agora RTC App ID
 
 | Method | Endpoint                  | Description                                                          |
 | ------ | ------------------------- | -------------------------------------------------------------------- |
-| POST   | `/auth/register`          | Register a new user (rate limited: per-email + per-IP)               |
-| POST   | `/auth/login`             | Login and receive JWT (rate limited: per-email + per-IP)             |
-| POST   | `/auth/forgot-password`   | Send password reset email (rate limited: per-email + per-IP)         |
-| POST   | `/auth/reset-password`    | Reset password with token (rate limited: per-email + per-IP)         |
+| POST   | `/auth/send-otp`          | Send 6-digit OTP to email (rate limited: per-email + per-IP)         |
+| POST   | `/auth/register`          | Verify OTP and register new user (rate limited: per-email + per-IP)  |
+| POST   | `/auth/login`             | Verify OTP and login (rate limited: per-email + per-IP)              |
 | POST   | `/companion/request`      | Send companion request                                               |
 | POST   | `/companion/accept`       | Accept companion request                                             |
 | POST   | `/companion/decline`      | Decline companion request                                            |

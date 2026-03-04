@@ -47,14 +47,20 @@ virtual_study_group/
 |       |
 |       |-- utils/                   # Backend utility modules
 |       |   |-- sendEmail.ts         # Nodemailer transporter — sends emails via SMTP.
-|       |                              Uses SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS
-|       |                              env vars. Exports sendEmail(to, subject, html)
+|       |   |                          Uses SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS
+|       |   |                          env vars. Exports sendEmail(to, subject, html)
+|       |   |-- otp.ts              # Stateless OTP utility — HMAC-SHA256 based.
+|       |                              generateOtp(email) → { otp, hash, expires }.
+|       |                              verifyOtp(email, otp, hash, expires) → boolean.
+|       |                              Uses OTP_SECRET + OTP_EXPIRY_MINUTES env vars.
+|       |                              crypto.timingSafeEqual for timing-attack prevention
 |       |
 |       |-- controllers/             # Request handlers (business logic)
-|       |   |-- AuthController.ts    # Register (bcrypt hash), Login (JWT sign),
-|       |   |                          ForgotPassword (SHA-256 hashed token + nodemailer),
-|       |   |                          ResetPassword (token validation + password update).
-|       |   |                          All return JSON responses
+|       |   |-- AuthController.ts    # OTP-based auth — sendOtp (generates OTP,
+|       |   |                          emails it, returns HMAC hash + expiry),
+|       |   |                          Register (verify OTP, create user, JWT sign),
+|       |   |                          Login (verify OTP, find user, JWT sign).
+|       |   |                          Passwordless — no bcrypt, no password storage
 |       |   |-- RoomController.ts    # Create room, join room, get room users
 |       |   |-- ChatController.ts    # Add chat message, get chat history, get user name
 |       |   |-- CompanionController.ts # Send/accept/decline companion requests,
@@ -94,8 +100,8 @@ virtual_study_group/
 |       |                              AI, Tech, Productivity categories
 |       |
 |       |-- routes/                  # Express route definitions
-|       |   |-- authRoutes.ts        # /auth/register, /auth/login,
-|       |   |                          /auth/forgot-password, /auth/reset-password.
+|       |   |-- authRoutes.ts        # /auth/send-otp (OTP email+IP rate limited),
+|       |   |                          /auth/register, /auth/login.
 |       |   |                          Dual-layer rate limiting: per-email + per-IP
 |       |   |-- roomRoutes.ts        # /room/create, /room/join/:room_id, /room/users/:room_id
 |       |   |-- chatRoutes.ts        # /chat/join, /chat/add, /chat/view/:room_id
@@ -114,9 +120,9 @@ virtual_study_group/
 |       |   |-- newsRoutes.ts        # /news
 |       |
 |       |-- models/                  # Mongoose schemas and models
-|       |   |-- User.ts              # User model: name, email (unique), password (hashed),
-|       |   |                          bio (default ''), avatar (default ''),
-|       |   |                          passwordResetToken, passwordResetExpires
+|       |   |-- User.ts              # User model: name, email (unique),
+|       |   |                          bio (default ''), avatar (default '').
+|       |   |                          Passwordless — no password field
 |       |   |-- Room.ts              # Room model: users[] (references User)
 |       |   |-- Chat.ts              # Chat model: sendBy (User ref), message, room_id (Room ref)
 |       |   |-- Companion.ts         # Companion model: requester, recipient (User refs),
@@ -137,8 +143,8 @@ virtual_study_group/
 |                                      object for all thresholds. Exports 7 limiters:
 |                                      authEmailLimiter (7/email/15min),
 |                                      authIpLimiter (15/IP/15min),
-|                                      resetEmailLimiter (3/email/15min),
-|                                      resetIpLimiter (5/IP/15min),
+|                                      otpEmailLimiter (5/email/15min),
+|                                      otpIpLimiter (10/IP/15min),
 |                                      aiLimiter (20/user/15min),
 |                                      searchLimiter (30/user/1min),
 |                                      globalLimiter (200/IP/15min).
@@ -192,15 +198,12 @@ virtual_study_group/
         |
         |-- pages/                   # Top-level page components (one per route)
         |   |-- LandingPage.tsx      # Hero page with animated CTAs
-        |   |-- AuthPage.tsx         # Auth layout wrapper with Login/Register tabs.
-        |   |                          Includes "Forgot Password?" link (login mode)
-        |   |-- ForgotPasswordPage.tsx # Email input form for password reset.
-        |   |                          Matches AuthPage visual style (gradient panel).
-        |   |                          POST /auth/forgot-password, success confirmation
-        |   |-- ResetPasswordPage.tsx # New password + confirm password form.
-        |   |                          Reads token/email from URL params.
-        |   |                          POST /auth/reset-password, auto-redirect on success.
-        |   |                          Handles invalid/expired link states
+        |   |-- AuthPage.tsx         # Auth layout with Login/Register tabs.
+        |   |                          Two-step OTP flow: Step 1 (email + name
+        |   |                          for register) → Step 2 (6-digit OTP input).
+        |   |                          Resend OTP with 30s countdown, back button.
+        |   |                          Calls /auth/send-otp then /auth/login or
+        |   |                          /auth/register with OTP verification
         |   |-- RoomPage.tsx         # Home dashboard with:
         |   |                          - Global people search bar (blurred dummy
         |   |                            preview when logged out, live search when
@@ -239,10 +242,10 @@ virtual_study_group/
         |                              interface with message display
         |
         |-- components/              # Reusable React components
-        |   |-- Login.tsx            # Login form - email/password, dispatches
-        |   |                          login({ name, userId }), calls connectSocket
-        |   |-- Register.tsx         # Register form - name/email/password, auto-login
-        |   |                          after registration, dispatches + connectSocket
+        |   |-- Login.tsx            # Login form (legacy, unused — AuthPage handles
+        |   |                          OTP-based login directly)
+        |   |-- Register.tsx         # Register form (legacy, unused — AuthPage handles
+        |   |                          OTP-based registration directly)
         |   |-- Navbar.tsx           # Collapsible sidebar (not top bar) - hamburger
         |   |                          toggle, framer-motion spring animation.
         |   |                          Nav items: Home, Chats, My Room, Streaming,
@@ -343,17 +346,17 @@ ENV CONFIGURATION
 =================
   backend/.env   ->  MONGODB_URI, PORT, JWT_SECRET, AI_PROVIDER, GEMINI_API_KEY, GROK_API_KEY,
                      R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME,
-                     AGORA_APP_ID, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, FRONTEND_URL
+                     AGORA_APP_ID, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS,
+                     OTP_SECRET, OTP_EXPIRY_MINUTES
   frontend/.env  ->  VITE_API_URL, VITE_STREAM_SOCKET_URL, VITE_NEWS_IMAGES_ONLY, VITE_AGORA_APP_ID
 
 
 API ROUTES SUMMARY
 ==================
-  Auth:
-    POST   /auth/register           Register new user (returns token, name, userId)
-    POST   /auth/login              Login (returns token, name, userId)
-    POST   /auth/forgot-password    Send password reset email (hashed token, 1hr expiry)
-    POST   /auth/reset-password     Reset password with token + email + new password
+  Auth (OTP-based, passwordless):
+    POST   /auth/send-otp           Send 6-digit OTP to email (HMAC hash + expiry returned)
+    POST   /auth/register           Verify OTP + register new user (returns token, name, userId)
+    POST   /auth/login              Verify OTP + login (returns token, name, userId)
 
   Rooms:
     POST   /room/create             Create room or add user to existing room
@@ -437,8 +440,7 @@ SOCKET EVENTS
 
 DATABASE COLLECTIONS
 ====================
-  users            ->  { name, email (unique), password (bcrypt hash), bio, avatar,
-                         passwordResetToken, passwordResetExpires }
+  users            ->  { name, email (unique), bio, avatar }
   rooms            ->  { users: [ObjectId -> User] }
   chats            ->  { sendBy: ObjectId -> User, message: String, room_id: ObjectId -> Room }
   companions       ->  { requester: ObjectId, recipient: ObjectId, status: 'pending'|'accepted' }
