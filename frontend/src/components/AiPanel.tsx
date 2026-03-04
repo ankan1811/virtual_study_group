@@ -1,7 +1,17 @@
 import React, { useRef, useState } from "react";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mic, MicOff, Send, Loader2, Sparkles, FileText } from "lucide-react";
+import {
+  Mic,
+  MicOff,
+  Send,
+  Loader2,
+  Sparkles,
+  FileText,
+  Save,
+  Check,
+  ExternalLink,
+} from "lucide-react";
 
 interface Message {
   msg: string;
@@ -16,17 +26,20 @@ interface QA {
 interface AiPanelProps {
   tab: "ai" | "summary";
   chatMessages: Message[];
+  roomId: string;
 }
 
 // Web Speech API type shim
 type SpeechRecognitionAny = any;
 
-export default function AiPanel({ tab, chatMessages }: AiPanelProps) {
+export default function AiPanel({ tab, chatMessages, roomId }: AiPanelProps) {
   const [input, setInput] = useState("");
   const [qaHistory, setQaHistory] = useState<QA[]>([]);
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedUrl, setSavedUrl] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionAny>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -110,6 +123,26 @@ export default function AiPanel({ tab, chatMessages }: AiPanelProps) {
     }
   };
 
+  const saveSummaryToR2 = async () => {
+    if (!summary || saving) return;
+    setSaving(true);
+    setSavedUrl(null);
+    const token = localStorage.getItem("token");
+    try {
+      const res = await axios.post(
+        `${import.meta.env.VITE_API_URL}/ai/save-summary`,
+        { summary, roomId },
+        { headers: { Authorization: token || "" } }
+      );
+      setSavedUrl(res.data.url);
+    } catch {
+      setSavedUrl(null);
+      alert("Failed to save summary. Please check R2 configuration.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -138,6 +171,40 @@ export default function AiPanel({ tab, chatMessages }: AiPanelProps) {
               <p className="text-sm text-gray-700 poppins-regular leading-relaxed whitespace-pre-line">
                 {summary}
               </p>
+
+              {/* Save to R2 + download link */}
+              <div className="mt-4 pt-3 border-t border-gray-100">
+                {savedUrl ? (
+                  <motion.a
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    href={savedUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 w-full py-2 rounded-xl bg-emerald-50 text-emerald-700 text-sm font-semibold poppins-semibold hover:bg-emerald-100 transition-colors border border-emerald-200"
+                  >
+                    <Check size={14} />
+                    Saved! View Summary
+                    <ExternalLink size={12} />
+                  </motion.a>
+                ) : (
+                  <button
+                    onClick={saveSummaryToR2}
+                    disabled={saving}
+                    className="flex items-center justify-center gap-2 w-full py-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 text-white text-sm font-semibold poppins-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
+                  >
+                    {saving ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" /> Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save size={14} /> Save Summary
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
             </motion.div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-center">

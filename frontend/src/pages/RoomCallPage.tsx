@@ -66,7 +66,7 @@ export default function RoomCallPage() {
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
 
   const channel = useRef(roomId);
-  const appid = useRef("0f5775ce2bed49cfa080d178da7a6866");
+  const appid = useRef(import.meta.env.VITE_AGORA_APP_ID || "");
   const token = useRef("");
   const [isJoined, setIsJoined] = useState(false);
 
@@ -222,7 +222,7 @@ export default function RoomCallPage() {
                 onMessagesChange={setChatMessages}
               />
             ) : (
-              <AiPanel tab={activeTab} chatMessages={chatMessages} />
+              <AiPanel tab={activeTab} chatMessages={chatMessages} roomId={roomId} />
             )}
           </div>
         </div>
