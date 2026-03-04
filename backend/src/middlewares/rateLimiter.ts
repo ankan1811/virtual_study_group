@@ -2,38 +2,42 @@ import rateLimit from 'express-rate-limit';
 import { Request } from 'express';
 import jwt from 'jsonwebtoken';
 
+// ── Helper: parse env as int with fallback ──────────────────────────────────
+const envInt = (key: string, fallback: number): number =>
+  parseInt(process.env[key] || String(fallback), 10);
+
 // ── Rate Limit Configuration ─────────────────────────────────────────────────
-// All thresholds in one place for easy tuning. Restart server after changes.
+// Every value is read from an env var (see .env). Restart server after changes.
 export const RATE_LIMIT_CONFIG = {
-  // Auth (login / register) — dual layer
-  AUTH_WINDOW_MS:          15 * 60 * 1000,  // 15 minutes
-  AUTH_MAX_PER_EMAIL:      7,               // per email address
-  AUTH_MAX_PER_IP:         15,              // per IP address
+  // Auth (login / register) — dual layer: per-email + per-IP
+  AUTH_WINDOW_MS:          envInt('AUTH_WINDOW_MIN', 15) * 60 * 1000,
+  AUTH_MAX_PER_EMAIL:      envInt('AUTH_MAX_PER_EMAIL', 7),
+  AUTH_MAX_PER_IP:         envInt('AUTH_MAX_PER_IP', 15),
 
   // OTP send — dual layer (tighter since it triggers email sends)
-  OTP_WINDOW_MS:           15 * 60 * 1000,  // 15 minutes
-  OTP_MAX_PER_EMAIL:       5,               // per email address
-  OTP_MAX_PER_IP:          10,              // per IP address
+  OTP_WINDOW_MS:           envInt('OTP_WINDOW_MIN', 15) * 60 * 1000,
+  OTP_MAX_PER_EMAIL:       envInt('OTP_MAX_PER_EMAIL', 5),
+  OTP_MAX_PER_IP:          envInt('OTP_MAX_PER_IP', 7),
 
-  // AI endpoints — per userId
-  AI_WINDOW_MS:            15 * 60 * 1000,  // 15 minutes
-  AI_MAX_PER_USER:         20,              // per authenticated user
+  // AI endpoints — per authenticated userId
+  AI_WINDOW_MS:            envInt('AI_WINDOW_MIN', 15) * 60 * 1000,
+  AI_MAX_PER_USER:         envInt('AI_MAX_PER_USER', 20),
 
-  // User search — per userId
-  SEARCH_WINDOW_MS:        1 * 60 * 1000,   // 1 minute
-  SEARCH_MAX_PER_USER:     30,              // per authenticated user
+  // User search — per authenticated userId
+  SEARCH_WINDOW_MS:        envInt('SEARCH_WINDOW_MIN', 1) * 60 * 1000,
+  SEARCH_MAX_PER_USER:     envInt('SEARCH_MAX_PER_USER', 30),
 
-  // R2 summary uploads — per user per month
-  R2_MAX_UPLOADS_PER_MONTH: parseInt(process.env.R2_MAX_UPLOADS_PER_MONTH || '10', 10),
+  // R2 summary uploads — per user per calendar month
+  R2_MAX_UPLOADS_PER_MONTH: envInt('R2_MAX_UPLOADS_PER_MONTH', 10),
 
-  // Global safety net — per IP
-  GLOBAL_WINDOW_MS:        15 * 60 * 1000,  // 15 minutes
-  GLOBAL_MAX_PER_IP:       200,             // per IP address
+  // Global safety net — per IP across all routes
+  GLOBAL_WINDOW_MS:        envInt('GLOBAL_WINDOW_MIN', 15) * 60 * 1000,
+  GLOBAL_MAX_PER_IP:       envInt('GLOBAL_MAX_PER_IP', 200),
 
-  // Socket event throttles (minimum interval in ms)
-  SOCKET_DM_INTERVAL_MS:            200,    // direct messages
-  SOCKET_COMPANION_REQ_INTERVAL_MS: 5000,   // companion requests
-  SOCKET_INVITE_INTERVAL_MS:        3000,   // room invites
+  // Socket event throttles (minimum interval in ms between consecutive events)
+  SOCKET_DM_INTERVAL_MS:            envInt('SOCKET_DM_INTERVAL_MS', 200),
+  SOCKET_COMPANION_REQ_INTERVAL_MS: envInt('SOCKET_COMPANION_REQ_INTERVAL_MS', 5000),
+  SOCKET_INVITE_INTERVAL_MS:        envInt('SOCKET_INVITE_INTERVAL_MS', 3000),
 } as const;
 
 // ── Helper: extract userId from JWT for per-user keying ──────────────────────
