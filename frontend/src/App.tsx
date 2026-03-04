@@ -2,8 +2,6 @@ import React, { useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import "./App.css";
 import AuthPage from "./pages/AuthPage";
-import ForgotPasswordPage from "./pages/ForgotPasswordPage";
-import ResetPasswordPage from "./pages/ResetPasswordPage";
 import RoomPage from "./pages/RoomPage";
 import RoomCallPage from "./pages/RoomCallPage";
 import LandingPage from "./pages/LandingPage";
@@ -49,8 +47,6 @@ function AppInner() {
         <Route element={<DemoAiPage />} path="/demo" />
         <Route element={<AuthPage />} path="/login" />
         <Route element={<AuthPage />} path="/register" />
-        <Route element={<ForgotPasswordPage />} path="/forgot-password" />
-        <Route element={<ResetPasswordPage />} path="/reset-password" />
         <Route element={<ProfilePage />} path="/profile" />
         <Route element={<ChatsPage />} path="/chats" />
         <Route element={<RoomCallPage />} path="/room/call" />

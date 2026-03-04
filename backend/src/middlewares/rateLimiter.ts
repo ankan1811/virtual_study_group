@@ -10,10 +10,10 @@ export const RATE_LIMIT_CONFIG = {
   AUTH_MAX_PER_EMAIL:      7,               // per email address
   AUTH_MAX_PER_IP:         15,              // per IP address
 
-  // Password reset — dual layer
-  RESET_WINDOW_MS:         15 * 60 * 1000,  // 15 minutes
-  RESET_MAX_PER_EMAIL:     3,               // per email address
-  RESET_MAX_PER_IP:        5,               // per IP address
+  // OTP send — dual layer (tighter since it triggers email sends)
+  OTP_WINDOW_MS:           15 * 60 * 1000,  // 15 minutes
+  OTP_MAX_PER_EMAIL:       5,               // per email address
+  OTP_MAX_PER_IP:          10,              // per IP address
 
   // AI endpoints — per userId
   AI_WINDOW_MS:            15 * 60 * 1000,  // 15 minutes
@@ -67,24 +67,24 @@ export const authIpLimiter = rateLimit({
   message: { error: 'Too many requests from this IP. Please try again later.' },
 });
 
-// ── Tier 2a: Password reset per-email limiter ────────────────────────────────
-export const resetEmailLimiter = rateLimit({
-  windowMs: RATE_LIMIT_CONFIG.RESET_WINDOW_MS,
-  max: RATE_LIMIT_CONFIG.RESET_MAX_PER_EMAIL,
+// ── Tier 2a: OTP send per-email limiter ──────────────────────────────────────
+export const otpEmailLimiter = rateLimit({
+  windowMs: RATE_LIMIT_CONFIG.OTP_WINDOW_MS,
+  max: RATE_LIMIT_CONFIG.OTP_MAX_PER_EMAIL,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req: Request) => (req.body?.email as string)?.toLowerCase?.() || req.ip || 'unknown',
-  message: { error: 'Too many password reset requests for this account. Please try again later.' },
+  message: { error: 'Too many OTP requests for this email. Please try again later.' },
 });
 
-// ── Tier 2b: Password reset per-IP limiter ───────────────────────────────────
-export const resetIpLimiter = rateLimit({
-  windowMs: RATE_LIMIT_CONFIG.RESET_WINDOW_MS,
-  max: RATE_LIMIT_CONFIG.RESET_MAX_PER_IP,
+// ── Tier 2b: OTP send per-IP limiter ─────────────────────────────────────────
+export const otpIpLimiter = rateLimit({
+  windowMs: RATE_LIMIT_CONFIG.OTP_WINDOW_MS,
+  max: RATE_LIMIT_CONFIG.OTP_MAX_PER_IP,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req: Request) => req.ip || 'unknown',
-  message: { error: 'Too many password reset requests from this IP. Please try again later.' },
+  message: { error: 'Too many OTP requests from this IP. Please try again later.' },
 });
 
 // ── Tier 3: AI endpoints per-user limiter ────────────────────────────────────

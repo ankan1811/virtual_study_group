@@ -1,41 +1,53 @@
-import React, { MouseEventHandler, useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import axios from "axios";
 import {
   Mail,
-  Lock,
   User,
-  Eye,
-  EyeOff,
   ArrowRight,
+  ArrowLeft,
   BookOpen,
   Users,
   Sparkles,
   Loader2,
+  KeyRound,
+  RefreshCw,
 } from "lucide-react";
 import { login } from "../store/authStore/authSlice";
 import { connectSocket } from "../utils/socketInstance";
 
 export default function AuthPage() {
   const [mode, setMode] = useState<"login" | "register">("login");
+  const [step, setStep] = useState<"email" | "otp">("email");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const [otp, setOtp] = useState("");
+  const [otpData, setOtpData] = useState<{ hash: string; expires: number } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [otpSending, setOtpSending] = useState(false);
   const [error, setError] = useState("");
+  const [countdown, setCountdown] = useState(0);
 
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
+  // Countdown timer for resend OTP
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const timer = setInterval(() => setCountdown((c) => c - 1), 1000);
+    return () => clearInterval(timer);
+  }, [countdown]);
+
   const resetFields = () => {
     setName("");
     setEmail("");
-    setPassword("");
+    setOtp("");
+    setOtpData(null);
     setError("");
-    setShowPassword(false);
+    setStep("email");
+    setCountdown(0);
   };
 
   const toggleMode = () => {
@@ -43,22 +55,41 @@ export default function AuthPage() {
     resetFields();
   };
 
-  const handleSubmit: MouseEventHandler<HTMLButtonElement> = async (e) => {
-    e.preventDefault();
-    if (!email || !password || (mode === "register" && !name)) {
+  const handleSendOtp = async () => {
+    if (!email || (mode === "register" && !name)) {
       setError("Please fill in all fields.");
+      return;
+    }
+    setOtpSending(true);
+    setError("");
+    try {
+      const res = await axios.post(
+        `${import.meta.env.VITE_API_URL}/auth/send-otp`,
+        { email }
+      );
+      setOtpData({ hash: res.data.hash, expires: res.data.expires });
+      setStep("otp");
+      setCountdown(30);
+    } catch (err: any) {
+      setError(err.response?.data?.error || "Failed to send OTP. Please try again.");
+    } finally {
+      setOtpSending(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!otp || otp.length !== 6) {
+      setError("Please enter the 6-digit OTP.");
       return;
     }
     setLoading(true);
     setError("");
-
     try {
-      const endpoint =
-        mode === "login" ? "/auth/login" : "/auth/register";
+      const endpoint = mode === "login" ? "/auth/login" : "/auth/register";
       const body =
         mode === "login"
-          ? { email, password }
-          : { name, email, password };
+          ? { email, otp, hash: otpData!.hash, expires: otpData!.expires }
+          : { name, email, otp, hash: otpData!.hash, expires: otpData!.expires };
 
       const res = await axios.post(
         `${import.meta.env.VITE_API_URL}${endpoint}`,
@@ -71,13 +102,29 @@ export default function AuthPage() {
       navigate("/home");
     } catch (err: any) {
       setError(
-        err.response?.data?.message ||
-          (mode === "login"
-            ? "Invalid credentials. Please try again."
-            : "Registration failed. Try a different email.")
+        err.response?.data?.error || "Verification failed. Please try again."
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (countdown > 0) return;
+    setOtp("");
+    setError("");
+    setOtpSending(true);
+    try {
+      const res = await axios.post(
+        `${import.meta.env.VITE_API_URL}/auth/send-otp`,
+        { email }
+      );
+      setOtpData({ hash: res.data.hash, expires: res.data.expires });
+      setCountdown(30);
+    } catch (err: any) {
+      setError(err.response?.data?.error || "Failed to resend OTP.");
+    } finally {
+      setOtpSending(false);
     }
   };
 
@@ -182,17 +229,23 @@ export default function AuthPage() {
           {/* Heading */}
           <AnimatePresence mode="wait">
             <motion.div
-              key={mode}
+              key={`${mode}-${step}`}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
             >
               <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 poppins-bold mb-1">
-                {mode === "login" ? "Welcome back" : "Create your account"}
+                {step === "otp"
+                  ? "Enter verification code"
+                  : mode === "login"
+                  ? "Welcome back"
+                  : "Create your account"}
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 poppins-regular mb-6">
-                {mode === "login"
+                {step === "otp"
+                  ? `We sent a 6-digit code to ${email}`
+                  : mode === "login"
                   ? "Sign in to rejoin your study companions."
                   : "Start studying smarter with your team."}
               </p>
@@ -214,113 +267,158 @@ export default function AuthPage() {
           </AnimatePresence>
 
           {/* Form */}
-          <form
-            className="space-y-4"
-            onSubmit={(e) => e.preventDefault()}
-          >
+          <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
             <AnimatePresence mode="wait">
-              {mode === "register" && (
+              {step === "email" ? (
                 <motion.div
-                  key="name-field"
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
+                  key="email-step"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
                   transition={{ duration: 0.2 }}
+                  className="space-y-4"
                 >
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 poppins-semibold">
-                    Full Name
-                  </label>
-                  <div className="relative">
-                    <User
-                      size={16}
-                      className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Aarav Sharma"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 text-sm poppins-regular focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-transparent transition-all bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                    />
+                  {mode === "register" && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 poppins-semibold">
+                        Full Name
+                      </label>
+                      <div className="relative">
+                        <User
+                          size={16}
+                          className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Aarav Sharma"
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                          className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 text-sm poppins-regular focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-transparent transition-all bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 poppins-semibold">
+                      Email
+                    </label>
+                    <div className="relative">
+                      <Mail
+                        size={16}
+                        className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+                      />
+                      <input
+                        type="email"
+                        placeholder="you@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 text-sm poppins-regular focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-transparent transition-all bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                      />
+                    </div>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={handleSendOtp}
+                    disabled={otpSending}
+                    className="w-full py-3 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-xl text-sm font-semibold poppins-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-md disabled:opacity-60 mt-2"
+                  >
+                    {otpSending ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" />
+                        Sending OTP...
+                      </>
+                    ) : (
+                      <>
+                        Send OTP
+                        <ArrowRight size={16} />
+                      </>
+                    )}
+                  </button>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="otp-step"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  transition={{ duration: 0.2 }}
+                  className="space-y-4"
+                >
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 poppins-semibold">
+                      Verification Code
+                    </label>
+                    <div className="relative">
+                      <KeyRound
+                        size={16}
+                        className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+                      />
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={6}
+                        placeholder="000000"
+                        value={otp}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, "");
+                          setOtp(val);
+                        }}
+                        className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 text-lg poppins-regular focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-transparent transition-all bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 tracking-[0.3em] text-center font-semibold"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Resend OTP */}
+                  <div className="flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStep("email");
+                        setOtp("");
+                        setError("");
+                      }}
+                      className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors poppins-regular"
+                    >
+                      <ArrowLeft size={14} />
+                      Change email
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleResendOtp}
+                      disabled={countdown > 0 || otpSending}
+                      className="flex items-center gap-1 text-xs font-medium transition-colors poppins-regular disabled:opacity-50"
+                      style={{
+                        color: countdown > 0 ? undefined : "#4f46e5",
+                      }}
+                    >
+                      <RefreshCw size={14} className={otpSending ? "animate-spin" : ""} />
+                      {countdown > 0 ? `Resend in ${countdown}s` : "Resend OTP"}
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleVerifyOtp}
+                    disabled={loading}
+                    className="w-full py-3 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-xl text-sm font-semibold poppins-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-md disabled:opacity-60 mt-2"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" />
+                        Verifying...
+                      </>
+                    ) : (
+                      <>
+                        {mode === "login" ? "Sign In" : "Create Account"}
+                        <ArrowRight size={16} />
+                      </>
+                    )}
+                  </button>
                 </motion.div>
               )}
             </AnimatePresence>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 poppins-semibold">
-                Email
-              </label>
-              <div className="relative">
-                <Mail
-                  size={16}
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
-                />
-                <input
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 text-sm poppins-regular focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-transparent transition-all bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 poppins-semibold">
-                Password
-              </label>
-              <div className="relative">
-                <Lock
-                  size={16}
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
-                />
-                <input
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-12 py-3 rounded-xl border border-gray-200 dark:border-gray-700 text-sm poppins-regular focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-transparent transition-all bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((p) => !p)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-            </div>
-
-            {mode === "login" && (
-              <div className="flex justify-end -mt-1">
-                <Link
-                  to="/forgot-password"
-                  className="text-xs text-indigo-600 dark:text-indigo-400 font-medium hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors poppins-regular"
-                >
-                  Forgot Password?
-                </Link>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              onClick={handleSubmit}
-              disabled={loading}
-              className="w-full py-3 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-xl text-sm font-semibold poppins-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-md disabled:opacity-60 mt-2"
-            >
-              {loading ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  {mode === "login" ? "Signing in..." : "Creating account..."}
-                </>
-              ) : (
-                <>
-                  {mode === "login" ? "Sign In" : "Create Account"}
-                  <ArrowRight size={16} />
-                </>
-              )}
-            </button>
           </form>
 
           {/* Bottom toggle */}
