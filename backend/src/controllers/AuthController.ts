@@ -121,3 +121,57 @@ export const loginUser = async (
     res.status(500).json({ error: "Failed to log in." });
   }
 };
+
+export const googleLogin = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const { access_token } = req.body;
+    if (!access_token) {
+      res.status(400).json({ error: "Google access token is required." });
+      return;
+    }
+
+    // Verify token and get user info from Google
+    const googleRes = await fetch(
+      "https://www.googleapis.com/oauth2/v3/userinfo",
+      { headers: { Authorization: `Bearer ${access_token}` } }
+    );
+    if (!googleRes.ok) {
+      res.status(401).json({ error: "Invalid Google token." });
+      return;
+    }
+    const profile = await googleRes.json();
+    if (!profile.email) {
+      res.status(401).json({ error: "Could not retrieve email from Google." });
+      return;
+    }
+
+    const { email, name, sub: googleId } = profile;
+
+    let user = await User.findOne({ email: email.toLowerCase() });
+    if (user) {
+      if (!user.googleId) {
+        user.googleId = googleId;
+        await user.save();
+      }
+    } else {
+      user = new User({
+        name: name || email.split("@")[0],
+        email: email.toLowerCase(),
+        googleId,
+      });
+      await user.save();
+    }
+
+    const token = jwt.sign(
+      { userId: user._id, email: user.email, name: user.name },
+      process.env.JWT_SECRET || ""
+    );
+    res.status(200).json({ token, name: user.name, userId: (user._id as any).toString() });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Google authentication failed." });
+  }
+};
