@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/middleware';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { getIO } from '../socketServer';
 
 // ── Lazy-initialized R2 client ──────────────────────────────────
 let _s3: S3Client | null = null;
@@ -154,6 +155,15 @@ export const saveSummary = async (req: AuthenticatedRequest, res: Response): Pro
       new GetObjectCommand({ Bucket: getBucket(), Key: key }),
       { expiresIn: 7 * 24 * 60 * 60 }
     );
+
+    // Broadcast the summary link to the room chat as a VSG Bot message
+    const io = getIO();
+    if (io && roomId) {
+      io.to(roomId).emit(`message:${roomId}`, {
+        msg: `📄 ${userName} saved a session summary! View it here: ${downloadUrl}`,
+        sentby: 'bot',
+      });
+    }
 
     res.status(200).json({ url: downloadUrl, key });
   } catch (error: any) {

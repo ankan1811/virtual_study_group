@@ -7,6 +7,31 @@ import { useSelector } from "react-redux";
 import { AuthState } from "../store/authStore/store";
 import { getSocket } from "../utils/socketInstance";
 
+/** Renders text with clickable URLs */
+function Linkify({ text }: { text: string }) {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+  return (
+    <>
+      {parts.map((part, i) =>
+        urlRegex.test(part) ? (
+          <a
+            key={i}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-indigo-600 underline hover:text-indigo-800 break-all"
+          >
+            View Summary
+          </a>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </>
+  );
+}
+
 interface Message {
   msg: string;
   sentby: string;
@@ -70,10 +95,20 @@ export default function ChatComponent({ roomId, onMessagesChange }: ChatComponen
         <ul className="px-3 py-2 poppins-regular flex flex-col gap-3">
           {messages.map((message, id) => {
             if (message.sentby === "bot") {
+              const isSummaryMsg = message.msg.includes("saved a session summary");
               return (
-                <li className="text-[10px] w-full flex justify-center" key={id}>
-                  {message.msg}
-                  <Emoji symbol="👋" label="wave" />
+                <li
+                  className={`w-full flex justify-center text-center ${
+                    isSummaryMsg
+                      ? "text-xs bg-violet-50 border border-violet-200 rounded-xl px-3 py-2 my-1"
+                      : "text-[10px]"
+                  }`}
+                  key={id}
+                >
+                  <span>
+                    <Linkify text={message.msg} />
+                    {!isSummaryMsg && <Emoji symbol="👋" label="wave" />}
+                  </span>
                 </li>
               );
             } else {

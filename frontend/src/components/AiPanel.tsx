@@ -105,6 +105,7 @@ export default function AiPanel({ tab, chatMessages, roomId }: AiPanelProps) {
       return;
     }
     setSummaryLoading(true);
+    setSavedUrl(null);
     const token = localStorage.getItem("token");
     try {
       const res = await axios.post(
