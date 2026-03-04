@@ -10,10 +10,17 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
 - **Framer Motion** for animations (sidebar, modals, toasts, popovers)
 - **Socket.IO Client** for real-time events (chat, DMs, presence, invites, companion requests)
 - **Agora RTC SDK** for video/audio calls
+- **@react-oauth/google** for single-click Google OAuth sign-in
 - **Axios** for REST API calls
 - **Web Speech API** for voice input in AI panel
 
 ## Features
+
+### Authentication (`AuthPage`)
+- **Two auth methods:** OTP-based email verification and single-click Google OAuth
+- **Google OAuth** — "Continue with Google" button using `@react-oauth/google`. Uses `useGoogleLogin` hook to get an access token, sends it to `POST /auth/google` for backend verification. Works for both new registrations and existing logins. Google Client ID via `VITE_GOOGLE_CLIENT_ID` env var.
+- **OTP flow** — two-step: enter email → receive OTP → enter OTP → authenticated. Resend OTP with 30-second cooldown, "Change email" back button.
+- On success: dispatches Redux login, stores JWT in localStorage, connects socket, navigates to `/home`
 
 ### Home Dashboard (`RoomPage`)
 - **Global People Search** — inline search bar at the top of the page. Debounced live search when logged in. Logged-out users see blurred dummy cards with a "Login to search" prompt.
@@ -84,6 +91,7 @@ VITE_API_URL=http://localhost:7002          # Backend API base URL
 VITE_STREAM_SOCKET_URL=http://localhost:3002 # Streaming socket server
 VITE_NEWS_IMAGES_ONLY=true                   # "true" = only show news with images, "false" = show all
 VITE_AGORA_APP_ID=your_agora_app_id         # Agora RTC App ID (from https://console.agora.io)
+VITE_GOOGLE_CLIENT_ID=your_google_client_id # Google OAuth Client ID (from https://console.cloud.google.com)
 ```
 
 ## Getting Started

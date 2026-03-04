@@ -57,10 +57,14 @@ virtual_study_group/
 |       |                              crypto.timingSafeEqual for timing-attack prevention
 |       |
 |       |-- controllers/             # Request handlers (business logic)
-|       |   |-- AuthController.ts    # OTP-based auth — sendOtp (generates OTP,
-|       |   |                          emails it, returns HMAC hash + expiry),
-|       |   |                          Register (verify OTP, create user, JWT sign),
-|       |   |                          Login (verify OTP, find user, JWT sign).
+|       |   |-- AuthController.ts    # OTP-based auth + Google OAuth.
+|       |   |                          sendOtp (generates OTP, emails it, returns
+|       |   |                          HMAC hash + expiry), Register (verify OTP,
+|       |   |                          create user, JWT sign), Login (verify OTP,
+|       |   |                          find user, JWT sign).
+|       |   |                          googleLogin: validates Google access_token
+|       |   |                          via googleapis userinfo endpoint, creates or
+|       |   |                          finds user by email, stores googleId, issues JWT.
 |       |   |                          Passwordless — no bcrypt, no password storage
 |       |   |-- RoomController.ts    # Create room, join room, get room users
 |       |   |-- ChatController.ts    # Add chat message, get chat history, get user name
@@ -104,7 +108,8 @@ virtual_study_group/
 |       |
 |       |-- routes/                  # Express route definitions
 |       |   |-- authRoutes.ts        # /auth/send-otp (OTP email+IP rate limited),
-|       |   |                          /auth/register, /auth/login.
+|       |   |                          /auth/register, /auth/login,
+|       |   |                          /auth/google (Google OAuth, IP rate limited).
 |       |   |                          Dual-layer rate limiting: per-email + per-IP
 |       |   |-- roomRoutes.ts        # /room/create, /room/join/:room_id, /room/users/:room_id
 |       |   |-- chatRoutes.ts        # /chat/join, /chat/add, /chat/view/:room_id
@@ -124,7 +129,8 @@ virtual_study_group/
 |       |
 |       |-- models/                  # Mongoose schemas and models
 |       |   |-- User.ts              # User model: name, email (unique),
-|       |   |                          bio (default ''), avatar (default '').
+|       |   |                          bio (default ''), avatar (default ''),
+|       |   |                          googleId (optional, for Google OAuth users).
 |       |   |                          Passwordless — no password field
 |       |   |-- Room.ts              # Room model: users[] (references User)
 |       |   |-- Chat.ts              # Chat model: sendBy (User ref), message, room_id (Room ref)
@@ -188,7 +194,9 @@ virtual_study_group/
     |
     |-- src/                         # Main application source code
         |
-        |-- main.tsx                 # React app entry point, renders App into DOM
+        |-- main.tsx                 # React app entry point, renders App into DOM.
+        |                              Wraps App with GoogleOAuthProvider using
+        |                              VITE_GOOGLE_CLIENT_ID env var
         |-- App.tsx                  # Root component - split into AppInner + App.
         |                              JWT rehydration on refresh, mounts overlays,
         |                              Redux Provider + Router wrapping
@@ -207,10 +215,15 @@ virtual_study_group/
         |-- pages/                   # Top-level page components (one per route)
         |   |-- LandingPage.tsx      # Hero page with animated CTAs
         |   |-- AuthPage.tsx         # Auth layout with Login/Register tabs.
-        |   |                          Two-step OTP flow: Step 1 (email + name
-        |   |                          for register) → Step 2 (6-digit OTP input).
-        |   |                          Resend OTP with 30s countdown, back button.
-        |   |                          Calls /auth/send-otp then /auth/login or
+        |   |                          Two auth methods: OTP email flow and
+        |   |                          single-click Google OAuth ("Continue with
+        |   |                          Google" button via useGoogleLogin hook).
+        |   |                          OTP flow: Step 1 (email + name for register)
+        |   |                          → Step 2 (6-digit OTP input). Resend OTP
+        |   |                          with 30s countdown, back button.
+        |   |                          Google flow: gets access_token → POST
+        |   |                          /auth/google → JWT + login. Calls
+        |   |                          /auth/send-otp then /auth/login or
         |   |                          /auth/register with OTP verification
         |   |-- RoomPage.tsx         # Home dashboard with:
         |   |                          - Global people search bar (blurred dummy
@@ -364,15 +377,17 @@ ENV CONFIGURATION
                        SEARCH_MAX_PER_USER, GLOBAL_WINDOW_MIN, GLOBAL_MAX_PER_IP,
                        SOCKET_DM_INTERVAL_MS, SOCKET_COMPANION_REQ_INTERVAL_MS,
                        SOCKET_INVITE_INTERVAL_MS
-  frontend/.env  ->  VITE_API_URL, VITE_STREAM_SOCKET_URL, VITE_NEWS_IMAGES_ONLY, VITE_AGORA_APP_ID
+  frontend/.env  ->  VITE_API_URL, VITE_STREAM_SOCKET_URL, VITE_NEWS_IMAGES_ONLY, VITE_AGORA_APP_ID,
+                     VITE_GOOGLE_CLIENT_ID
 
 
 API ROUTES SUMMARY
 ==================
-  Auth (OTP-based, passwordless):
+  Auth (OTP-based + Google OAuth, passwordless):
     POST   /auth/send-otp           Send 6-digit OTP to email (HMAC hash + expiry returned)
     POST   /auth/register           Verify OTP + register new user (returns token, name, userId)
     POST   /auth/login              Verify OTP + login (returns token, name, userId)
+    POST   /auth/google             Google OAuth sign-in/register (validates access_token, returns token)
 
   Rooms:
     POST   /room/create             Create room or add user to existing room
@@ -456,7 +471,7 @@ SOCKET EVENTS
 
 DATABASE COLLECTIONS
 ====================
-  users            ->  { name, email (unique), bio, avatar }
+  users            ->  { name, email (unique), bio, avatar, googleId (optional) }
   rooms            ->  { users: [ObjectId -> User] }
   chats            ->  { sendBy: ObjectId -> User, message: String, room_id: ObjectId -> Room }
   companions       ->  { requester: ObjectId, recipient: ObjectId, status: 'pending'|'accepted' }

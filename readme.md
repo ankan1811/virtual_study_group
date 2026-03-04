@@ -15,7 +15,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 | **Cloud Storage**    | Cloudflare R2 (S3-compatible, free tier) for summary persistence  |
 | **State Management** | Redux Toolkit                                                     |
 | **Styling**          | Tailwind CSS, shadcn/ui, Framer Motion                            |
-| **Auth**             | Stateless OTP (HMAC-SHA256) + JWT + nodemailer                    |
+| **Auth**             | Stateless OTP (HMAC-SHA256) + Google OAuth + JWT + nodemailer     |
 | **Rate Limiting**    | express-rate-limit (per-user + per-IP, all thresholds via env vars) |
 | **Streaming**        | FFmpeg (RTMP to YouTube Live)                                     |
 | **Audio Viz**        | P5.js                                                             |
@@ -23,8 +23,10 @@ A full-stack web application for creating virtual study group spaces with real-t
 
 ## Features
 
-### Authentication (OTP-based)
+### Authentication (OTP + Google OAuth)
 
+- **Two sign-in methods:** passwordless OTP and single-click Google OAuth
+- **Google OAuth** — "Continue with Google" button on the auth page. Uses `@react-oauth/google` on frontend to get an access token, backend verifies it against Google's userinfo API (`POST /auth/google`). Works for both new registrations and existing logins. Stores `googleId` on the User model for account linking. Google Client ID via `VITE_GOOGLE_CLIENT_ID` env var.
 - **Passwordless OTP auth** — no passwords stored. Users verify email ownership via a 6-digit OTP on every login/register
 - **Stateless OTP** — HMAC-SHA256 signed hash (no OTP stored in DB). Server generates OTP + hash, emails OTP to user, client sends back OTP + hash for verification
 - **Configurable expiry** via `OTP_EXPIRY_MINUTES` env var (default: 5 minutes)
@@ -206,6 +208,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 - Node.js (v18+)
 - MongoDB instance (local or Atlas)
 - Agora account (for video call App ID)
+- Google Cloud Console OAuth Client ID (for Google sign-in — [create one](https://console.cloud.google.com/apis/credentials))
 - Google AI Studio API key (for Gemini AI — [get one free](https://aistudio.google.com)) or xAI API key (for Grok — [get one free](https://console.x.ai))
 - Cloudflare account with R2 bucket + API token (for summary storage — [free tier](https://developers.cloudflare.com/r2/))
 
@@ -290,6 +293,7 @@ Create a `.env` file in `frontend/` with:
 ```
 VITE_API_URL=http://localhost:7002
 VITE_AGORA_APP_ID=your_agora_app_id   # Agora RTC App ID
+VITE_GOOGLE_CLIENT_ID=your_google_client_id # Google OAuth Client ID (from https://console.cloud.google.com)
 ```
 
 ## Routes
@@ -313,6 +317,7 @@ VITE_AGORA_APP_ID=your_agora_app_id   # Agora RTC App ID
 | POST   | `/auth/send-otp`          | Send 6-digit OTP to email (rate limited: per-email + per-IP)         |
 | POST   | `/auth/register`          | Verify OTP and register new user (rate limited: per-email + per-IP)  |
 | POST   | `/auth/login`             | Verify OTP and login (rate limited: per-email + per-IP)              |
+| POST   | `/auth/google`            | Google OAuth sign-in/register (rate limited: per-IP)                 |
 | POST   | `/companion/request`      | Send companion request                                               |
 | POST   | `/companion/accept`       | Accept companion request                                             |
 | POST   | `/companion/decline`      | Decline companion request                                            |
