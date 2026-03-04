@@ -16,7 +16,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 | **State Management** | Redux Toolkit                                                     |
 | **Styling**          | Tailwind CSS, shadcn/ui, Framer Motion                            |
 | **Auth**             | Stateless OTP (HMAC-SHA256) + JWT + nodemailer                    |
-| **Rate Limiting**    | express-rate-limit (per-user + per-IP, configurable thresholds)   |
+| **Rate Limiting**    | express-rate-limit (per-user + per-IP, all thresholds via env vars) |
 | **Streaming**        | FFmpeg (RTMP to YouTube Live)                                     |
 | **Audio Viz**        | P5.js                                                             |
 | **News Feed**        | Mock articles (AI / Tech / Productivity categories, 30-min cache) |
@@ -139,6 +139,7 @@ A full-stack web application for creating virtual study group spaces with real-t
   - Saved summaries include: session date, user name, room ID, and formatted bullet-point content
   - Button transitions to a green "Saved! View Summary" link after successful upload
   - Re-generating a new summary resets the save state
+  - **Monthly upload quota:** configurable via `R2_MAX_UPLOADS_PER_MONTH` env var (default: 10 per user). Tracked per calendar month in MongoDB
 
 ### Home Page
 
@@ -166,18 +167,19 @@ A full-stack web application for creating virtual study group spaces with real-t
 
 ### Rate Limiting & Security
 
-- **User-specific rate limiting** via `express-rate-limit` with all thresholds defined in a single `RATE_LIMIT_CONFIG` object for easy tuning
+- **All rate limit thresholds configurable via env vars** — every value in `RATE_LIMIT_CONFIG` reads from a corresponding env var with sensible defaults. No code changes needed to tune limits
 - **Dual-layer protection on auth endpoints** — both per-email and per-IP limits applied simultaneously:
-  - Login & Register: 7 attempts per email / 15 attempts per IP per 15-minute window
-  - Send OTP: 5 per email / 10 per IP per 15-minute window (tighter since it triggers email sends)
+  - Login & Register: `AUTH_MAX_PER_EMAIL` (default 7) / `AUTH_MAX_PER_IP` (default 15) per `AUTH_WINDOW_MIN` (default 15 min)
+  - Send OTP: `OTP_MAX_PER_EMAIL` (default 5) / `OTP_MAX_PER_IP` (default 7) per `OTP_WINDOW_MIN` (default 15 min)
 - **Per-userId rate limiting on authenticated endpoints:**
-  - AI Doubt Solver & Session Summary: 20 requests per user per 15 minutes (protects expensive API quotas)
-  - User Search: 30 requests per user per minute (prevents enumeration)
-- **Global safety net:** 200 requests per IP per 15 minutes across all routes
-- **Socket event throttling** (per-user, in-memory):
-  - `dm:send`: 200ms minimum interval (prevents message flooding)
-  - `companion:sendRequest`: 5s minimum interval (prevents notification spam)
-  - `sendInvite`: 3s minimum interval (prevents invite spam)
+  - AI Doubt Solver & Session Summary: `AI_MAX_PER_USER` (default 20) per `AI_WINDOW_MIN` (default 15 min)
+  - User Search: `SEARCH_MAX_PER_USER` (default 30) per `SEARCH_WINDOW_MIN` (default 1 min)
+- **R2 summary upload quota:** `R2_MAX_UPLOADS_PER_MONTH` (default 10) per user per calendar month, tracked via MongoDB `UploadCounter` collection
+- **Global safety net:** `GLOBAL_MAX_PER_IP` (default 200) per `GLOBAL_WINDOW_MIN` (default 15 min) across all routes
+- **Socket event throttling** (per-user, in-memory, configurable via env):
+  - `dm:send`: `SOCKET_DM_INTERVAL_MS` (default 200ms)
+  - `companion:sendRequest`: `SOCKET_COMPANION_REQ_INTERVAL_MS` (default 5000ms)
+  - `sendInvite`: `SOCKET_INVITE_INTERVAL_MS` (default 3000ms)
 - Throttled socket events emit error responses (`dm:error`, `companion:error`, `inviteError`)
 - HTTP 429 responses include `RateLimit-*` standard headers
 - `trust proxy` enabled for correct client IP detection behind reverse proxies
@@ -242,6 +244,7 @@ R2_ACCOUNT_ID=your_cloudflare_id  # Cloudflare account ID (from dashboard URL)
 R2_ACCESS_KEY_ID=your_r2_key      # R2 API token access key
 R2_SECRET_ACCESS_KEY=your_r2_secret # R2 API token secret key
 R2_BUCKET_NAME=study-summaries    # R2 bucket name for saved summaries
+R2_MAX_UPLOADS_PER_MONTH=10      # Max summary uploads per user per month (default: 10)
 AGORA_APP_ID=your_agora_app_id   # Agora RTC App ID
 SMTP_HOST=smtp.gmail.com          # SMTP server for OTP emails
 SMTP_PORT=587                     # SMTP port (587 for TLS)
@@ -249,6 +252,23 @@ SMTP_USER=your-email@gmail.com    # SMTP sender email
 SMTP_PASS=your-app-password       # SMTP password (Gmail: use App Password)
 OTP_SECRET=your-random-hex-string # HMAC signing key for stateless OTP
 OTP_EXPIRY_MINUTES=5              # OTP validity duration (default: 5 minutes)
+
+# Rate Limiting (all optional — defaults shown, only override what you need)
+# AUTH_WINDOW_MIN=15              # Auth window in minutes
+# AUTH_MAX_PER_EMAIL=7            # Max login/register per email per window
+# AUTH_MAX_PER_IP=15              # Max login/register per IP per window
+# OTP_WINDOW_MIN=15              # OTP send window in minutes
+# OTP_MAX_PER_EMAIL=5            # Max OTP sends per email per window
+# OTP_MAX_PER_IP=7               # Max OTP sends per IP per window
+# AI_WINDOW_MIN=15               # AI endpoint window in minutes
+# AI_MAX_PER_USER=20             # Max AI requests per user per window
+# SEARCH_WINDOW_MIN=1            # User search window in minutes
+# SEARCH_MAX_PER_USER=30         # Max searches per user per window
+# GLOBAL_WINDOW_MIN=15           # Global safety net window in minutes
+# GLOBAL_MAX_PER_IP=200          # Max requests per IP per window (all routes)
+# SOCKET_DM_INTERVAL_MS=200      # Min ms between DM sends per user
+# SOCKET_COMPANION_REQ_INTERVAL_MS=5000  # Min ms between companion requests
+# SOCKET_INVITE_INTERVAL_MS=3000 # Min ms between room invites
 ```
 
 Start the server:

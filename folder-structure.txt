@@ -9,9 +9,10 @@ virtual_study_group/
 |
 |-- backend/                         # Node.js + Express + TypeScript backend
 |   |-- .env                         # Environment variables (MONGODB_URI, JWT_SECRET,
-|   |                                  PORT, AI_PROVIDER, GEMINI_API_KEY, GROK_API_KEY,
-|   |                                  R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY,
-|   |                                  R2_BUCKET_NAME, AGORA_APP_ID)
+|   |                                  PORT, OTP_SECRET, OTP_EXPIRY_MINUTES,
+|   |                                  AI_PROVIDER, GEMINI_API_KEY, GROK_API_KEY,
+|   |                                  R2_*, AGORA_APP_ID, SMTP_*,
+|   |                                  + optional rate limit overrides)
 |   |-- .gitignore                   # Git ignore rules for backend
 |   |-- package.json                 # Backend dependencies and scripts
 |   |-- tsconfig.json                # TypeScript configuration for backend
@@ -78,6 +79,8 @@ virtual_study_group/
 |       |   |                          POST /ai/ask (question -> answer)
 |       |   |                          POST /ai/summary (messages -> summary)
 |       |   |-- SummaryController.ts # Save AI summary to Cloudflare R2 (S3-compatible).
+|       |   |                          Monthly upload quota per user via UploadCounter
+|       |   |                          model (R2_MAX_UPLOADS_PER_MONTH env var, def 10).
 |       |   |                          Builds styled HTML document with purple gradient
 |       |   |                          header, metadata (user, room, date), and formatted
 |       |   |                          bullet-point content. Uploads via @aws-sdk/client-s3.
@@ -130,6 +133,9 @@ virtual_study_group/
 |       |   |-- DirectMessage.ts     # DM model: from, to (User refs), content, read (bool,
 |       |   |                          default false), timestamps. Indexes: from+to, to+from,
 |       |   |                          to+read (for fast unread-count queries)
+|       |   |-- UploadCounter.ts     # Upload quota tracker: userId, monthKey ("2026-03"),
+|       |   |                          count. Unique compound index on userId+monthKey.
+|       |   |                          Used by SummaryController for monthly R2 limit
 |       |   |-- Notification.ts      # Notification model: recipient (User ref), type
 |       |   |                          ('companion_request'|'companion_accepted'|'room_invite'),
 |       |   |                          fromUserId, fromUserName, data (Mixed), read (bool).
@@ -139,17 +145,19 @@ virtual_study_group/
 |           |-- middleware.ts        # JWT token verification - extracts userId from
 |           |                          Authorization header. Exports AuthenticatedRequest
 |           |-- rateLimiter.ts       # Rate limiting middleware (express-rate-limit).
-|                                      RATE_LIMIT_CONFIG: single configurable constants
-|                                      object for all thresholds. Exports 7 limiters:
-|                                      authEmailLimiter (7/email/15min),
-|                                      authIpLimiter (15/IP/15min),
-|                                      otpEmailLimiter (5/email/15min),
-|                                      otpIpLimiter (10/IP/15min),
-|                                      aiLimiter (20/user/15min),
-|                                      searchLimiter (30/user/1min),
-|                                      globalLimiter (200/IP/15min).
-|                                      Also exports RATE_LIMIT_CONFIG for socket
-|                                      throttle intervals used by socketServer.ts
+|                                      RATE_LIMIT_CONFIG: every threshold reads from
+|                                      env vars via envInt() helper with defaults.
+|                                      Exports 7 limiters + config object:
+|                                      authEmailLimiter (AUTH_MAX_PER_EMAIL, def 7),
+|                                      authIpLimiter (AUTH_MAX_PER_IP, def 15),
+|                                      otpEmailLimiter (OTP_MAX_PER_EMAIL, def 5),
+|                                      otpIpLimiter (OTP_MAX_PER_IP, def 7),
+|                                      aiLimiter (AI_MAX_PER_USER, def 20),
+|                                      searchLimiter (SEARCH_MAX_PER_USER, def 30),
+|                                      globalLimiter (GLOBAL_MAX_PER_IP, def 200).
+|                                      Also exports R2_MAX_UPLOADS_PER_MONTH (def 10)
+|                                      and socket throttle intervals (SOCKET_*_MS)
+|                                      used by socketServer.ts + SummaryController.ts
 
 |
 |-- frontend/                        # React 18 + TypeScript + Vite frontend
@@ -344,10 +352,18 @@ virtual_study_group/
 
 ENV CONFIGURATION
 =================
-  backend/.env   ->  MONGODB_URI, PORT, JWT_SECRET, AI_PROVIDER, GEMINI_API_KEY, GROK_API_KEY,
+  backend/.env   ->  MONGODB_URI, PORT, JWT_SECRET, OTP_SECRET, OTP_EXPIRY_MINUTES,
+                     AI_PROVIDER, GEMINI_API_KEY, GROK_API_KEY,
                      R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME,
-                     AGORA_APP_ID, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS,
-                     OTP_SECRET, OTP_EXPIRY_MINUTES
+                     R2_MAX_UPLOADS_PER_MONTH, AGORA_APP_ID,
+                     SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS,
+                     + Rate limiting env vars (all optional with defaults):
+                       AUTH_WINDOW_MIN, AUTH_MAX_PER_EMAIL, AUTH_MAX_PER_IP,
+                       OTP_WINDOW_MIN, OTP_MAX_PER_EMAIL, OTP_MAX_PER_IP,
+                       AI_WINDOW_MIN, AI_MAX_PER_USER, SEARCH_WINDOW_MIN,
+                       SEARCH_MAX_PER_USER, GLOBAL_WINDOW_MIN, GLOBAL_MAX_PER_IP,
+                       SOCKET_DM_INTERVAL_MS, SOCKET_COMPANION_REQ_INTERVAL_MS,
+                       SOCKET_INVITE_INTERVAL_MS
   frontend/.env  ->  VITE_API_URL, VITE_STREAM_SOCKET_URL, VITE_NEWS_IMAGES_ONLY, VITE_AGORA_APP_ID
 
 
@@ -450,3 +466,5 @@ DATABASE COLLECTIONS
   notifications    ->  { recipient: ObjectId, type: String, fromUserId: String,
                          fromUserName: String, data: Mixed, read: Boolean, timestamps }
                        TTL index on createdAt: auto-deleted after 10 days
+  uploadcounters   ->  { userId: String, monthKey: String ("2026-03"), count: Number }
+                       Unique compound index on { userId, monthKey }
