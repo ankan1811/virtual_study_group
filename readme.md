@@ -14,6 +14,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 | **AI**               | Switchable: Google Gemini 2.5 Flash (default) / xAI Grok          |
 | **Cloud Storage**    | Cloudflare R2 (S3-compatible, free tier) for summary persistence  |
 | **State Management** | Redux Toolkit                                                     |
+| **Whiteboard**       | Excalidraw (MIT, client-side, lazy-loaded)                        |
 | **Styling**          | Tailwind CSS, shadcn/ui, Framer Motion                            |
 | **Auth**             | Stateless OTP (HMAC-SHA256) + Google OAuth + JWT + nodemailer     |
 | **Rate Limiting**    | express-rate-limit (per-user + per-IP, all thresholds via env vars) |
@@ -100,6 +101,22 @@ A full-stack web application for creating virtual study group spaces with real-t
 - Fetched via `GET /notifications` on app load when offline delivery occurred
 - Animated dropdown with relative timestamps, per-type icons, and inline delete
 
+### AI Whiteboard
+
+- **Excalidraw-powered collaborative whiteboard** — full drawing tools (shapes, text, freehand, arrows, etc.) rendered in the center video area when the Whiteboard tab is active
+- **Completely free** — Excalidraw is MIT-licensed and runs entirely client-side, AI analysis via Gemini free tier
+- **Lazy-loaded** via `React.lazy()` — Excalidraw bundle only downloads when the whiteboard tab is first opened, keeping initial page load fast
+- **Real-time collaboration** — all room participants see the same whiteboard live via Socket.IO
+  - Drawing changes debounced at 150ms (client) and throttled at 100ms (server)
+  - Echo-loop prevention ensures incoming sync doesn't re-trigger outgoing broadcasts
+- **AI Explain panel** — right-side panel with:
+  - "Explain This" button to analyze the entire whiteboard
+  - Custom question input to ask specific questions about the drawing
+  - Q&A history with teal-accented chat bubbles and Framer Motion animations
+- **Whiteboard Summary** — accessible from the Summary tab's "Whiteboard Summary" sub-tab, generates a bullet-point summary of whiteboard content and can be saved to R2
+- **Drawing preserved across tab switches** — scene state lifted to parent and restored via `initialData`
+- **Smart AI payloads** — sends compact text descriptions (element type, text content, dimensions) rather than raw Excalidraw JSON
+
 ### Video Calling (Agora RTC)
 
 - Real-time video and audio calls using Agora SDK
@@ -131,11 +148,13 @@ A full-stack web application for creating virtual study group spaces with real-t
 
 ### Session Summary
 
-- "Summary" tab in the call room generates an AI summary of the chat session
-- Uses the same switchable AI provider as the Doubt Solver
+- "Summary" tab in the call room with **two sub-tabs:**
+  - **Chat Summary** — generates an AI summary of the chat session messages
+  - **Whiteboard Summary** — generates an AI summary of whiteboard drawings and diagrams
+- Both use the same switchable AI provider as the Doubt Solver
 - One-click generation with loading state
 - Formatted summary card display
-- **Save to Cloudflare R2** — "Save Summary" button uploads the summary as a beautifully styled HTML document to Cloudflare R2 (S3-compatible storage)
+- **Save to Cloudflare R2** — "Save Summary" button (available on both sub-tabs) uploads the summary as a beautifully styled HTML document to Cloudflare R2 (S3-compatible storage)
   - Generates a presigned download URL valid for 7 days
   - After saving, a **VSG Bot message** is broadcast to the room chat with the download link so all call participants can access it
   - Saved summaries include: session date, user name, room ID, and formatted bullet-point content
@@ -200,6 +219,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 - Full streaming pipeline (frontend-to-backend wiring)
 - Session analytics dashboard
 - Study streak tracking
+- Whiteboard image export to AI (Gemini Vision) for spatial analysis
 
 ## Getting Started
 
@@ -328,7 +348,9 @@ VITE_GOOGLE_CLIENT_ID=your_google_client_id # Google OAuth Client ID (from https
 | GET    | `/user/search?q=`         | Search users by name/email (rate limited: per-user)                  |
 | GET    | `/news`                   | Get news feed articles                                               |
 | POST   | `/ai/ask`                 | Ask AI a study question (rate limited: per-user)                     |
-| POST   | `/ai/summary`             | Generate AI session summary (rate limited: per-user)                 |
+| POST   | `/ai/summary`             | Generate AI chat session summary (rate limited: per-user)            |
+| POST   | `/ai/whiteboard-explain`  | AI analysis of whiteboard drawing (rate limited: per-user)           |
+| POST   | `/ai/whiteboard-summary`  | Generate AI whiteboard summary (rate limited: per-user)              |
 | POST   | `/ai/save-summary`        | Save summary to Cloudflare R2, broadcast link to room chat           |
 | GET    | `/dm/recent`              | Get recent chats (last message per companion, sorted by time)        |
 | GET    | `/dm/:companionId`        | Get DM history (includes `_id`, `read` state)                        |

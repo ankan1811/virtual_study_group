@@ -36,6 +36,9 @@ virtual_study_group/
 |       |                              DM events: dm:send (echoes _id+tempId for delivery
 |       |                              ack), dm:markRead (marks read + emits dm:readUpdate
 |       |                              to sender), dm:join.
+|       |                              Whiteboard events: whiteboard:update (throttled
+|       |                              100ms, broadcasts whiteboard:sync to room),
+|       |                              whiteboard:clear (broadcasts whiteboard:cleared).
 |       |                              Notification events: notification:new (pushed to
 |       |                              recipient on companion_request, companion_accepted,
 |       |                              room_invite). saveAndEmitNotification() helper.
@@ -82,6 +85,11 @@ virtual_study_group/
 |       |   |                          singleton. Default: Gemini 2.5 Flash.
 |       |   |                          POST /ai/ask (question -> answer)
 |       |   |                          POST /ai/summary (messages -> summary)
+|       |   |                          POST /ai/whiteboard-explain (elements +
+|       |   |                          optional question -> explanation)
+|       |   |                          POST /ai/whiteboard-summary (elements ->
+|       |   |                          summary). describeWhiteboardElements()
+|       |   |                          helper converts elements to compact text
 |       |   |-- SummaryController.ts # Save AI summary to Cloudflare R2 (S3-compatible).
 |       |   |                          Monthly upload quota per user via UploadCounter
 |       |   |                          model (R2_MAX_UPLOADS_PER_MONTH env var, def 10).
@@ -118,6 +126,8 @@ virtual_study_group/
 |       |   |-- userRoutes.ts        # GET /user/profile, PUT /user/profile,
 |       |   |                          GET /user/search?q= (per-user rate limited)
 |       |   |-- aiRoutes.ts          # /ai/ask, /ai/summary (per-user rate limited),
+|       |   |                          /ai/whiteboard-explain, /ai/whiteboard-summary
+|       |   |                          (per-user rate limited),
 |       |   |                          /ai/save-summary (auth required, saves to R2)
 |       |   |-- dmRoutes.ts          # GET /dm/recent (recent chats aggregation),
 |       |   |                          GET /dm/unread-counts (before /:companionId to
@@ -252,8 +262,12 @@ virtual_study_group/
         |   |                          updates via dm:receive socket event
         |   |-- RoomCallPage.tsx     # Video call page - Agora RTC integration,
         |   |                          mic/camera controls, remote user streams.
-        |   |                          Tab panel: Chat / AI Doubt / Summary.
-        |   |                          RoomId from Redux (not localStorage).
+        |   |                          Tab panel: Chat / AI Doubt / Summary /
+        |   |                          Whiteboard. Whiteboard tab swaps the center
+        |   |                          video area for Excalidraw (lazy-loaded).
+        |   |                          Lifts whiteboardElements state for AI panels.
+        |   |                          whiteboardSceneRef preserves drawing across
+        |   |                          tab switches. RoomId from Redux.
         |   |                          Agora App ID from VITE_AGORA_APP_ID env var
         |   |-- Streampage.tsx       # Live streaming page - camera preview, YouTube
         |   |                          stream key input, start/stop controls
@@ -298,12 +312,34 @@ virtual_study_group/
         |   |                          - "ai" tab: AI doubt solver (text + voice
         |   |                            via Web Speech API), Q&A history cards
         |   |                            Generic "AI Assistant" branding
-        |   |                          - "summary" tab: generates session summary
-        |   |                            from chat messages via POST /ai/summary.
-        |   |                            "Save Summary" button uploads styled HTML
-        |   |                            to Cloudflare R2 via POST /ai/save-summary.
-        |   |                            Shows presigned download link after save.
-        |   |                            Broadcasts link to room chat as bot message
+        |   |                          - "summary" tab: two sub-tabs:
+        |   |                            * Chat Summary: generates session summary
+        |   |                              from chat messages via POST /ai/summary
+        |   |                            * Whiteboard Summary: generates summary
+        |   |                              from whiteboard elements via POST
+        |   |                              /ai/whiteboard-summary
+        |   |                            Both sub-tabs have "Save Summary" button
+        |   |                            that uploads styled HTML to Cloudflare R2
+        |   |                            via POST /ai/save-summary. Shows presigned
+        |   |                            download link after save. Broadcasts link
+        |   |                            to room chat as bot message
+        |   |-- WhiteboardPanel.tsx # Excalidraw wrapper component. Renders in
+        |   |                          center area when Whiteboard tab is active.
+        |   |                          Lazy-loaded via React.lazy(). Real-time
+        |   |                          sync via Socket.IO: debounced onChange
+        |   |                          (150ms) emits whiteboard:update, listens
+        |   |                          for whiteboard:sync to apply remote changes.
+        |   |                          isRemoteUpdate ref prevents echo loops.
+        |   |                          Lifts simplified elements (type, text,
+        |   |                          dimensions) to parent via onSceneChange.
+        |   |                          Accepts initialData for state restoration
+        |   |-- WhiteboardExplainPanel.tsx # AI explain panel for whiteboard.
+        |   |                          Renders in right 380px panel when Whiteboard
+        |   |                          tab is active. "Explain This" button +
+        |   |                          custom question input. Calls POST
+        |   |                          /ai/whiteboard-explain. Q&A history with
+        |   |                          teal-accented bubbles. Empty state when
+        |   |                          nothing drawn yet
         |   |-- InviteNotificationOverlay.tsx  # Animated banner for incoming room
         |   |                          invites. Accept navigates to /room/call,
         |   |                          Decline dismisses. Socket: receiveInvite
@@ -414,6 +450,8 @@ API ROUTES SUMMARY
   AI (Gemini / Grok — switchable via AI_PROVIDER env var):
     POST   /ai/ask                  Ask AI a study question
     POST   /ai/summary             Generate AI summary of chat messages
+    POST   /ai/whiteboard-explain  AI analysis of whiteboard drawing (+ optional question)
+    POST   /ai/whiteboard-summary  Generate AI summary of whiteboard content
     POST   /ai/save-summary        Save summary to Cloudflare R2, broadcast link to room chat
 
   DMs:
@@ -454,6 +492,12 @@ SOCKET EVENTS
     companion:accepted         Server confirms acceptance to requester
     companion:online           Server broadcasts user online
     companion:offline          Server broadcasts user offline
+
+  Whiteboard (whiteboard:update throttled 100ms):
+    whiteboard:update     Client broadcasts drawing changes to room (roomId + elements)
+    whiteboard:sync       Server relays whiteboard changes to other room participants
+    whiteboard:clear      Client clears the whiteboard for all room participants
+    whiteboard:cleared    Server notifies room that whiteboard was cleared
 
   DMs (dm:send throttled 200ms):
     dm:join               Client joins DM room (dm_{sortedIds})
