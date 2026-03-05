@@ -1,16 +1,15 @@
-import React, { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Navbar from '../components/Navbar'
 import { Mic, MicOff, Podcast, Video, VideoOff, Youtube } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import io from "socket.io-client";
 const Socket = io();
 export default function Streampage() {
-  const [isMicOn, setIsMicOn] = useState(true);
+  const [isMicOn] = useState(true);
   const [isVideoOn, setIsVideoOn] = useState(true);
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [socket, setSocket] = useState<typeof Socket>();
+  const [isStreaming] = useState(false);
+  const [_socket, _setSocket] = useState<typeof Socket>();
   const [mediaState, setMediaState] = useState({ audio: false, video: false });
-  let mediaObj = { media: null };
   const [mediaStream, setMediaStream] = useState<MediaStream>();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [ytString, setYtString] = useState<string>('');

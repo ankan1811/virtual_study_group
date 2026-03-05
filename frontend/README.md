@@ -13,6 +13,7 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
 - **@react-oauth/google** for single-click Google OAuth sign-in
 - **Axios** for REST API calls
 - **Web Speech API** for voice input in AI panel
+- **@excalidraw/excalidraw** for collaborative whiteboard (lazy-loaded)
 
 ## Features
 
@@ -62,14 +63,29 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
 
 ### Room Call (`RoomCallPage`)
 - Agora RTC video/audio with mic/camera controls (App ID via `VITE_AGORA_APP_ID` env var)
-- Tab panel: Chat / AI Doubt Solver / Session Summary
+- Tab panel: Chat / AI Doubt Solver / Summary / Whiteboard
 - Room ID from Redux state (not URL or localStorage)
 - Bot messages in chat support clickable URLs (Linkify helper) with special styling for summary notifications
+- **Opt-in chat persistence:**
+  - Inline "Save" button in chat panel — disabled when nothing to save, re-enables on new messages, shows "Saved" checkmark on success
+  - `SaveChatPrompt` modal on exit — "Save & Exit" or "Exit without saving". Skipped if all messages already saved
+  - `useBlocker` intercepts React Router navigation; `beforeunload` guards browser tab close
+  - `NavbarCall` exit button uses programmatic navigation (no `<Link>`) to allow interception
 
 ### AI Integration
 - **Doubt Solver** — text + voice input (Web Speech API), powered by switchable AI (Gemini/Grok)
-- **Session Summary** — generates AI summary from chat messages
+- **Session Summary** — Summary tab has two sub-tabs:
+  - **Chat Summary** — generates AI summary from chat messages
+  - **Whiteboard Summary** — generates AI summary from whiteboard drawings
+- Both summaries can be saved to Cloudflare R2 with presigned download URLs
 - **Save Summary** — one-click save to Cloudflare R2 (S3-compatible) as a styled HTML document. Returns a presigned download URL (valid 7 days). After saving, a VSG Bot message is broadcast to the room chat with the download link so all participants can access it.
+
+### AI Whiteboard (`WhiteboardPanel` + `WhiteboardExplainPanel`)
+- **Excalidraw-powered whiteboard** — full drawing tools (shapes, text, freehand, arrows) rendered in the center video area when the Whiteboard tab is active. Lazy-loaded via `React.lazy()` to avoid bloating the initial bundle.
+- **Real-time collaboration** — all room participants see the same whiteboard live via Socket.IO. Drawing changes are debounced (150ms client-side) and throttled (100ms server-side) to balance responsiveness and bandwidth. Echo-loop prevention via `isRemoteUpdate` ref flag.
+- **AI Explain panel** (right 380px panel) — "Explain This" button sends a compact text description of whiteboard elements to Gemini/Grok for analysis. Custom question input for asking specific questions about the drawing. Q&A history with teal-accented chat bubbles and Framer Motion animations.
+- **Drawing preserved across tab switches** — whiteboard scene state is lifted to `RoomCallPage` via `whiteboardSceneRef` and restored via `initialData` on re-mount.
+- **Whiteboard data for AI** — elements are simplified before sending to the LLM: text content for text elements, type + dimensions for shapes. No raw Excalidraw JSON sent (too verbose).
 
 ### Live Streaming (`Streampage`)
 - Camera preview, YouTube RTMP stream key input, start/stop controls
@@ -122,3 +138,7 @@ Requires the backend running on port 7002 (see `backend/README.md` or `backend/.
 | `serverMessage` | Client → Server | Send chat message |
 | `dm:error` | Server → Client | DM send throttled (too frequent) |
 | `companion:error` | Server → Client | Companion request throttled (too frequent) |
+| `whiteboard:update` | Client → Server | Broadcast whiteboard element changes to room (debounced 150ms) |
+| `whiteboard:sync` | Server → Client | Incoming whiteboard changes from another participant |
+| `whiteboard:clear` | Client → Server | Clear the whiteboard for all room participants |
+| `whiteboard:cleared` | Server → Client | Whiteboard was cleared by another participant |

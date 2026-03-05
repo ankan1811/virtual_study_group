@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import { useEffect } from 'react'
 import p5 from 'p5'
 export default function SoundBar() {
   const divElems = [];
@@ -7,7 +7,7 @@ export default function SoundBar() {
   }
 
   useEffect(() => {
-    const sketch = new p5(p => {
+    new p5(() => {
 
     })
 

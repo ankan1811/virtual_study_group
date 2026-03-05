@@ -1,10 +1,10 @@
-import React, { useEffect } from "react";
+import { useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import "./App.css";
 import AuthPage from "./pages/AuthPage";
 import RoomPage from "./pages/RoomPage";
 import RoomCallPage from "./pages/RoomCallPage";
-import LandingPage from "./pages/LandingPage";
+
 import { Provider, useDispatch } from "react-redux";
 import store from "./store/authStore/store";
 import Streampage from "./pages/Streampage";

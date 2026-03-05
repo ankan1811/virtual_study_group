@@ -1,12 +1,11 @@
-import React from "react";
 import Logo from "../assets/logo.svg";
 import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
 import { LogIn } from "lucide-react";
+
 export default function NavbarCall({
-  leaveChannel,
+  onExitClick,
 }: {
-  leaveChannel: VoidFunction;
+  onExitClick: () => void;
 }) {
   return (
     <nav className="bg-white w-full border-b md:border-0 shadow-md poppins-regular">
@@ -17,11 +16,11 @@ export default function NavbarCall({
         <ul className="flex gap-10"></ul>
         <ul className="flex gap-10">
           <li key="" className="">
-            <Button variant="destructive" onClick={leaveChannel}>
-              <Link to="/home" className="flex gap-2 items-center">
+            <Button variant="destructive" onClick={onExitClick}>
+              <div className="flex gap-2 items-center">
                 <LogIn size={20} />
                 <h1 className="text-lg">Exit room</h1>
-              </Link>
+              </div>
             </Button>
           </li>
         </ul>

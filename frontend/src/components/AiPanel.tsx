@@ -23,16 +23,26 @@ interface QA {
   answer: string;
 }
 
+interface WhiteboardElement {
+  type: string;
+  text?: string;
+  width: number;
+  height: number;
+}
+
 interface AiPanelProps {
   tab: "ai" | "summary";
   chatMessages: Message[];
   roomId: string;
+  whiteboardElements?: WhiteboardElement[];
 }
 
 // Web Speech API type shim
 type SpeechRecognitionAny = any;
 
-export default function AiPanel({ tab, chatMessages, roomId }: AiPanelProps) {
+type SummarySubTab = "chat" | "whiteboard";
+
+export default function AiPanel({ tab, chatMessages, roomId, whiteboardElements }: AiPanelProps) {
   const [input, setInput] = useState("");
   const [qaHistory, setQaHistory] = useState<QA[]>([]);
   const [loading, setLoading] = useState(false);
@@ -41,6 +51,11 @@ export default function AiPanel({ tab, chatMessages, roomId }: AiPanelProps) {
   const [saving, setSaving] = useState(false);
   const [savedUrl, setSavedUrl] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
+  const [summarySubTab, setSummarySubTab] = useState<SummarySubTab>("chat");
+  const [wbSummary, setWbSummary] = useState<string | null>(null);
+  const [wbSummaryLoading, setWbSummaryLoading] = useState(false);
+  const [wbSaving, setWbSaving] = useState(false);
+  const [wbSavedUrl, setWbSavedUrl] = useState<string | null>(null);
   const recognitionRef = useRef<SpeechRecognitionAny>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -144,6 +159,48 @@ export default function AiPanel({ tab, chatMessages, roomId }: AiPanelProps) {
     }
   };
 
+  const generateWhiteboardSummary = async () => {
+    if (!whiteboardElements || whiteboardElements.length === 0) {
+      setWbSummary("No whiteboard content to summarize yet.");
+      return;
+    }
+    setWbSummaryLoading(true);
+    setWbSavedUrl(null);
+    const token = localStorage.getItem("token");
+    try {
+      const res = await axios.post(
+        `${import.meta.env.VITE_API_URL}/ai/whiteboard-summary`,
+        { elements: whiteboardElements },
+        { headers: { Authorization: token || "" } }
+      );
+      setWbSummary(res.data.summary);
+    } catch {
+      setWbSummary("Could not generate whiteboard summary. Please try again.");
+    } finally {
+      setWbSummaryLoading(false);
+    }
+  };
+
+  const saveWbSummaryToR2 = async () => {
+    if (!wbSummary || wbSaving) return;
+    setWbSaving(true);
+    setWbSavedUrl(null);
+    const token = localStorage.getItem("token");
+    try {
+      const res = await axios.post(
+        `${import.meta.env.VITE_API_URL}/ai/save-summary`,
+        { summary: wbSummary, roomId },
+        { headers: { Authorization: token || "" } }
+      );
+      setWbSavedUrl(res.data.url);
+    } catch {
+      setWbSavedUrl(null);
+      alert("Failed to save whiteboard summary. Please check R2 configuration.");
+    } finally {
+      setWbSaving(false);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -152,10 +209,21 @@ export default function AiPanel({ tab, chatMessages, roomId }: AiPanelProps) {
   };
 
   if (tab === "summary") {
-    return (
-      <div className="flex flex-col flex-1 overflow-hidden bg-gray-50">
+    // Shared summary card renderer
+    const renderSummaryCard = (
+      content: string | null,
+      url: string | null,
+      isSaving: boolean,
+      onSave: () => void,
+      isLoading: boolean,
+      onGenerate: () => void,
+      emptyLabel: string,
+      accentFrom: string,
+      accentTo: string,
+    ) => (
+      <>
         <div className="flex-1 overflow-y-auto p-4">
-          {summary ? (
+          {content ? (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -166,20 +234,18 @@ export default function AiPanel({ tab, chatMessages, roomId }: AiPanelProps) {
                   <FileText size={14} className="text-violet-600" />
                 </div>
                 <p className="text-sm font-semibold text-gray-800 poppins-semibold">
-                  Session Summary
+                  {summarySubTab === "chat" ? "Chat Summary" : "Whiteboard Summary"}
                 </p>
               </div>
               <p className="text-sm text-gray-700 poppins-regular leading-relaxed whitespace-pre-line">
-                {summary}
+                {content}
               </p>
-
-              {/* Save to R2 + download link */}
               <div className="mt-4 pt-3 border-t border-gray-100">
-                {savedUrl ? (
+                {url ? (
                   <motion.a
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    href={savedUrl}
+                    href={url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center justify-center gap-2 w-full py-2 rounded-xl bg-emerald-50 text-emerald-700 text-sm font-semibold poppins-semibold hover:bg-emerald-100 transition-colors border border-emerald-200"
@@ -190,11 +256,11 @@ export default function AiPanel({ tab, chatMessages, roomId }: AiPanelProps) {
                   </motion.a>
                 ) : (
                   <button
-                    onClick={saveSummaryToR2}
-                    disabled={saving}
+                    onClick={onSave}
+                    disabled={isSaving}
                     className="flex items-center justify-center gap-2 w-full py-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 text-white text-sm font-semibold poppins-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
                   >
-                    {saving ? (
+                    {isSaving ? (
                       <>
                         <Loader2 size={14} className="animate-spin" /> Saving...
                       </>
@@ -212,19 +278,17 @@ export default function AiPanel({ tab, chatMessages, roomId }: AiPanelProps) {
               <div className="p-4 bg-violet-50 rounded-2xl">
                 <FileText size={28} className="text-violet-400" />
               </div>
-              <p className="text-sm text-gray-500 poppins-regular">
-                Generate a summary of the current study session chat
-              </p>
+              <p className="text-sm text-gray-500 poppins-regular">{emptyLabel}</p>
             </div>
           )}
         </div>
         <div className="p-4 border-t border-gray-100">
           <button
-            onClick={generateSummary}
-            disabled={summaryLoading}
-            className="w-full py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 text-white text-sm font-semibold poppins-semibold hover:opacity-90 transition-opacity disabled:opacity-60 flex items-center justify-center gap-2"
+            onClick={onGenerate}
+            disabled={isLoading}
+            className={`w-full py-2.5 rounded-xl bg-gradient-to-r ${accentFrom} ${accentTo} text-white text-sm font-semibold poppins-semibold hover:opacity-90 transition-opacity disabled:opacity-60 flex items-center justify-center gap-2`}
           >
-            {summaryLoading ? (
+            {isLoading ? (
               <>
                 <Loader2 size={14} className="animate-spin" /> Generating...
               </>
@@ -235,6 +299,56 @@ export default function AiPanel({ tab, chatMessages, roomId }: AiPanelProps) {
             )}
           </button>
         </div>
+      </>
+    );
+
+    return (
+      <div className="flex flex-col flex-1 overflow-hidden bg-gray-50">
+        {/* Sub-tab bar */}
+        <div className="flex border-b border-gray-200 bg-white flex-shrink-0">
+          {(
+            [
+              { key: "chat" as SummarySubTab, label: "Chat Summary" },
+              { key: "whiteboard" as SummarySubTab, label: "Whiteboard Summary" },
+            ] as const
+          ).map((st) => (
+            <button
+              key={st.key}
+              onClick={() => setSummarySubTab(st.key)}
+              className={`flex-1 py-2 text-[11px] font-semibold poppins-semibold transition-colors ${
+                summarySubTab === st.key
+                  ? "text-violet-700 border-b-2 border-violet-500 bg-violet-50/50"
+                  : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              {st.label}
+            </button>
+          ))}
+        </div>
+
+        {summarySubTab === "chat"
+          ? renderSummaryCard(
+              summary,
+              savedUrl,
+              saving,
+              saveSummaryToR2,
+              summaryLoading,
+              generateSummary,
+              "Generate a summary of the current study session chat",
+              "from-violet-600",
+              "to-purple-600",
+            )
+          : renderSummaryCard(
+              wbSummary,
+              wbSavedUrl,
+              wbSaving,
+              saveWbSummaryToR2,
+              wbSummaryLoading,
+              generateWhiteboardSummary,
+              "Generate a summary of the whiteboard drawings",
+              "from-teal-600",
+              "to-emerald-600",
+            )}
       </div>
     );
   }

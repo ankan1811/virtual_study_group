@@ -1,4 +1,4 @@
-import React, { useRef } from 'react'
+import { useRef } from 'react'
 import Messages from '../components/Messages'
 import Recorder from '../components/shared/Recorder'
 
@@ -6,7 +6,6 @@ export default function DemoAiPage() {
   const fileRef = useRef<HTMLInputElement | null>(null)
   const submitButtonRef = useRef<HTMLButtonElement | null>(null)
   const uploadAudio = (blob: Blob) => {
-    const url = URL.createObjectURL(blob);
     const file = new File([blob], 'audio.webm', { type: blob.type });
     //set the file as the value of the hidden file input field
     if (fileRef.current) {

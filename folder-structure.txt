@@ -36,6 +36,9 @@ virtual_study_group/
 |       |                              DM events: dm:send (echoes _id+tempId for delivery
 |       |                              ack), dm:markRead (marks read + emits dm:readUpdate
 |       |                              to sender), dm:join.
+|       |                              Whiteboard events: whiteboard:update (throttled
+|       |                              100ms, broadcasts whiteboard:sync to room),
+|       |                              whiteboard:clear (broadcasts whiteboard:cleared).
 |       |                              Notification events: notification:new (pushed to
 |       |                              recipient on companion_request, companion_accepted,
 |       |                              room_invite). saveAndEmitNotification() helper.
@@ -67,7 +70,11 @@ virtual_study_group/
 |       |   |                          finds user by email, stores googleId, issues JWT.
 |       |   |                          Passwordless — no bcrypt, no password storage
 |       |   |-- RoomController.ts    # Create room, join room, get room users
-|       |   |-- ChatController.ts    # Add chat message, get chat history, get user name
+|       |   |-- ChatController.ts    # Add chat message, get chat history, get user name.
+|       |   |                          bulkSaveChats: POST /chat/bulk-save — bulk-saves
+|       |   |                          room chat messages to MongoDB. Accepts messages
+|       |   |                          array (max 500), filters bot messages, generates
+|       |   |                          sessionId (UUID) for grouping, uses insertMany
 |       |   |-- CompanionController.ts # Send/accept/decline companion requests,
 |       |   |                          get companion list, get pending requests.
 |       |   |                          Emits real-time socket notifications
@@ -82,6 +89,11 @@ virtual_study_group/
 |       |   |                          singleton. Default: Gemini 2.5 Flash.
 |       |   |                          POST /ai/ask (question -> answer)
 |       |   |                          POST /ai/summary (messages -> summary)
+|       |   |                          POST /ai/whiteboard-explain (elements +
+|       |   |                          optional question -> explanation)
+|       |   |                          POST /ai/whiteboard-summary (elements ->
+|       |   |                          summary). describeWhiteboardElements()
+|       |   |                          helper converts elements to compact text
 |       |   |-- SummaryController.ts # Save AI summary to Cloudflare R2 (S3-compatible).
 |       |   |                          Monthly upload quota per user via UploadCounter
 |       |   |                          model (R2_MAX_UPLOADS_PER_MONTH env var, def 10).
@@ -112,12 +124,15 @@ virtual_study_group/
 |       |   |                          /auth/google (Google OAuth, IP rate limited).
 |       |   |                          Dual-layer rate limiting: per-email + per-IP
 |       |   |-- roomRoutes.ts        # /room/create, /room/join/:room_id, /room/users/:room_id
-|       |   |-- chatRoutes.ts        # /chat/join, /chat/add, /chat/view/:room_id
+|       |   |-- chatRoutes.ts        # /chat/join, /chat/add, /chat/view/:room_id,
+|       |   |                          POST /chat/bulk-save (verifyToken, bulkSaveChats)
 |       |   |-- companionRoutes.ts   # /companion/request, /companion/accept,
 |       |   |                          /companion/decline, /companion/list, /companion/pending
 |       |   |-- userRoutes.ts        # GET /user/profile, PUT /user/profile,
 |       |   |                          GET /user/search?q= (per-user rate limited)
 |       |   |-- aiRoutes.ts          # /ai/ask, /ai/summary (per-user rate limited),
+|       |   |                          /ai/whiteboard-explain, /ai/whiteboard-summary
+|       |   |                          (per-user rate limited),
 |       |   |                          /ai/save-summary (auth required, saves to R2)
 |       |   |-- dmRoutes.ts          # GET /dm/recent (recent chats aggregation),
 |       |   |                          GET /dm/unread-counts (before /:companionId to
@@ -133,7 +148,10 @@ virtual_study_group/
 |       |   |                          googleId (optional, for Google OAuth users).
 |       |   |                          Passwordless — no password field
 |       |   |-- Room.ts              # Room model: users[] (references User)
-|       |   |-- Chat.ts              # Chat model: sendBy (User ref), message, room_id (Room ref)
+|       |   |-- Chat.ts              # Chat model: sendBy (User ref), senderName, message,
+|       |   |                          room_id (String, e.g. "user_{userId}"), sessionId
+|       |   |                          (UUID grouping per save). timestamps: true.
+|       |   |                          Index on { room_id, createdAt }
 |       |   |-- Companion.ts         # Companion model: requester, recipient (User refs),
 |       |   |                          status ('pending'|'accepted'). Unique compound index
 |       |   |-- DirectMessage.ts     # DM model: from, to (User refs), content, read (bool,
@@ -252,9 +270,17 @@ virtual_study_group/
         |   |                          updates via dm:receive socket event
         |   |-- RoomCallPage.tsx     # Video call page - Agora RTC integration,
         |   |                          mic/camera controls, remote user streams.
-        |   |                          Tab panel: Chat / AI Doubt / Summary.
-        |   |                          RoomId from Redux (not localStorage).
-        |   |                          Agora App ID from VITE_AGORA_APP_ID env var
+        |   |                          Tab panel: Chat / AI Doubt / Summary /
+        |   |                          Whiteboard. Whiteboard tab swaps the center
+        |   |                          video area for Excalidraw (lazy-loaded).
+        |   |                          Lifts whiteboardElements state for AI panels.
+        |   |                          whiteboardSceneRef preserves drawing across
+        |   |                          tab switches. RoomId from Redux.
+        |   |                          Agora App ID from VITE_AGORA_APP_ID env var.
+        |   |                          Chat persistence: useBlocker for nav blocking,
+        |   |                          beforeunload for tab close, SaveChatPrompt
+        |   |                          overlay on exit, inline save callback for
+        |   |                          ChatComponent, shared lastSavedCountRef
         |   |-- Streampage.tsx       # Live streaming page - camera preview, YouTube
         |   |                          stream key input, start/stop controls
         |   |-- AskAiPage.tsx        # AI voice input page - mic component with
@@ -276,13 +302,24 @@ virtual_study_group/
         |   |                          Logout. Login icon shown when logged out.
         |   |                          Logout: clears localStorage token, disconnects
         |   |                          socket, resets Redux, redirects to /login
-        |   |-- NavbarCall.tsx       # Minimal navbar for in-call view with exit button
+        |   |-- NavbarCall.tsx       # Minimal navbar for in-call view. Exit button
+        |   |                          uses onExitClick callback (no <Link>) so
+        |   |                          navigation can be intercepted for save prompt
+        |   |-- SaveChatPrompt.tsx # Animated modal overlay for "Save your chats?"
+        |   |                          prompt. Framer Motion AnimatePresence, backdrop
+        |   |                          blur, indigo gradient accent. "Save & Exit"
+        |   |                          (with loading spinner) and "Exit without saving"
+        |   |                          buttons. Shown when leaving room with unsaved
+        |   |                          messages. Follows InviteNotificationOverlay pattern
         |   |-- ChatComponent.tsx    # Real-time chat widget - uses getSocket()
         |   |                          singleton, room-based messaging, lifts messages
         |   |                          to parent via onMessagesChange prop.
         |   |                          Linkify helper renders URLs in bot messages as
         |   |                          clickable links. Summary bot messages get special
-        |   |                          violet styling distinct from regular bot messages
+        |   |                          violet styling distinct from regular bot messages.
+        |   |                          Inline "Save" button: onSaveChats callback,
+        |   |                          lastSavedCountRef tracks save state, disabled
+        |   |                          when no unsaved msgs, "Saved" checkmark on success
         |   |-- DmPanel.tsx          # Slide-in DM panel from right. Optimistic send
         |   |                          (tempId), delivery states: sending/delivered/read.
         |   |                          Tick icons: clock=sending, ✓=delivered, ✓✓=read.
@@ -298,12 +335,34 @@ virtual_study_group/
         |   |                          - "ai" tab: AI doubt solver (text + voice
         |   |                            via Web Speech API), Q&A history cards
         |   |                            Generic "AI Assistant" branding
-        |   |                          - "summary" tab: generates session summary
-        |   |                            from chat messages via POST /ai/summary.
-        |   |                            "Save Summary" button uploads styled HTML
-        |   |                            to Cloudflare R2 via POST /ai/save-summary.
-        |   |                            Shows presigned download link after save.
-        |   |                            Broadcasts link to room chat as bot message
+        |   |                          - "summary" tab: two sub-tabs:
+        |   |                            * Chat Summary: generates session summary
+        |   |                              from chat messages via POST /ai/summary
+        |   |                            * Whiteboard Summary: generates summary
+        |   |                              from whiteboard elements via POST
+        |   |                              /ai/whiteboard-summary
+        |   |                            Both sub-tabs have "Save Summary" button
+        |   |                            that uploads styled HTML to Cloudflare R2
+        |   |                            via POST /ai/save-summary. Shows presigned
+        |   |                            download link after save. Broadcasts link
+        |   |                            to room chat as bot message
+        |   |-- WhiteboardPanel.tsx # Excalidraw wrapper component. Renders in
+        |   |                          center area when Whiteboard tab is active.
+        |   |                          Lazy-loaded via React.lazy(). Real-time
+        |   |                          sync via Socket.IO: debounced onChange
+        |   |                          (150ms) emits whiteboard:update, listens
+        |   |                          for whiteboard:sync to apply remote changes.
+        |   |                          isRemoteUpdate ref prevents echo loops.
+        |   |                          Lifts simplified elements (type, text,
+        |   |                          dimensions) to parent via onSceneChange.
+        |   |                          Accepts initialData for state restoration
+        |   |-- WhiteboardExplainPanel.tsx # AI explain panel for whiteboard.
+        |   |                          Renders in right 380px panel when Whiteboard
+        |   |                          tab is active. "Explain This" button +
+        |   |                          custom question input. Calls POST
+        |   |                          /ai/whiteboard-explain. Q&A history with
+        |   |                          teal-accented bubbles. Empty state when
+        |   |                          nothing drawn yet
         |   |-- InviteNotificationOverlay.tsx  # Animated banner for incoming room
         |   |                          invites. Accept navigates to /room/call,
         |   |                          Decline dismisses. Socket: receiveInvite
@@ -398,6 +457,7 @@ API ROUTES SUMMARY
     GET    /chat/join               Get logged-in user's name from JWT
     POST   /chat/add                Send a chat message (emits via Socket.IO)
     GET    /chat/view/:room_id      Get chat history for a room
+    POST   /chat/bulk-save          Bulk-save room chat messages (auth, max 500, sessionId grouping)
 
   Companions:
     POST   /companion/request       Send companion request
@@ -414,6 +474,8 @@ API ROUTES SUMMARY
   AI (Gemini / Grok — switchable via AI_PROVIDER env var):
     POST   /ai/ask                  Ask AI a study question
     POST   /ai/summary             Generate AI summary of chat messages
+    POST   /ai/whiteboard-explain  AI analysis of whiteboard drawing (+ optional question)
+    POST   /ai/whiteboard-summary  Generate AI summary of whiteboard content
     POST   /ai/save-summary        Save summary to Cloudflare R2, broadcast link to room chat
 
   DMs:
@@ -455,6 +517,12 @@ SOCKET EVENTS
     companion:online           Server broadcasts user online
     companion:offline          Server broadcasts user offline
 
+  Whiteboard (whiteboard:update throttled 100ms):
+    whiteboard:update     Client broadcasts drawing changes to room (roomId + elements)
+    whiteboard:sync       Server relays whiteboard changes to other room participants
+    whiteboard:clear      Client clears the whiteboard for all room participants
+    whiteboard:cleared    Server notifies room that whiteboard was cleared
+
   DMs (dm:send throttled 200ms):
     dm:join               Client joins DM room (dm_{sortedIds})
     dm:send               Client sends DM (payload: toUserId, content, tempId)
@@ -473,7 +541,10 @@ DATABASE COLLECTIONS
 ====================
   users            ->  { name, email (unique), bio, avatar, googleId (optional) }
   rooms            ->  { users: [ObjectId -> User] }
-  chats            ->  { sendBy: ObjectId -> User, message: String, room_id: ObjectId -> Room }
+  chats            ->  { sendBy: ObjectId -> User, senderName: String, message: String,
+                         room_id: String (e.g. "user_{userId}"), sessionId: String (UUID),
+                         timestamps }
+                       Index on { room_id, createdAt }
   companions       ->  { requester: ObjectId, recipient: ObjectId, status: 'pending'|'accepted' }
                        Unique compound index on { requester, recipient }
   directmessages   ->  { from: ObjectId, to: ObjectId, content: String, read: Boolean,

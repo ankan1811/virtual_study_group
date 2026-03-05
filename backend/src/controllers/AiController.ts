@@ -43,6 +43,18 @@ function getModel(): string {
   return _model;
 }
 
+// ── Helpers ──────────────────────────────────────────────────────
+function describeWhiteboardElements(
+  elements: Array<{ type: string; text?: string; width?: number; height?: number }>
+): string {
+  return elements
+    .map((el) => {
+      if (el.type === 'text' && el.text) return `Text: "${el.text}"`;
+      return `Shape: ${el.type} (${Math.round(el.width || 0)}x${Math.round(el.height || 0)})`;
+    })
+    .join('\n');
+}
+
 // ── Controllers ──────────────────────────────────────────────────
 export const askDoubt = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
@@ -108,6 +120,87 @@ export const summarizeSession = async (req: AuthenticatedRequest, res: Response)
     res.status(200).json({ summary });
   } catch (error: any) {
     console.error('AI API error:', error?.message);
+    res.status(500).json({ error: 'AI is currently unavailable. Please try again later.' });
+  }
+};
+
+// ── Whiteboard explain ───────────────────────────────────────────
+export const explainWhiteboard = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { elements, question } = req.body as {
+      elements: Array<{ type: string; text?: string; width?: number; height?: number }>;
+      question?: string;
+    };
+
+    if (!elements || elements.length === 0) {
+      res.status(400).json({ error: 'Whiteboard is empty. Draw something first.' });
+      return;
+    }
+
+    const description = describeWhiteboardElements(elements);
+    const userPrompt = question
+      ? `User question: ${question}\n\nWhiteboard contents:\n${description}`
+      : `Explain and analyze this whiteboard:\n${description}`;
+
+    const completion = await getClient().chat.completions.create({
+      model: getModel(),
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are a helpful study assistant analyzing a whiteboard drawing from a study session. ' +
+            'Describe what you see, explain any concepts depicted, identify relationships between elements, ' +
+            'and provide educational insights. Be concise but thorough. Use bullet points for clarity.',
+        },
+        { role: 'user', content: userPrompt },
+      ],
+      max_tokens: 600,
+    });
+
+    const explanation = completion.choices[0]?.message?.content || 'Could not generate an explanation.';
+    res.status(200).json({ explanation });
+  } catch (error: any) {
+    console.error('AI whiteboard error:', error?.message);
+    res.status(500).json({ error: 'AI is currently unavailable. Please try again later.' });
+  }
+};
+
+// ── Whiteboard summary ───────────────────────────────────────────
+export const summarizeWhiteboard = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { elements } = req.body as {
+      elements: Array<{ type: string; text?: string; width?: number; height?: number }>;
+    };
+
+    if (!elements || elements.length === 0) {
+      res.status(400).json({ error: 'Whiteboard is empty. Draw something first.' });
+      return;
+    }
+
+    const description = describeWhiteboardElements(elements);
+
+    const completion = await getClient().chat.completions.create({
+      model: getModel(),
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are a study session summarizer. Given a description of a whiteboard drawing from a study session, ' +
+            'produce a concise bullet-point summary highlighting: the main topics/concepts drawn, ' +
+            'key diagrams and their meaning, relationships between elements, and any conclusions. Be brief and useful.',
+        },
+        {
+          role: 'user',
+          content: `Summarize this study session whiteboard:\n\n${description}`,
+        },
+      ],
+      max_tokens: 500,
+    });
+
+    const summary = completion.choices[0]?.message?.content || 'Could not generate whiteboard summary.';
+    res.status(200).json({ summary });
+  } catch (error: any) {
+    console.error('AI whiteboard summary error:', error?.message);
     res.status(500).json({ error: 'AI is currently unavailable. Please try again later.' });
   }
 };

@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate, useBlocker } from "react-router-dom";
+import axios from "axios";
 import NavbarCall from "../components/NavbarCall";
-import { User } from "lucide-react";
+import { User, Loader2 } from "lucide-react";
 import Emoji from "../components/shared/Emoji";
 import Stream from "../components/Stream";
 import type {
@@ -21,8 +22,14 @@ import {
 } from "agora-rtc-sdk-ng/esm";
 import ChatComponent from "../components/ChatComponent";
 import AiPanel from "../components/AiPanel";
+import WhiteboardExplainPanel from "../components/WhiteboardExplainPanel";
+import SaveChatPrompt from "../components/SaveChatPrompt";
 import { AuthState } from "../store/authStore/store";
 import { leaveRoom } from "../store/RoomStore/roomSlice";
+
+const WhiteboardPanel = React.lazy(
+  () => import("../components/WhiteboardPanel")
+);
 
 onCameraChanged((device) => {
   console.log("onCameraChanged: ", device);
@@ -39,7 +46,14 @@ const client: IAgoraRTCClient = createClient({
 let audioTrack: IMicrophoneAudioTrack;
 let videoTrack: ICameraVideoTrack;
 
-type TabType = "chat" | "ai" | "summary";
+type TabType = "chat" | "ai" | "summary" | "whiteboard";
+
+interface WhiteboardElement {
+  type: string;
+  text?: string;
+  width: number;
+  height: number;
+}
 
 interface Message {
   msg: string;
@@ -49,6 +63,7 @@ interface Message {
 export default function RoomCallPage() {
   const dispatch = useDispatch();
   const location = useLocation();
+  const navigate = useNavigate();
   const user = useSelector((state: AuthState) => state.auth.user);
   const roomIdFromRedux = useSelector((state: AuthState) => state.room.currentRoomId);
 
@@ -64,12 +79,27 @@ export default function RoomCallPage() {
   const [activeTab, setActiveTab] = useState<TabType>("chat");
   // Lifted chat messages for AI summary
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
+  // Whiteboard elements (lifted from WhiteboardPanel for AI explain + summary)
+  const [whiteboardElements, setWhiteboardElements] = useState<WhiteboardElement[]>([]);
+  // Preserve Excalidraw scene across tab switches
+  const whiteboardSceneRef = useRef<readonly any[]>([]);
 
   const channel = useRef(roomId);
   const appid = useRef(import.meta.env.VITE_AGORA_APP_ID || "");
   const token = useRef("");
   const [isJoined, setIsJoined] = useState(false);
 
+  // ---- Chat persistence state ----
+  const [showSavePrompt, setShowSavePrompt] = useState(false);
+  const [pendingNavigationPath, setPendingNavigationPath] = useState<string | null>(null);
+  const lastSavedCountRef = useRef(0);
+
+  const hasUnsavedMessages = () => {
+    const userMsgs = chatMessages.filter((m) => m.sentby !== "bot");
+    return userMsgs.length > 0 && userMsgs.length > lastSavedCountRef.current;
+  };
+
+  // ---- Agora helpers ----
   const turnOnCamera = async (flag?: boolean) => {
     flag = flag ?? !isVideoOn;
     setIsVideoOn(flag);
@@ -144,15 +174,104 @@ export default function RoomCallPage() {
     };
   }, []);
 
+  // ---- Chat persistence: save to server ----
+  const saveChatsToServer = async () => {
+    const authToken = localStorage.getItem("token");
+    const userMsgs = chatMessages.filter((m) => m.sentby !== "bot");
+    await axios.post(
+      `${import.meta.env.VITE_API_URL}/chat/bulk-save`,
+      { roomId, messages: userMsgs },
+      { headers: { Authorization: authToken || "" } }
+    );
+    lastSavedCountRef.current = userMsgs.length;
+  };
+
+  // Inline save button callback (passed to ChatComponent)
+  const handleInlineSaveChats = async () => {
+    await saveChatsToServer();
+  };
+
+  // Exit prompt: Save & Exit
+  const handleSaveAndExit = async () => {
+    try {
+      await saveChatsToServer();
+    } catch (err) {
+      console.error("Failed to save chats:", err);
+    }
+    completeExit();
+  };
+
+  // Exit prompt: Exit without saving
+  const handleDiscardAndExit = () => {
+    completeExit();
+  };
+
+  const completeExit = () => {
+    setShowSavePrompt(false);
+    if (blocker.state === "blocked") {
+      leaveChannel();
+      blocker.proceed();
+    } else if (pendingNavigationPath) {
+      leaveChannel();
+      navigate(pendingNavigationPath);
+      setPendingNavigationPath(null);
+    }
+  };
+
+  // NavbarCall exit click
+  const handleExitClick = () => {
+    if (hasUnsavedMessages()) {
+      setShowSavePrompt(true);
+      setPendingNavigationPath("/home");
+    } else {
+      leaveChannel();
+      navigate("/home");
+    }
+  };
+
+  // ---- React Router navigation blocking ----
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => {
+    return (
+      hasUnsavedMessages() &&
+      currentLocation.pathname !== nextLocation.pathname &&
+      !showSavePrompt
+    );
+  });
+
+  useEffect(() => {
+    if (blocker.state === "blocked") {
+      setShowSavePrompt(true);
+    }
+  }, [blocker.state]);
+
+  // ---- Browser tab/window close ----
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedMessages()) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [chatMessages]);
+
+  // ---- Tabs & whiteboard ----
   const tabItems: { key: TabType; label: string }[] = [
     { key: "chat", label: "Chat" },
     { key: "ai", label: "AI Doubt" },
     { key: "summary", label: "Summary" },
+    { key: "whiteboard", label: "Whiteboard" },
   ];
+
+  const handleWhiteboardSceneChange = (elements: WhiteboardElement[]) => {
+    setWhiteboardElements(elements);
+    whiteboardSceneRef.current = elements;
+  };
 
   return (
     <div className="h-screen flex flex-col">
-      <NavbarCall leaveChannel={leaveChannel} />
+      <NavbarCall onExitClick={handleExitClick} />
       <div className="flex h-full overflow-hidden">
         {/* Participants sidebar */}
         <div className="w-min flex flex-col rounded-md flex-shrink-0">
@@ -175,24 +294,40 @@ export default function RoomCallPage() {
           </ul>
         </div>
 
-        {/* Video area */}
+        {/* Video / Whiteboard area */}
         <div className="flex-1 overflow-hidden">
-          <Stream
-            isAudioOn={isAudioOn}
-            isVideoOn={isVideoOn}
-            isAudioPubed={isAudioPubed}
-            isVideoPubed={isVideoPubed}
-            isVideoSubed={isVideoSubed}
-            setIsAudioOn={setIsAudioOn}
-            setIsAudioPubed={setIsAudioPubed}
-            setIsVideoOn={setIsVideoOn}
-            setIsVideoPubed={setIsVideoPubed}
-            setIsVideoSubed={setIsVideoSubed}
-            turnOnCamera={turnOnCamera}
-            turnOnMicrophone={turnOnMicrophone}
-            publishAudio={publishAudio}
-            publishVideo={publishVideo}
-          />
+          {activeTab === "whiteboard" ? (
+            <React.Suspense
+              fallback={
+                <div className="flex items-center justify-center h-full bg-gray-50">
+                  <Loader2 className="animate-spin text-teal-400" size={32} />
+                </div>
+              }
+            >
+              <WhiteboardPanel
+                roomId={roomId}
+                onSceneChange={handleWhiteboardSceneChange}
+                initialElements={whiteboardSceneRef.current}
+              />
+            </React.Suspense>
+          ) : (
+            <Stream
+              isAudioOn={isAudioOn}
+              isVideoOn={isVideoOn}
+              isAudioPubed={isAudioPubed}
+              isVideoPubed={isVideoPubed}
+              isVideoSubed={isVideoSubed}
+              setIsAudioOn={setIsAudioOn}
+              setIsAudioPubed={setIsAudioPubed}
+              setIsVideoOn={setIsVideoOn}
+              setIsVideoPubed={setIsVideoPubed}
+              setIsVideoSubed={setIsVideoSubed}
+              turnOnCamera={turnOnCamera}
+              turnOnMicrophone={turnOnMicrophone}
+              publishAudio={publishAudio}
+              publishVideo={publishVideo}
+            />
+          )}
         </div>
 
         {/* Right panel: Chat / AI / Summary tabs */}
@@ -220,13 +355,29 @@ export default function RoomCallPage() {
               <ChatComponent
                 roomId={roomId}
                 onMessagesChange={setChatMessages}
+                onSaveChats={handleInlineSaveChats}
               />
+            ) : activeTab === "whiteboard" ? (
+              <WhiteboardExplainPanel elements={whiteboardElements} />
             ) : (
-              <AiPanel tab={activeTab} chatMessages={chatMessages} roomId={roomId} />
+              <AiPanel
+                tab={activeTab}
+                chatMessages={chatMessages}
+                roomId={roomId}
+                whiteboardElements={whiteboardElements}
+              />
             )}
           </div>
         </div>
       </div>
+
+      {/* Save chat prompt overlay */}
+      <SaveChatPrompt
+        isOpen={showSavePrompt}
+        messageCount={chatMessages.filter((m) => m.sentby !== "bot").length}
+        onSave={handleSaveAndExit}
+        onDiscard={handleDiscardAndExit}
+      />
     </div>
   );
 }
