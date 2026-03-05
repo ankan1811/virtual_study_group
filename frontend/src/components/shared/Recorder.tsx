@@ -6,7 +6,7 @@ export const mimeType = "audio/webm";
 export default function Recorder({ }: { uploadAudio: (blob: Blob) => void }) {
   const [permission, setPermission] = useState(false);
   const [, setStream] = useState<MediaStream | null>(null);
-  const [, setRecordingStatus] = useState("inactive");
+
 
   useEffect(() => {
     getMicPermission();
