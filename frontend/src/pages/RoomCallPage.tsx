@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { useLocation } from "react-router-dom";
 import NavbarCall from "../components/NavbarCall";
-import { User } from "lucide-react";
+import { User, Loader2 } from "lucide-react";
 import Emoji from "../components/shared/Emoji";
 import Stream from "../components/Stream";
 import type {
@@ -21,8 +21,13 @@ import {
 } from "agora-rtc-sdk-ng/esm";
 import ChatComponent from "../components/ChatComponent";
 import AiPanel from "../components/AiPanel";
+import WhiteboardExplainPanel from "../components/WhiteboardExplainPanel";
 import { AuthState } from "../store/authStore/store";
 import { leaveRoom } from "../store/RoomStore/roomSlice";
+
+const WhiteboardPanel = React.lazy(
+  () => import("../components/WhiteboardPanel")
+);
 
 onCameraChanged((device) => {
   console.log("onCameraChanged: ", device);
@@ -39,7 +44,14 @@ const client: IAgoraRTCClient = createClient({
 let audioTrack: IMicrophoneAudioTrack;
 let videoTrack: ICameraVideoTrack;
 
-type TabType = "chat" | "ai" | "summary";
+type TabType = "chat" | "ai" | "summary" | "whiteboard";
+
+interface WhiteboardElement {
+  type: string;
+  text?: string;
+  width: number;
+  height: number;
+}
 
 interface Message {
   msg: string;
@@ -64,6 +76,10 @@ export default function RoomCallPage() {
   const [activeTab, setActiveTab] = useState<TabType>("chat");
   // Lifted chat messages for AI summary
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
+  // Whiteboard elements (lifted from WhiteboardPanel for AI explain + summary)
+  const [whiteboardElements, setWhiteboardElements] = useState<WhiteboardElement[]>([]);
+  // Preserve Excalidraw scene across tab switches
+  const whiteboardSceneRef = useRef<readonly any[]>([]);
 
   const channel = useRef(roomId);
   const appid = useRef(import.meta.env.VITE_AGORA_APP_ID || "");
@@ -148,7 +164,13 @@ export default function RoomCallPage() {
     { key: "chat", label: "Chat" },
     { key: "ai", label: "AI Doubt" },
     { key: "summary", label: "Summary" },
+    { key: "whiteboard", label: "Whiteboard" },
   ];
+
+  const handleWhiteboardSceneChange = (elements: WhiteboardElement[]) => {
+    setWhiteboardElements(elements);
+    whiteboardSceneRef.current = elements;
+  };
 
   return (
     <div className="h-screen flex flex-col">
@@ -175,24 +197,40 @@ export default function RoomCallPage() {
           </ul>
         </div>
 
-        {/* Video area */}
+        {/* Video / Whiteboard area */}
         <div className="flex-1 overflow-hidden">
-          <Stream
-            isAudioOn={isAudioOn}
-            isVideoOn={isVideoOn}
-            isAudioPubed={isAudioPubed}
-            isVideoPubed={isVideoPubed}
-            isVideoSubed={isVideoSubed}
-            setIsAudioOn={setIsAudioOn}
-            setIsAudioPubed={setIsAudioPubed}
-            setIsVideoOn={setIsVideoOn}
-            setIsVideoPubed={setIsVideoPubed}
-            setIsVideoSubed={setIsVideoSubed}
-            turnOnCamera={turnOnCamera}
-            turnOnMicrophone={turnOnMicrophone}
-            publishAudio={publishAudio}
-            publishVideo={publishVideo}
-          />
+          {activeTab === "whiteboard" ? (
+            <React.Suspense
+              fallback={
+                <div className="flex items-center justify-center h-full bg-gray-50">
+                  <Loader2 className="animate-spin text-teal-400" size={32} />
+                </div>
+              }
+            >
+              <WhiteboardPanel
+                roomId={roomId}
+                onSceneChange={handleWhiteboardSceneChange}
+                initialElements={whiteboardSceneRef.current}
+              />
+            </React.Suspense>
+          ) : (
+            <Stream
+              isAudioOn={isAudioOn}
+              isVideoOn={isVideoOn}
+              isAudioPubed={isAudioPubed}
+              isVideoPubed={isVideoPubed}
+              isVideoSubed={isVideoSubed}
+              setIsAudioOn={setIsAudioOn}
+              setIsAudioPubed={setIsAudioPubed}
+              setIsVideoOn={setIsVideoOn}
+              setIsVideoPubed={setIsVideoPubed}
+              setIsVideoSubed={setIsVideoSubed}
+              turnOnCamera={turnOnCamera}
+              turnOnMicrophone={turnOnMicrophone}
+              publishAudio={publishAudio}
+              publishVideo={publishVideo}
+            />
+          )}
         </div>
 
         {/* Right panel: Chat / AI / Summary tabs */}
@@ -221,8 +259,15 @@ export default function RoomCallPage() {
                 roomId={roomId}
                 onMessagesChange={setChatMessages}
               />
+            ) : activeTab === "whiteboard" ? (
+              <WhiteboardExplainPanel elements={whiteboardElements} />
             ) : (
-              <AiPanel tab={activeTab} chatMessages={chatMessages} roomId={roomId} />
+              <AiPanel
+                tab={activeTab}
+                chatMessages={chatMessages}
+                roomId={roomId}
+                whiteboardElements={whiteboardElements}
+              />
             )}
           </div>
         </div>

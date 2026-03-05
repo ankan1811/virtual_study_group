@@ -292,6 +292,20 @@ export function initSocketServer(httpServer: http.Server): Server {
       }
     });
 
+    // ── Whiteboard sync ────────────────────────────────────────────────────
+
+    socket.on(
+      'whiteboard:update',
+      ({ roomId, elements }: { roomId: string; elements: any[] }) => {
+        if (isSocketThrottled(userId, 'whiteboard:update', 100)) return;
+        socket.to(roomId).emit('whiteboard:sync', { elements, fromUserId: userId });
+      }
+    );
+
+    socket.on('whiteboard:clear', ({ roomId }: { roomId: string }) => {
+      socket.to(roomId).emit('whiteboard:cleared', { fromUserId: userId });
+    });
+
     // ── Disconnect ──────────────────────────────────────────────────────────
 
     socket.on('disconnect', async () => {
