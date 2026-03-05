@@ -134,6 +134,13 @@ A full-stack web application for creating virtual study group spaces with real-t
 - Bot welcome message on room join
 - **Linkify helper** — URLs in bot messages render as clickable links (e.g., summary download links)
 - Summary bot messages get special styling (violet background, rounded border) distinct from regular bot messages
+- **Opt-in chat persistence** — chat messages are ephemeral by default (fresh every session). Users can save them to MongoDB on demand:
+  - **Inline "Save" button** in the chat input bar — saves all messages to the database. Disabled when no unsaved messages exist; re-enables when new messages arrive after a save. Shows a brief "Saved" confirmation with checkmark
+  - **"Save your chats?" exit prompt** — animated modal appears when leaving the room with unsaved messages. Options: "Save & Exit" (persists then navigates) or "Exit without saving" (discards). Prompt is **skipped entirely** if the user already saved all messages via the inline button
+  - **Browser tab close protection** — native `beforeunload` dialog warns when unsaved messages exist
+  - **React Router navigation blocking** — `useBlocker` intercepts sidebar/back button navigation and shows the save prompt
+  - Messages are bulk-saved via `POST /chat/bulk-save` with a `sessionId` (UUID) grouping messages per save operation. Capped at 500 messages per request
+  - Bot messages are excluded from saves and unsaved message counts
 
 ### AI Doubt Solver
 
@@ -352,6 +359,7 @@ VITE_GOOGLE_CLIENT_ID=your_google_client_id # Google OAuth Client ID (from https
 | POST   | `/ai/whiteboard-explain`  | AI analysis of whiteboard drawing (rate limited: per-user)           |
 | POST   | `/ai/whiteboard-summary`  | Generate AI whiteboard summary (rate limited: per-user)              |
 | POST   | `/ai/save-summary`        | Save summary to Cloudflare R2, broadcast link to room chat           |
+| POST   | `/chat/bulk-save`         | Bulk-save room chat messages to MongoDB (auth required, max 500)     |
 | GET    | `/dm/recent`              | Get recent chats (last message per companion, sorted by time)        |
 | GET    | `/dm/:companionId`        | Get DM history (includes `_id`, `read` state)                        |
 | GET    | `/dm/unread-counts`       | Get unread message count per companion                               |

@@ -66,6 +66,11 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
 - Tab panel: Chat / AI Doubt Solver / Summary / Whiteboard
 - Room ID from Redux state (not URL or localStorage)
 - Bot messages in chat support clickable URLs (Linkify helper) with special styling for summary notifications
+- **Opt-in chat persistence:**
+  - Inline "Save" button in chat panel — disabled when nothing to save, re-enables on new messages, shows "Saved" checkmark on success
+  - `SaveChatPrompt` modal on exit — "Save & Exit" or "Exit without saving". Skipped if all messages already saved
+  - `useBlocker` intercepts React Router navigation; `beforeunload` guards browser tab close
+  - `NavbarCall` exit button uses programmatic navigation (no `<Link>`) to allow interception
 
 ### AI Integration
 - **Doubt Solver** — text + voice input (Web Speech API), powered by switchable AI (Gemini/Grok)

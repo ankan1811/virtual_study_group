@@ -70,7 +70,11 @@ virtual_study_group/
 |       |   |                          finds user by email, stores googleId, issues JWT.
 |       |   |                          Passwordless — no bcrypt, no password storage
 |       |   |-- RoomController.ts    # Create room, join room, get room users
-|       |   |-- ChatController.ts    # Add chat message, get chat history, get user name
+|       |   |-- ChatController.ts    # Add chat message, get chat history, get user name.
+|       |   |                          bulkSaveChats: POST /chat/bulk-save — bulk-saves
+|       |   |                          room chat messages to MongoDB. Accepts messages
+|       |   |                          array (max 500), filters bot messages, generates
+|       |   |                          sessionId (UUID) for grouping, uses insertMany
 |       |   |-- CompanionController.ts # Send/accept/decline companion requests,
 |       |   |                          get companion list, get pending requests.
 |       |   |                          Emits real-time socket notifications
@@ -120,7 +124,8 @@ virtual_study_group/
 |       |   |                          /auth/google (Google OAuth, IP rate limited).
 |       |   |                          Dual-layer rate limiting: per-email + per-IP
 |       |   |-- roomRoutes.ts        # /room/create, /room/join/:room_id, /room/users/:room_id
-|       |   |-- chatRoutes.ts        # /chat/join, /chat/add, /chat/view/:room_id
+|       |   |-- chatRoutes.ts        # /chat/join, /chat/add, /chat/view/:room_id,
+|       |   |                          POST /chat/bulk-save (verifyToken, bulkSaveChats)
 |       |   |-- companionRoutes.ts   # /companion/request, /companion/accept,
 |       |   |                          /companion/decline, /companion/list, /companion/pending
 |       |   |-- userRoutes.ts        # GET /user/profile, PUT /user/profile,
@@ -143,7 +148,10 @@ virtual_study_group/
 |       |   |                          googleId (optional, for Google OAuth users).
 |       |   |                          Passwordless — no password field
 |       |   |-- Room.ts              # Room model: users[] (references User)
-|       |   |-- Chat.ts              # Chat model: sendBy (User ref), message, room_id (Room ref)
+|       |   |-- Chat.ts              # Chat model: sendBy (User ref), senderName, message,
+|       |   |                          room_id (String, e.g. "user_{userId}"), sessionId
+|       |   |                          (UUID grouping per save). timestamps: true.
+|       |   |                          Index on { room_id, createdAt }
 |       |   |-- Companion.ts         # Companion model: requester, recipient (User refs),
 |       |   |                          status ('pending'|'accepted'). Unique compound index
 |       |   |-- DirectMessage.ts     # DM model: from, to (User refs), content, read (bool,
@@ -268,7 +276,11 @@ virtual_study_group/
         |   |                          Lifts whiteboardElements state for AI panels.
         |   |                          whiteboardSceneRef preserves drawing across
         |   |                          tab switches. RoomId from Redux.
-        |   |                          Agora App ID from VITE_AGORA_APP_ID env var
+        |   |                          Agora App ID from VITE_AGORA_APP_ID env var.
+        |   |                          Chat persistence: useBlocker for nav blocking,
+        |   |                          beforeunload for tab close, SaveChatPrompt
+        |   |                          overlay on exit, inline save callback for
+        |   |                          ChatComponent, shared lastSavedCountRef
         |   |-- Streampage.tsx       # Live streaming page - camera preview, YouTube
         |   |                          stream key input, start/stop controls
         |   |-- AskAiPage.tsx        # AI voice input page - mic component with
@@ -290,13 +302,24 @@ virtual_study_group/
         |   |                          Logout. Login icon shown when logged out.
         |   |                          Logout: clears localStorage token, disconnects
         |   |                          socket, resets Redux, redirects to /login
-        |   |-- NavbarCall.tsx       # Minimal navbar for in-call view with exit button
+        |   |-- NavbarCall.tsx       # Minimal navbar for in-call view. Exit button
+        |   |                          uses onExitClick callback (no <Link>) so
+        |   |                          navigation can be intercepted for save prompt
+        |   |-- SaveChatPrompt.tsx # Animated modal overlay for "Save your chats?"
+        |   |                          prompt. Framer Motion AnimatePresence, backdrop
+        |   |                          blur, indigo gradient accent. "Save & Exit"
+        |   |                          (with loading spinner) and "Exit without saving"
+        |   |                          buttons. Shown when leaving room with unsaved
+        |   |                          messages. Follows InviteNotificationOverlay pattern
         |   |-- ChatComponent.tsx    # Real-time chat widget - uses getSocket()
         |   |                          singleton, room-based messaging, lifts messages
         |   |                          to parent via onMessagesChange prop.
         |   |                          Linkify helper renders URLs in bot messages as
         |   |                          clickable links. Summary bot messages get special
-        |   |                          violet styling distinct from regular bot messages
+        |   |                          violet styling distinct from regular bot messages.
+        |   |                          Inline "Save" button: onSaveChats callback,
+        |   |                          lastSavedCountRef tracks save state, disabled
+        |   |                          when no unsaved msgs, "Saved" checkmark on success
         |   |-- DmPanel.tsx          # Slide-in DM panel from right. Optimistic send
         |   |                          (tempId), delivery states: sending/delivered/read.
         |   |                          Tick icons: clock=sending, ✓=delivered, ✓✓=read.
@@ -434,6 +457,7 @@ API ROUTES SUMMARY
     GET    /chat/join               Get logged-in user's name from JWT
     POST   /chat/add                Send a chat message (emits via Socket.IO)
     GET    /chat/view/:room_id      Get chat history for a room
+    POST   /chat/bulk-save          Bulk-save room chat messages (auth, max 500, sessionId grouping)
 
   Companions:
     POST   /companion/request       Send companion request
@@ -517,7 +541,10 @@ DATABASE COLLECTIONS
 ====================
   users            ->  { name, email (unique), bio, avatar, googleId (optional) }
   rooms            ->  { users: [ObjectId -> User] }
-  chats            ->  { sendBy: ObjectId -> User, message: String, room_id: ObjectId -> Room }
+  chats            ->  { sendBy: ObjectId -> User, senderName: String, message: String,
+                         room_id: String (e.g. "user_{userId}"), sessionId: String (UUID),
+                         timestamps }
+                       Index on { room_id, createdAt }
   companions       ->  { requester: ObjectId, recipient: ObjectId, status: 'pending'|'accepted' }
                        Unique compound index on { requester, recipient }
   directmessages   ->  { from: ObjectId, to: ObjectId, content: String, read: Boolean,
