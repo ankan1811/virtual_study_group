@@ -5,10 +5,9 @@ import {
   Mic,
   MicOff,
   MonitorUp,
-  MonitorX,
   X,
 } from "lucide-react";
-import React, { useState } from "react";
+import { useState } from "react";
 
 type StateFunction<T> = React.Dispatch<React.SetStateAction<T>>;
 interface propsInterface {

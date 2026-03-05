@@ -1,9 +1,11 @@
 // controllers/ChatController.ts
 
 import { Request, Response } from "express";
+import crypto from "crypto";
 import Chat from "../models/Chat";
 import jwt from "jsonwebtoken";
 import { getIO } from "../socketServer";
+import { AuthenticatedRequest } from "../middlewares/middleware";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -67,4 +69,54 @@ export const addchat = async (req: Request, res: Response): Promise<void> => {
   getIO()?.emit("chatMessage", { user, message });
 
   res.status(200).json({ message: "Chat message sent successfully" });
+};
+
+export const bulkSaveChats = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { roomId, messages } = req.body;
+    const userId = req.user?.userId;
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    if (!roomId || !Array.isArray(messages) || messages.length === 0) {
+      res.status(400).json({ error: "roomId and a non-empty messages array are required" });
+      return;
+    }
+
+    // Cap at 500 messages to prevent abuse
+    const capped = messages.slice(0, 500);
+
+    // Filter out bot messages
+    const userMessages = capped.filter(
+      (m: { msg: string; sentby: string }) => m.sentby !== "bot"
+    );
+
+    if (userMessages.length === 0) {
+      res.status(400).json({ error: "No user messages to save" });
+      return;
+    }
+
+    const sessionId = crypto.randomUUID();
+
+    const docs = userMessages.map((m: { msg: string; sentby: string }) => ({
+      sendBy: userId,
+      senderName: m.sentby,
+      message: m.msg,
+      room_id: roomId,
+      sessionId,
+    }));
+
+    await Chat.insertMany(docs);
+
+    res.status(200).json({ success: true, count: docs.length, sessionId });
+  } catch (error) {
+    console.error("bulkSaveChats error:", error);
+    res.status(500).json({ error: "Failed to save chat messages" });
+  }
 };

@@ -1,12 +1,12 @@
 
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import ActiveLogo from "../../assets/active.gif"
 
 export const mimeType = "audio/webm";
-export default function Recorder({ uploadAudio }: { uploadAudio: (blob: Blob) => void }) {
+export default function Recorder({ }: { uploadAudio: (blob: Blob) => void }) {
   const [permission, setPermission] = useState(false);
-  const [stream, setStream] = useState<MediaStream | null>(null);
-  const [recordingStatus, setRecordingStatus] = useState("inactive");
+  const [, setStream] = useState<MediaStream | null>(null);
+  const [, setRecordingStatus] = useState("inactive");
 
   useEffect(() => {
     getMicPermission();
@@ -24,12 +24,6 @@ export default function Recorder({ uploadAudio }: { uploadAudio: (blob: Blob) =>
     } else {
       alert("The microphone is not accessible. Please check your browser settings.")
     }
-  }
-
-  const startRecording = async () => {
-    if (stream === null) return;
-
-    setRecordingStatus("recording");
   }
 
   return (

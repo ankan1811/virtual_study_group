@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate, useBlocker } from "react-router-dom";
+import axios from "axios";
 import NavbarCall from "../components/NavbarCall";
 import { User, Loader2 } from "lucide-react";
 import Emoji from "../components/shared/Emoji";
@@ -22,6 +23,7 @@ import {
 import ChatComponent from "../components/ChatComponent";
 import AiPanel from "../components/AiPanel";
 import WhiteboardExplainPanel from "../components/WhiteboardExplainPanel";
+import SaveChatPrompt from "../components/SaveChatPrompt";
 import { AuthState } from "../store/authStore/store";
 import { leaveRoom } from "../store/RoomStore/roomSlice";
 
@@ -61,6 +63,7 @@ interface Message {
 export default function RoomCallPage() {
   const dispatch = useDispatch();
   const location = useLocation();
+  const navigate = useNavigate();
   const user = useSelector((state: AuthState) => state.auth.user);
   const roomIdFromRedux = useSelector((state: AuthState) => state.room.currentRoomId);
 
@@ -86,6 +89,17 @@ export default function RoomCallPage() {
   const token = useRef("");
   const [isJoined, setIsJoined] = useState(false);
 
+  // ---- Chat persistence state ----
+  const [showSavePrompt, setShowSavePrompt] = useState(false);
+  const [pendingNavigationPath, setPendingNavigationPath] = useState<string | null>(null);
+  const lastSavedCountRef = useRef(0);
+
+  const hasUnsavedMessages = () => {
+    const userMsgs = chatMessages.filter((m) => m.sentby !== "bot");
+    return userMsgs.length > 0 && userMsgs.length > lastSavedCountRef.current;
+  };
+
+  // ---- Agora helpers ----
   const turnOnCamera = async (flag?: boolean) => {
     flag = flag ?? !isVideoOn;
     setIsVideoOn(flag);
@@ -160,6 +174,89 @@ export default function RoomCallPage() {
     };
   }, []);
 
+  // ---- Chat persistence: save to server ----
+  const saveChatsToServer = async () => {
+    const authToken = localStorage.getItem("token");
+    const userMsgs = chatMessages.filter((m) => m.sentby !== "bot");
+    await axios.post(
+      `${import.meta.env.VITE_API_URL}/chat/bulk-save`,
+      { roomId, messages: userMsgs },
+      { headers: { Authorization: authToken || "" } }
+    );
+    lastSavedCountRef.current = userMsgs.length;
+  };
+
+  // Inline save button callback (passed to ChatComponent)
+  const handleInlineSaveChats = async () => {
+    await saveChatsToServer();
+  };
+
+  // Exit prompt: Save & Exit
+  const handleSaveAndExit = async () => {
+    try {
+      await saveChatsToServer();
+    } catch (err) {
+      console.error("Failed to save chats:", err);
+    }
+    completeExit();
+  };
+
+  // Exit prompt: Exit without saving
+  const handleDiscardAndExit = () => {
+    completeExit();
+  };
+
+  const completeExit = () => {
+    setShowSavePrompt(false);
+    if (blocker.state === "blocked") {
+      leaveChannel();
+      blocker.proceed();
+    } else if (pendingNavigationPath) {
+      leaveChannel();
+      navigate(pendingNavigationPath);
+      setPendingNavigationPath(null);
+    }
+  };
+
+  // NavbarCall exit click
+  const handleExitClick = () => {
+    if (hasUnsavedMessages()) {
+      setShowSavePrompt(true);
+      setPendingNavigationPath("/home");
+    } else {
+      leaveChannel();
+      navigate("/home");
+    }
+  };
+
+  // ---- React Router navigation blocking ----
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => {
+    return (
+      hasUnsavedMessages() &&
+      currentLocation.pathname !== nextLocation.pathname &&
+      !showSavePrompt
+    );
+  });
+
+  useEffect(() => {
+    if (blocker.state === "blocked") {
+      setShowSavePrompt(true);
+    }
+  }, [blocker.state]);
+
+  // ---- Browser tab/window close ----
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedMessages()) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [chatMessages]);
+
+  // ---- Tabs & whiteboard ----
   const tabItems: { key: TabType; label: string }[] = [
     { key: "chat", label: "Chat" },
     { key: "ai", label: "AI Doubt" },
@@ -174,7 +271,7 @@ export default function RoomCallPage() {
 
   return (
     <div className="h-screen flex flex-col">
-      <NavbarCall leaveChannel={leaveChannel} />
+      <NavbarCall onExitClick={handleExitClick} />
       <div className="flex h-full overflow-hidden">
         {/* Participants sidebar */}
         <div className="w-min flex flex-col rounded-md flex-shrink-0">
@@ -258,6 +355,7 @@ export default function RoomCallPage() {
               <ChatComponent
                 roomId={roomId}
                 onMessagesChange={setChatMessages}
+                onSaveChats={handleInlineSaveChats}
               />
             ) : activeTab === "whiteboard" ? (
               <WhiteboardExplainPanel elements={whiteboardElements} />
@@ -272,6 +370,14 @@ export default function RoomCallPage() {
           </div>
         </div>
       </div>
+
+      {/* Save chat prompt overlay */}
+      <SaveChatPrompt
+        isOpen={showSavePrompt}
+        messageCount={chatMessages.filter((m) => m.sentby !== "bot").length}
+        onSave={handleSaveAndExit}
+        onDiscard={handleDiscardAndExit}
+      />
     </div>
   );
 }

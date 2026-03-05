@@ -1,4 +1,4 @@
-import React, { MouseEventHandler, useState } from "react";
+import { MouseEventHandler, useState } from "react";
 import {
   Card,
   CardContent,

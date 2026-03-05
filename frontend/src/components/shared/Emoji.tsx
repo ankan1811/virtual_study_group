@@ -1,5 +1,3 @@
-import React from "react";
-
 export default function Emoji(props: { label: string; symbol: string }) {
   return (
     <span
