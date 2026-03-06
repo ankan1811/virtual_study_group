@@ -74,6 +74,7 @@ export default function ChatComponent({ roomId, onMessagesChange, onSaveChats }:
     socket.on(`message:${roomId}`, handleMessage);
     return () => {
       socket.off(`message:${roomId}`, handleMessage);
+      socket.emit("leaveRoom", { roomId });
     };
   }, [roomId, user]);
 
@@ -119,11 +120,16 @@ export default function ChatComponent({ roomId, onMessagesChange, onSaveChats }:
         style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")" }}
       >
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-500 gap-2">
-            <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-              <Send size={20} className="text-gray-300 dark:text-gray-600" />
+          <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-500 gap-3">
+            <div className="w-14 h-14 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+              <Send size={22} className="text-gray-300 dark:text-gray-600 -rotate-12" />
             </div>
-            <p className="text-xs poppins-regular">No messages yet. Say hello!</p>
+            <div className="text-center">
+              <p className="text-xs poppins-medium text-gray-400 dark:text-gray-500">No messages yet</p>
+              <p className="text-[10px] poppins-regular text-gray-300 dark:text-gray-600 mt-0.5">
+                Start the conversation!
+              </p>
+            </div>
           </div>
         )}
 
@@ -131,29 +137,42 @@ export default function ChatComponent({ roomId, onMessagesChange, onSaveChats }:
           // Bot / system message
           if (message.sentby === "bot") {
             const isSummaryMsg = message.msg.includes("saved a session summary");
+            const isJoinLeave = message.msg.includes("joined the room") || message.msg.includes("left the room");
             return (
               <div key={id} className="flex justify-center">
                 <span
                   className={`text-[10px] px-3 py-1 rounded-full poppins-regular ${
                     isSummaryMsg
                       ? "bg-violet-50 dark:bg-violet-950/30 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-800 text-xs py-1.5"
+                      : isJoinLeave
+                      ? "bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400"
                       : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
                   }`}
                 >
                   <Linkify text={message.msg} />
-                  {!isSummaryMsg && " 👋"}
                 </span>
               </div>
             );
           }
 
           const isMe = message.sentby === user?.name;
+          const initials = message.sentby
+            .split(" ")
+            .slice(0, 2)
+            .map((w) => w[0])
+            .join("")
+            .toUpperCase();
 
           return (
             <div
               key={id}
-              className={`flex ${isMe ? "justify-end" : "justify-start"}`}
+              className={`flex items-end gap-1.5 ${isMe ? "justify-end" : "justify-start"}`}
             >
+              {!isMe && (
+                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-[8px] font-bold flex-shrink-0 mb-0.5">
+                  {initials}
+                </div>
+              )}
               <div
                 className={`max-w-[75%] rounded-2xl px-3.5 py-2 shadow-sm ${
                   isMe

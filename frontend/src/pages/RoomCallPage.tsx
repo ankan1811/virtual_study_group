@@ -19,7 +19,7 @@ import {
   onCameraChanged,
   onMicrophoneChanged,
 } from "agora-rtc-sdk-ng/esm";
-import ChatComponent from "../components/ChatComponent";
+import ChatTabPanel from "../components/ChatTabPanel";
 import AiPanel from "../components/AiPanel";
 import WhiteboardExplainPanel from "../components/WhiteboardExplainPanel";
 import SaveChatPrompt from "../components/SaveChatPrompt";
@@ -347,7 +347,7 @@ export default function RoomCallPage() {
           {/* Tab content */}
           <div className="flex-1 overflow-hidden flex flex-col">
             {activeTab === "chat" ? (
-              <ChatComponent
+              <ChatTabPanel
                 roomId={roomId}
                 onMessagesChange={setChatMessages}
                 onSaveChats={handleInlineSaveChats}
