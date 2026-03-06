@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -66,10 +66,6 @@ export default function RoomCallPage() {
   const [activeTab, setActiveTab] = useState<TabType>("chat");
   // Lifted chat messages for AI summary
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
-  // Whiteboard elements (lifted from WhiteboardPanel for AI explain + summary)
-  const [whiteboardElements, setWhiteboardElements] = useState<WhiteboardElement[]>([]);
-  // Preserve Excalidraw scene across tab switches
-  const whiteboardSceneRef = useRef<readonly any[]>([]);
 
   const channel = useRef(roomId);
   const appid = useRef(import.meta.env.VITE_AGORA_APP_ID || "");
@@ -225,7 +221,7 @@ export default function RoomCallPage() {
     return () => window.removeEventListener("beforeunload", handler);
   }, [chatMessages]);
 
-  // ---- Tabs & whiteboard ----
+  // ---- Tabs ----
   const tabItems: { key: TabType; label: string; icon: typeof MessageSquare }[] = [
     { key: "chat", label: "Chat", icon: MessageSquare },
     { key: "ai", label: "AI Doubt", icon: Bot },
@@ -233,10 +229,13 @@ export default function RoomCallPage() {
     { key: "whiteboard", label: "Whiteboard", icon: PenTool },
   ];
 
-  const handleWhiteboardSceneChange = useCallback((elements: WhiteboardElement[]) => {
-    setWhiteboardElements(elements);
-    whiteboardSceneRef.current = elements;
-  }, []);
+  const handleTabClick = (key: TabType) => {
+    if (key === "whiteboard") {
+      navigate(`/whiteboard/${roomId}`);
+    } else {
+      setActiveTab(key);
+    }
+  };
 
   return (
     <div className="h-screen flex flex-col bg-gray-100 dark:bg-gray-900">
@@ -263,40 +262,24 @@ export default function RoomCallPage() {
           )}
         </div>
 
-        {/* Center: Video / Whiteboard */}
+        {/* Center: Video */}
         <div className="flex-1 overflow-hidden">
-          {activeTab === "whiteboard" ? (
-            <React.Suspense
-              fallback={
-                <div className="flex items-center justify-center h-full bg-gray-50 dark:bg-gray-900">
-                  <Loader2 className="animate-spin text-indigo-400" size={32} />
-                </div>
-              }
-            >
-              <WhiteboardPanel
-                roomId={roomId}
-                onSceneChange={handleWhiteboardSceneChange}
-                initialElements={whiteboardSceneRef.current}
-              />
-            </React.Suspense>
-          ) : (
-            <Stream
-              isAudioOn={isAudioOn}
-              isVideoOn={isVideoOn}
-              isAudioPubed={isAudioPubed}
-              isVideoPubed={isVideoPubed}
-              isVideoSubed={isVideoSubed}
-              setIsAudioOn={setIsAudioOn}
-              setIsAudioPubed={setIsAudioPubed}
-              setIsVideoOn={setIsVideoOn}
-              setIsVideoPubed={setIsVideoPubed}
-              setIsVideoSubed={setIsVideoSubed}
-              turnOnCamera={turnOnCamera}
-              turnOnMicrophone={turnOnMicrophone}
-              publishAudio={publishAudio}
-              publishVideo={publishVideo}
-            />
-          )}
+          <Stream
+            isAudioOn={isAudioOn}
+            isVideoOn={isVideoOn}
+            isAudioPubed={isAudioPubed}
+            isVideoPubed={isVideoPubed}
+            isVideoSubed={isVideoSubed}
+            setIsAudioOn={setIsAudioOn}
+            setIsAudioPubed={setIsAudioPubed}
+            setIsVideoOn={setIsVideoOn}
+            setIsVideoPubed={setIsVideoPubed}
+            setIsVideoSubed={setIsVideoSubed}
+            turnOnCamera={turnOnCamera}
+            turnOnMicrophone={turnOnMicrophone}
+            publishAudio={publishAudio}
+            publishVideo={publishVideo}
+          />
         </div>
 
         {/* Right: Tabbed panel */}
@@ -308,12 +291,15 @@ export default function RoomCallPage() {
           <div className="flex items-center border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0">
             {tabItems.map((t) => {
               const Icon = t.icon;
+              const isWhiteboard = t.key === "whiteboard";
               return (
                 <button
                   key={t.key}
-                  onClick={() => setActiveTab(t.key)}
+                  onClick={() => handleTabClick(t.key)}
                   className={`flex-1 py-3 flex items-center justify-center gap-1.5 text-[11px] font-semibold poppins-semibold transition-all duration-200 ${
-                    activeTab === t.key
+                    isWhiteboard
+                      ? "text-teal-500 dark:text-teal-400 hover:text-teal-600 dark:hover:text-teal-300"
+                      : activeTab === t.key
                       ? "text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-500"
                       : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                   }`}
@@ -340,14 +326,11 @@ export default function RoomCallPage() {
                 onMessagesChange={setChatMessages}
                 onSaveChats={handleInlineSaveChats}
               />
-            ) : activeTab === "whiteboard" ? (
-              <WhiteboardExplainPanel elements={whiteboardElements} />
             ) : (
               <AiPanel
-                tab={activeTab}
+                tab={activeTab as "ai" | "summary"}
                 chatMessages={chatMessages}
                 roomId={roomId}
-                whiteboardElements={whiteboardElements}
               />
             )}
           </div>

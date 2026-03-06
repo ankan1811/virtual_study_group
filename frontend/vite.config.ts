@@ -5,6 +5,7 @@ import { resolve } from 'path'
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    alias: [{ find: "@", replacement: resolve(__dirname, "./") }]
+    alias: [{ find: "@", replacement: resolve(__dirname, "./") }],
+    conditions: ["development", "production"],
   }
 })
