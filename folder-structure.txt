@@ -271,16 +271,26 @@ virtual_study_group/
         |   |-- RoomCallPage.tsx     # Video call page - Agora RTC integration,
         |   |                          mic/camera controls, remote user streams.
         |   |                          Tab panel: Chat / AI Doubt / Summary /
-        |   |                          Whiteboard. Whiteboard tab swaps the center
-        |   |                          video area for Excalidraw (lazy-loaded).
-        |   |                          Lifts whiteboardElements state for AI panels.
-        |   |                          whiteboardSceneRef preserves drawing across
-        |   |                          tab switches. RoomId from Redux.
-        |   |                          Agora App ID from VITE_AGORA_APP_ID env var.
-        |   |                          Chat persistence: useBlocker for nav blocking,
-        |   |                          beforeunload for tab close, SaveChatPrompt
-        |   |                          overlay on exit, inline save callback for
-        |   |                          ChatComponent, shared lastSavedCountRef
+        |   |                          Whiteboard. Whiteboard tab navigates to
+        |   |                          /whiteboard/:roomId (full-page). RoomId
+        |   |                          from Redux. Agora App ID from env var.
+        |   |                          Chat persistence: beforeunload for tab
+        |   |                          close, SaveChatPrompt overlay on exit,
+        |   |                          inline save callback, lastSavedCountRef
+        |   |-- WhiteboardPage.tsx   # Full-page collaborative whiteboard at
+        |   |                          /whiteboard/:roomId. Lazy-loads
+        |   |                          @excalidraw/excalidraw via React.lazy().
+        |   |                          Real-time sync via Socket.IO (debounced
+        |   |                          200ms). Built-in AI Assist sidebar (360px,
+        |   |                          Framer Motion spring) with "Explain This"
+        |   |                          + custom questions. Toolbar: Back to Room,
+        |   |                          Clear, AI Assist toggle. Simplifies elements
+        |   |                          for AI payloads (type + text + dimensions)
+        |   |-- RadioPage.tsx        # Study Radio — full-page radio player.
+        |   |                          Displays 8 SomaFM channel cards with
+        |   |                          play/pause, volume slider, and canvas-based
+        |   |                          audio visualizer. Uses RadioContext for
+        |   |                          global playback state
         |   |-- Streampage.tsx       # Live streaming page - camera preview, YouTube
         |   |                          stream key input, start/stop controls
         |   |-- AskAiPage.tsx        # AI voice input page - mic component with
@@ -295,8 +305,9 @@ virtual_study_group/
         |   |                          OTP-based registration directly)
         |   |-- Navbar.tsx           # Collapsible sidebar (not top bar) - hamburger
         |   |                          toggle, framer-motion spring animation.
-        |   |                          Nav items: Home, Chats, My Room, Streaming,
-        |   |                          Ask AI, Contact us. Active route highlighting.
+        |   |                          Nav items: Home, Chats, My Room, Study Radio,
+        |   |                          Streaming, Ask AI, Contact us. Active route
+        |   |                          highlighting.
         |   |                          Profile avatar (top-right) with dropdown:
         |   |                          My Profile, Settings, My Room, Ask AI,
         |   |                          Logout. Login icon shown when logged out.
@@ -346,23 +357,29 @@ virtual_study_group/
         |   |                            via POST /ai/save-summary. Shows presigned
         |   |                            download link after save. Broadcasts link
         |   |                            to room chat as bot message
-        |   |-- WhiteboardPanel.tsx # Excalidraw wrapper component. Renders in
-        |   |                          center area when Whiteboard tab is active.
-        |   |                          Lazy-loaded via React.lazy(). Real-time
-        |   |                          sync via Socket.IO: debounced onChange
-        |   |                          (150ms) emits whiteboard:update, listens
-        |   |                          for whiteboard:sync to apply remote changes.
-        |   |                          isRemoteUpdate ref prevents echo loops.
-        |   |                          Lifts simplified elements (type, text,
-        |   |                          dimensions) to parent via onSceneChange.
+        |   |-- ChatTabPanel.tsx    # Extracted chat tab for RoomCallPage. Wraps
+        |   |                          ChatComponent with room member list header
+        |   |                          (fetches companion list), DM panel integration,
+        |   |                          and inline save callback passthrough
+        |   |-- WhiteboardPanel.tsx # Reusable whiteboard wrapper component.
+        |   |                          Imports @excalidraw/excalidraw directly.
+        |   |                          Real-time sync via Socket.IO: debounced
+        |   |                          onChange (150ms) emits whiteboard:update,
+        |   |                          listens for whiteboard:sync. isRemoteUpdate
+        |   |                          ref prevents echo loops. Lifts simplified
+        |   |                          elements to parent via onSceneChange.
         |   |                          Accepts initialData for state restoration
-        |   |-- WhiteboardExplainPanel.tsx # AI explain panel for whiteboard.
-        |   |                          Renders in right 380px panel when Whiteboard
-        |   |                          tab is active. "Explain This" button +
-        |   |                          custom question input. Calls POST
-        |   |                          /ai/whiteboard-explain. Q&A history with
-        |   |                          teal-accented bubbles. Empty state when
-        |   |                          nothing drawn yet
+        |   |-- RadioVisualizer.tsx # Canvas-based audio frequency bar visualizer.
+        |   |                          Uses Web Audio API AnalyserNode for real-time
+        |   |                          FFT data. Two variants: "full" (tall bars on
+        |   |                          RadioPage) and "mini" (compact for MiniPlayer).
+        |   |                          Falls back to CSS animated bars when analyser
+        |   |                          returns zero data
+        |   |-- MiniPlayer.tsx      # Floating bottom-right mini radio player.
+        |   |                          Visible on all pages except /radio when a
+        |   |                          channel is playing. Play/pause, volume,
+        |   |                          mute, expand to full page, close controls.
+        |   |                          Uses RadioContext for shared audio state
         |   |-- InviteNotificationOverlay.tsx  # Animated banner for incoming room
         |   |                          invites. Accept navigates to /room/call,
         |   |                          Decline dismisses. Socket: receiveInvite
@@ -409,6 +426,21 @@ virtual_study_group/
         |                              markOneRead, markAllReadLocal, removeNotification.
         |                              AppNotification: { _id, type, fromUserId,
         |                              fromUserName, data, read, createdAt }
+        |
+        |-- context/                  # React context providers
+        |   |-- RadioContext.tsx    # Global radio playback context. useReducer
+        |                              for state (currentChannel, isPlaying,
+        |                              volume, isMiniPlayerEnabled). Manages
+        |                              HTMLAudioElement + Web Audio API AnalyserNode.
+        |                              State persisted to sessionStorage. Exports
+        |                              RadioProvider + useRadio() hook
+        |
+        |-- data/                    # Static data files
+        |   |-- radioChannels.ts   # 8 curated SomaFM radio channels (Groove Salad,
+        |                              Drone Zone, Lush, Space Station Soma, DEF CON,
+        |                              Boot Liquor, Fluid, Groove Salad Classic).
+        |                              Each: id, name, genre, description, streamUrl,
+        |                              emoji, gradient color
         |
         |-- utils/                   # Utility functions
         |   |-- socketInstance.ts    # Socket.IO singleton - connectSocket(token),

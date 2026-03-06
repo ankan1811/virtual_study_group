@@ -104,19 +104,28 @@ A full-stack web application for creating virtual study group spaces with real-t
 
 ### AI Whiteboard
 
-- **Excalidraw-powered collaborative whiteboard** — full drawing tools (shapes, text, freehand, arrows, etc.) rendered in the center video area when the Whiteboard tab is active
-- **Completely free** — Excalidraw is MIT-licensed and runs entirely client-side, AI analysis via Gemini free tier
-- **Lazy-loaded** via `React.lazy()` — Excalidraw bundle only downloads when the whiteboard tab is first opened, keeping initial page load fast
+- **Full-page collaborative whiteboard** — opens as a dedicated route (`/whiteboard/:roomId`) when the Whiteboard tab is clicked in the call room. Full drawing tools (shapes, text, freehand, arrows, etc.) powered by `@excalidraw/excalidraw`
+- **Completely free** — the whiteboard library is MIT-licensed and runs entirely client-side, AI analysis via Gemini free tier
+- **Lazy-loaded** via `React.lazy()` — whiteboard bundle only downloads when first opened, keeping initial page load fast
 - **Real-time collaboration** — all room participants see the same whiteboard live via Socket.IO
-  - Drawing changes debounced at 150ms (client) and throttled at 100ms (server)
+  - Drawing changes debounced at 200ms (client) and throttled at 100ms (server)
   - Echo-loop prevention ensures incoming sync doesn't re-trigger outgoing broadcasts
-- **AI Explain panel** — right-side panel with:
+- **Built-in AI Assist sidebar** — collapsible right panel (360px, Framer Motion spring) with:
   - "Explain This" button to analyze the entire whiteboard
   - Custom question input to ask specific questions about the drawing
   - Q&A history with teal-accented chat bubbles and Framer Motion animations
+- **Toolbar** — top bar with Back to Room, Clear whiteboard, and AI Assist toggle
 - **Whiteboard Summary** — accessible from the Summary tab's "Whiteboard Summary" sub-tab, generates a bullet-point summary of whiteboard content and can be saved to R2
-- **Drawing preserved across tab switches** — scene state lifted to parent and restored via `initialData`
-- **Smart AI payloads** — sends compact text descriptions (element type, text content, dimensions) rather than raw Excalidraw JSON
+- **Smart AI payloads** — sends compact text descriptions (element type, text content, dimensions) rather than raw JSON
+
+### Study Radio
+
+- **Full-page radio player** at `/radio` — browse and play curated internet radio channels from SomaFM
+- **8 curated channels** — Groove Salad, Drone Zone, Lush, Space Station Soma, DEF CON Radio, Boot Liquor, Fluid, Groove Salad Classic (ambient, chill, electronic, Americana)
+- **Global audio context** — `RadioContext` with `useReducer`, manages `HTMLAudioElement` + Web Audio API `AnalyserNode` for real-time visualizations. State persisted to `sessionStorage`
+- **Canvas-based audio visualizer** — frequency bar animation with fallback to CSS animated bars
+- **Floating MiniPlayer** — bottom-right mini player visible on all pages except `/radio`. Play/pause, volume, mute, expand, and close controls
+- **Accessible from sidebar** — "Study Radio" nav item with headphones icon
 
 ### Video Calling (Agora RTC)
 
@@ -182,7 +191,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 
 - Collapsible sidebar (not a top bar) with framer-motion spring animation
 - Hamburger toggle at top-left
-- Sidebar items: Home, Chats, My Room, Streaming, Ask AI, Contact us
+- Sidebar items: Home, Chats, My Room, Study Radio, Streaming, Ask AI, Contact us
 - "My Room" menu item dispatches room entry and navigates to call
 - Profile avatar dropdown with: My Profile, Settings, My Room, Ask AI, Logout
 - Active route highlighting
@@ -227,7 +236,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 - Full streaming pipeline (frontend-to-backend wiring)
 - Session analytics dashboard
 - Study streak tracking
-- Whiteboard image export to AI (Gemini Vision) for spatial analysis
+- Whiteboard image export to AI (Gemini Vision) for richer spatial analysis
 
 ## Getting Started
 
@@ -335,6 +344,8 @@ VITE_GOOGLE_CLIENT_ID=your_google_client_id # Google OAuth Client ID (from https
 | `/profile`   | User Profile    |      Yes      |
 | `/chats`     | Recent Chats    |      Yes      |
 | `/room/call` | Video Call Room |      Yes      |
+| `/whiteboard/:roomId` | Collaborative Whiteboard |  Yes  |
+| `/radio`     | Study Radio     |      Yes      |
 | `/stream`    | Live Streaming  |      Yes      |
 | `/ask`       | Ask AI (Voice)  |      Yes      |
 
