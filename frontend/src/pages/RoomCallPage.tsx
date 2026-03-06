@@ -3,7 +3,8 @@ import { useSelector, useDispatch } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
 import Navbar from "../components/Navbar";
-import { Users, LogOut, MessageSquare, Bot, FileText, PenTool } from "lucide-react";
+import { Users, LogOut, MessageSquare, Bot, FileText, PenTool, Share2, Check } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import Stream from "../components/Stream";
 import type {
   ICameraVideoTrack,
@@ -66,6 +67,7 @@ export default function RoomCallPage() {
   const [activeTab, setActiveTab] = useState<TabType>("chat");
   // Lifted chat messages for AI summary
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
+  const [copied, setCopied] = useState(false);
 
   const channel = useRef(roomId);
   const appid = useRef(import.meta.env.VITE_AGORA_APP_ID || "");
@@ -309,6 +311,52 @@ export default function RoomCallPage() {
                 </button>
               );
             })}
+            <button
+              onClick={async () => {
+                const link = `${window.location.origin}/join/${roomId}`;
+                try {
+                  await navigator.clipboard.writeText(link);
+                } catch {
+                  const ta = document.createElement("textarea");
+                  ta.value = link;
+                  document.body.appendChild(ta);
+                  ta.select();
+                  document.execCommand("copy");
+                  document.body.removeChild(ta);
+                }
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+              className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 mr-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 text-indigo-500 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-[11px] font-semibold poppins-semibold transition-colors"
+            >
+              <AnimatePresence mode="wait" initial={false}>
+                {copied ? (
+                  <motion.span
+                    key="check"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0, opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="flex items-center gap-1 text-emerald-500"
+                  >
+                    <Check size={12} />
+                    Copied!
+                  </motion.span>
+                ) : (
+                  <motion.span
+                    key="share"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0, opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="flex items-center gap-1"
+                  >
+                    <Share2 size={12} />
+                    Invite
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </button>
             <button
               onClick={handleExitClick}
               className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 mr-2 rounded-lg bg-red-50 dark:bg-red-950/30 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/40 text-[11px] font-semibold poppins-semibold transition-colors"

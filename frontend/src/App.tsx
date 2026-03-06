@@ -7,13 +7,13 @@ import RoomCallPage from "./pages/RoomCallPage";
 
 import { Provider, useDispatch } from "react-redux";
 import store from "./store/authStore/store";
-import Streampage from "./pages/Streampage";
 import AskAiPage from "./pages/AskAiPage";
 import DemoAiPage from "./pages/DemoAiPage";
 import ProfilePage from "./pages/ProfilePage";
 import ChatsPage from "./pages/ChatsPage";
 import RadioPage from "./pages/RadioPage";
 import WhiteboardPage from "./pages/WhiteboardPage";
+import JoinRoomPage from "./pages/JoinRoomPage";
 import { login } from "./store/authStore/authSlice";
 import { connectSocket } from "./utils/socketInstance";
 import InviteNotificationOverlay from "./components/InviteNotificationOverlay";
@@ -48,7 +48,6 @@ function AppInner() {
         <Routes>
           <Route element={<Navigate to="/home" replace />} path="/" />
           <Route element={<RoomPage />} path="/home" />
-          <Route element={<Streampage />} path="/stream" />
           <Route element={<AskAiPage />} path="/ask" />
           <Route element={<DemoAiPage />} path="/demo" />
           <Route element={<AuthPage />} path="/login" />
@@ -57,6 +56,7 @@ function AppInner() {
           <Route element={<ChatsPage />} path="/chats" />
           <Route element={<RoomCallPage />} path="/room/call" />
           <Route element={<RadioPage />} path="/radio" />
+          <Route element={<JoinRoomPage />} path="/join/:roomId" />
           <Route element={<WhiteboardPage />} path="/whiteboard/:roomId" />
           <Route element={<WhiteboardPage />} path="/whiteboard" />
         </Routes>
