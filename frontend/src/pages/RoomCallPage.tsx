@@ -1,10 +1,10 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { useLocation, useNavigate, useBlocker } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
-import NavbarCall from "../components/NavbarCall";
-import { User, Loader2 } from "lucide-react";
-import Emoji from "../components/shared/Emoji";
+import Navbar from "../components/Navbar";
+import { Users, LogOut, MessageSquare, Bot, FileText, PenTool, Share2, Check } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import Stream from "../components/Stream";
 import type {
   ICameraVideoTrack,
@@ -20,16 +20,11 @@ import {
   onCameraChanged,
   onMicrophoneChanged,
 } from "agora-rtc-sdk-ng/esm";
-import ChatComponent from "../components/ChatComponent";
+import ChatTabPanel from "../components/ChatTabPanel";
 import AiPanel from "../components/AiPanel";
-import WhiteboardExplainPanel from "../components/WhiteboardExplainPanel";
 import SaveChatPrompt from "../components/SaveChatPrompt";
 import { AuthState } from "../store/authStore/store";
 import { leaveRoom } from "../store/RoomStore/roomSlice";
-
-const WhiteboardPanel = React.lazy(
-  () => import("../components/WhiteboardPanel")
-);
 
 onCameraChanged((device) => {
   console.log("onCameraChanged: ", device);
@@ -47,13 +42,6 @@ let audioTrack: IMicrophoneAudioTrack;
 let videoTrack: ICameraVideoTrack;
 
 type TabType = "chat" | "ai" | "summary" | "whiteboard";
-
-interface WhiteboardElement {
-  type: string;
-  text?: string;
-  width: number;
-  height: number;
-}
 
 interface Message {
   msg: string;
@@ -79,10 +67,7 @@ export default function RoomCallPage() {
   const [activeTab, setActiveTab] = useState<TabType>("chat");
   // Lifted chat messages for AI summary
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
-  // Whiteboard elements (lifted from WhiteboardPanel for AI explain + summary)
-  const [whiteboardElements, setWhiteboardElements] = useState<WhiteboardElement[]>([]);
-  // Preserve Excalidraw scene across tab switches
-  const whiteboardSceneRef = useRef<readonly any[]>([]);
+  const [copied, setCopied] = useState(false);
 
   const channel = useRef(roomId);
   const appid = useRef(import.meta.env.VITE_AGORA_APP_ID || "");
@@ -167,7 +152,7 @@ export default function RoomCallPage() {
   useEffect(() => {
     channel.current = roomId;
     AgoraRTC.setLogLevel(4);
-    joinChannel();
+    joinChannel().catch((err) => console.error("Agora join failed:", err));
     return () => {
       leaveChannelInternal();
       dispatch(leaveRoom());
@@ -208,10 +193,7 @@ export default function RoomCallPage() {
 
   const completeExit = () => {
     setShowSavePrompt(false);
-    if (blocker.state === "blocked") {
-      leaveChannel();
-      blocker.proceed();
-    } else if (pendingNavigationPath) {
+    if (pendingNavigationPath) {
       leaveChannel();
       navigate(pendingNavigationPath);
       setPendingNavigationPath(null);
@@ -229,21 +211,6 @@ export default function RoomCallPage() {
     }
   };
 
-  // ---- React Router navigation blocking ----
-  const blocker = useBlocker(({ currentLocation, nextLocation }) => {
-    return (
-      hasUnsavedMessages() &&
-      currentLocation.pathname !== nextLocation.pathname &&
-      !showSavePrompt
-    );
-  });
-
-  useEffect(() => {
-    if (blocker.state === "blocked") {
-      setShowSavePrompt(true);
-    }
-  }, [blocker.state]);
-
   // ---- Browser tab/window close ----
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
@@ -256,115 +223,162 @@ export default function RoomCallPage() {
     return () => window.removeEventListener("beforeunload", handler);
   }, [chatMessages]);
 
-  // ---- Tabs & whiteboard ----
-  const tabItems: { key: TabType; label: string }[] = [
-    { key: "chat", label: "Chat" },
-    { key: "ai", label: "AI Doubt" },
-    { key: "summary", label: "Summary" },
-    { key: "whiteboard", label: "Whiteboard" },
+  // ---- Tabs ----
+  const tabItems: { key: TabType; label: string; icon: typeof MessageSquare }[] = [
+    { key: "chat", label: "Chat", icon: MessageSquare },
+    { key: "ai", label: "AI Doubt", icon: Bot },
+    { key: "summary", label: "Summary", icon: FileText },
+    { key: "whiteboard", label: "Whiteboard", icon: PenTool },
   ];
 
-  const handleWhiteboardSceneChange = (elements: WhiteboardElement[]) => {
-    setWhiteboardElements(elements);
-    whiteboardSceneRef.current = elements;
+  const handleTabClick = (key: TabType) => {
+    if (key === "whiteboard") {
+      navigate(`/whiteboard/${roomId}`);
+    } else {
+      setActiveTab(key);
+    }
   };
 
   return (
-    <div className="h-screen flex flex-col">
-      <NavbarCall onExitClick={handleExitClick} />
-      <div className="flex h-full overflow-hidden">
-        {/* Participants sidebar */}
-        <div className="w-min flex flex-col rounded-md flex-shrink-0">
-          <div className="px-2 py-1 flex bg-slate-500 text-white items-center poppins-regular shadow-md gap-2 rounded-tr-md">
-            <p className="text-sm flex items-center">
-              <Emoji symbol="📌" label="pin" />
-              Participants
-            </p>
-            <button className="px-2 py-1 bg-slate-800 rounded">
-              {user ? 1 : 0}
-            </button>
-          </div>
-          <ul className="text-xs h-full poppins-regular px-3 py-2 justify-start bg-slate-300 rounded-br-md min-w-[120px]">
-            {user && (
-              <li className="flex gap-1 mt-2">
-                <User size={10} />
-                {user.name}
-              </li>
-            )}
-          </ul>
-        </div>
+    <div className="h-screen flex flex-col bg-gray-100 dark:bg-gray-900">
+      <Navbar />
 
-        {/* Video / Whiteboard area */}
-        <div className="flex-1 overflow-hidden">
-          {activeTab === "whiteboard" ? (
-            <React.Suspense
-              fallback={
-                <div className="flex items-center justify-center h-full bg-gray-50">
-                  <Loader2 className="animate-spin text-teal-400" size={32} />
-                </div>
-              }
-            >
-              <WhiteboardPanel
-                roomId={roomId}
-                onSceneChange={handleWhiteboardSceneChange}
-                initialElements={whiteboardSceneRef.current}
-              />
-            </React.Suspense>
-          ) : (
-            <Stream
-              isAudioOn={isAudioOn}
-              isVideoOn={isVideoOn}
-              isAudioPubed={isAudioPubed}
-              isVideoPubed={isVideoPubed}
-              isVideoSubed={isVideoSubed}
-              setIsAudioOn={setIsAudioOn}
-              setIsAudioPubed={setIsAudioPubed}
-              setIsVideoOn={setIsVideoOn}
-              setIsVideoPubed={setIsVideoPubed}
-              setIsVideoSubed={setIsVideoSubed}
-              turnOnCamera={turnOnCamera}
-              turnOnMicrophone={turnOnMicrophone}
-              publishAudio={publishAudio}
-              publishVideo={publishVideo}
-            />
+      {/* Main content */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left: Participants strip */}
+        <div className="w-16 flex-shrink-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col items-center pt-14 pb-4 gap-3">
+          <div className="flex flex-col items-center gap-1">
+            <Users size={16} className="text-gray-400" />
+            <span className="text-[10px] text-gray-400 poppins-medium">{user ? 1 : 0}</span>
+          </div>
+          <div className="w-8 h-px bg-gray-200 dark:bg-gray-700" />
+          {user && (
+            <div className="group relative flex flex-col items-center">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-xs font-bold poppins-semibold ring-2 ring-green-400 ring-offset-2 ring-offset-white dark:ring-offset-gray-800">
+                {user.name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase()}
+              </div>
+              <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 poppins-regular truncate max-w-[56px] text-center">
+                {user.name.split(" ")[0]}
+              </span>
+            </div>
           )}
         </div>
 
-        {/* Right panel: Chat / AI / Summary tabs */}
-        <div className="w-[380px] flex-shrink-0 h-full flex flex-col border-l border-gray-200 bg-white">
-          {/* Tab bar */}
-          <div className="flex border-b border-gray-200 bg-white flex-shrink-0">
-            {tabItems.map((t) => (
-              <button
-                key={t.key}
-                onClick={() => setActiveTab(t.key)}
-                className={`flex-1 py-3 text-xs font-semibold poppins-semibold transition-colors ${
-                  activeTab === t.key
-                    ? "text-indigo-700 border-b-2 border-indigo-600 bg-indigo-50/50"
-                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
+        {/* Center: Video */}
+        <div className="flex-1 overflow-hidden">
+          <Stream
+            isAudioOn={isAudioOn}
+            isVideoOn={isVideoOn}
+            isAudioPubed={isAudioPubed}
+            isVideoPubed={isVideoPubed}
+            isVideoSubed={isVideoSubed}
+            setIsAudioOn={setIsAudioOn}
+            setIsAudioPubed={setIsAudioPubed}
+            setIsVideoOn={setIsVideoOn}
+            setIsVideoPubed={setIsVideoPubed}
+            setIsVideoSubed={setIsVideoSubed}
+            turnOnCamera={turnOnCamera}
+            turnOnMicrophone={turnOnMicrophone}
+            publishAudio={publishAudio}
+            publishVideo={publishVideo}
+          />
+        </div>
+
+        {/* Right: Tabbed panel */}
+        <div className="w-[380px] flex-shrink-0 h-full flex flex-col bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700">
+          {/* Spacer to clear fixed navbar buttons (hamburger/avatar/bell) */}
+          <div className="h-14 flex-shrink-0" />
+
+          {/* Tab bar + Exit button row */}
+          <div className="flex items-center border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0">
+            {tabItems.map((t) => {
+              const Icon = t.icon;
+              const isWhiteboard = t.key === "whiteboard";
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => handleTabClick(t.key)}
+                  className={`flex-1 py-3 flex items-center justify-center gap-1.5 text-[11px] font-semibold poppins-semibold transition-all duration-200 ${
+                    isWhiteboard
+                      ? "text-teal-500 dark:text-teal-400 hover:text-teal-600 dark:hover:text-teal-300"
+                      : activeTab === t.key
+                      ? "text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-500"
+                      : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+                  }`}
+                >
+                  <Icon size={14} />
+                  {t.label}
+                </button>
+              );
+            })}
+            <button
+              onClick={async () => {
+                const link = `${window.location.origin}/join/${roomId}`;
+                try {
+                  await navigator.clipboard.writeText(link);
+                } catch {
+                  const ta = document.createElement("textarea");
+                  ta.value = link;
+                  document.body.appendChild(ta);
+                  ta.select();
+                  document.execCommand("copy");
+                  document.body.removeChild(ta);
+                }
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+              className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 mr-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 text-indigo-500 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-[11px] font-semibold poppins-semibold transition-colors"
+            >
+              <AnimatePresence mode="wait" initial={false}>
+                {copied ? (
+                  <motion.span
+                    key="check"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0, opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="flex items-center gap-1 text-emerald-500"
+                  >
+                    <Check size={12} />
+                    Copied!
+                  </motion.span>
+                ) : (
+                  <motion.span
+                    key="share"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0, opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="flex items-center gap-1"
+                  >
+                    <Share2 size={12} />
+                    Invite
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </button>
+            <button
+              onClick={handleExitClick}
+              className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 mr-2 rounded-lg bg-red-50 dark:bg-red-950/30 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/40 text-[11px] font-semibold poppins-semibold transition-colors"
+            >
+              <LogOut size={12} />
+              Exit
+            </button>
           </div>
 
           {/* Tab content */}
           <div className="flex-1 overflow-hidden flex flex-col">
             {activeTab === "chat" ? (
-              <ChatComponent
+              <ChatTabPanel
                 roomId={roomId}
                 onMessagesChange={setChatMessages}
                 onSaveChats={handleInlineSaveChats}
               />
-            ) : activeTab === "whiteboard" ? (
-              <WhiteboardExplainPanel elements={whiteboardElements} />
             ) : (
               <AiPanel
-                tab={activeTab}
+                tab={activeTab as "ai" | "summary"}
                 chatMessages={chatMessages}
                 roomId={roomId}
-                whiteboardElements={whiteboardElements}
               />
             )}
           </div>

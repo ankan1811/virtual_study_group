@@ -46,7 +46,13 @@ export default function AuthPage() {
       dispatch(login({ name: res.data.name, userId: res.data.userId }));
       localStorage.setItem("token", res.data.token);
       connectSocket(res.data.token);
-      navigate("/home");
+      const pendingRoom = sessionStorage.getItem("pendingJoinRoom");
+      if (pendingRoom) {
+        sessionStorage.removeItem("pendingJoinRoom");
+        navigate(`/join/${pendingRoom}`);
+      } else {
+        navigate("/home");
+      }
     } catch (err: any) {
       setError(err.response?.data?.error || "Google sign-in failed. Please try again.");
     } finally {
@@ -125,7 +131,13 @@ export default function AuthPage() {
       dispatch(login({ name: res.data.name, userId: res.data.userId }));
       localStorage.setItem("token", res.data.token);
       connectSocket(res.data.token);
-      navigate("/home");
+      const pendingRoom = sessionStorage.getItem("pendingJoinRoom");
+      if (pendingRoom) {
+        sessionStorage.removeItem("pendingJoinRoom");
+        navigate(`/join/${pendingRoom}`);
+      } else {
+        navigate("/home");
+      }
     } catch (err: any) {
       setError(
         err.response?.data?.error || "Verification failed. Please try again."

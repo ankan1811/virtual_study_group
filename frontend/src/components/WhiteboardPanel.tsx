@@ -19,7 +19,13 @@ export default function WhiteboardPanel({
   const isRemoteUpdate = useRef(false);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Keep a stable ref to onSceneChange to avoid re-creating handleChange
+  const onSceneChangeRef = useRef(onSceneChange);
+  onSceneChangeRef.current = onSceneChange;
+
   // Lift scene to parent + broadcast via socket (debounced)
+  // IMPORTANT: parent state updates are deferred to avoid triggering
+  // re-renders during Excalidraw's synchronous commit phase.
   const handleChange = useCallback(
     (elements: readonly any[]) => {
       // Skip if this change came from a remote sync
@@ -28,21 +34,22 @@ export default function WhiteboardPanel({
         return;
       }
 
-      const active = elements.filter((el: any) => !el.isDeleted);
-
-      // Lift simplified elements to parent for AI
-      onSceneChange(
-        active.map((el: any) => ({
-          type: el.type,
-          ...(el.type === "text" && { text: el.text }),
-          width: el.width,
-          height: el.height,
-        }))
-      );
-
-      // Debounced socket broadcast
+      // Debounce both parent notification and socket broadcast
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
       debounceTimer.current = setTimeout(() => {
+        const active = elements.filter((el: any) => !el.isDeleted);
+
+        // Lift simplified elements to parent for AI
+        onSceneChangeRef.current(
+          active.map((el: any) => ({
+            type: el.type,
+            ...(el.type === "text" && { text: el.text }),
+            width: el.width,
+            height: el.height,
+          }))
+        );
+
+        // Socket broadcast
         const socket = getSocket();
         if (socket && roomId) {
           socket.emit("whiteboard:update", {
@@ -52,7 +59,7 @@ export default function WhiteboardPanel({
         }
       }, 150);
     },
-    [roomId, onSceneChange]
+    [roomId]
   );
 
   // Listen for remote whiteboard sync

@@ -431,7 +431,7 @@ export default function RoomPage() {
     avatarColors[userId.charCodeAt(userId.length - 1) % avatarColors.length];
 
   const displayCompanions = isAuthenticated && companions.length > 0 ? companions : null;
-  const showDummy = !isAuthenticated || companions.length === 0;
+  const showDummy = !isAuthenticated;
   const companionList = displayCompanions || (showDummy ? dummyCompanions : []);
 
   // Show global results panel when logged in, query is non-empty, and not mid-debounce
@@ -659,104 +659,146 @@ export default function RoomPage() {
             )}
           </div>
 
-          <div className={`relative ${showDummy ? "mt-3" : ""}`}>
-            <div className="flex gap-4 overflow-x-auto pt-1 pb-1 scrollbar-none">
-              {companionList.map((c) => (
-                <div key={c.userId} className="relative flex-shrink-0">
-                  <button
-                    onClick={() => {
-                      if (!isAuthenticated) { navigate("/login"); return; }
-                      if (showDummy) return;
-                      setOpenPopover(openPopover === c.userId ? null : c.userId);
-                    }}
-                    className="flex flex-col items-center gap-1.5 group"
-                  >
-                    <div className="relative">
-                      {/* Avatar — green ring = unread, subtle grey ring = default */}
-                      <div
-                        className={`w-14 h-14 rounded-full flex items-center justify-center text-white text-sm font-bold poppins-semibold ${getAvatarColor(c.userId)} transition-all duration-300 ${
-                          (showDummy ? dummyUnreadIds.has(c.userId) : unreadDmFrom.has(c.userId))
-                            ? "ring-[3px] ring-emerald-400"
-                            : "ring-2 ring-gray-300 dark:ring-gray-700"
-                        }`}
-                      >
-                        {getInitials(c.name)}
-                      </div>
+          {/* Logged-in empty state */}
+          {isAuthenticated && companions.length === 0 ? (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, ease: "easeOut" }}
+              className="relative overflow-hidden rounded-2xl border border-dashed border-indigo-200 dark:border-indigo-800/60 bg-gradient-to-br from-indigo-50/80 via-white to-purple-50/60 dark:from-indigo-950/40 dark:via-gray-900 dark:to-purple-950/30 px-6 py-8"
+            >
+              {/* Decorative floating circles */}
+              <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full bg-indigo-100/50 dark:bg-indigo-900/20 blur-xl" />
+              <div className="absolute -bottom-4 -left-4 w-16 h-16 rounded-full bg-purple-100/50 dark:bg-purple-900/20 blur-xl" />
 
-                      {/* Online dot */}
-                      <span
-                        className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-gray-50 dark:border-gray-950 ${
-                          c.isOnline ? "bg-emerald-400" : "bg-gray-300 dark:bg-gray-600"
-                        }`}
-                      />
-                    </div>
-                    <span className="text-[11px] text-gray-600 dark:text-gray-400 poppins-regular max-w-[56px] truncate">
-                      {c.name.split(" ")[0]}
-                    </span>
-                  </button>
-
-                  {/* Popover — only for real companions when logged in */}
-                  {isAuthenticated && !showDummy && (
-                    <AnimatePresence>
-                      {openPopover === c.userId && (
-                        <motion.div
-                          initial={{ opacity: 0, scale: 0.92, y: 8 }}
-                          animate={{ opacity: 1, scale: 1, y: 0 }}
-                          exit={{ opacity: 0, scale: 0.92, y: 8 }}
-                          transition={{ type: "spring", damping: 24, stiffness: 300 }}
-                          className="absolute top-[76px] left-1/2 -translate-x-1/2 z-50 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 p-3 w-44 space-y-1"
-                        >
-                          <p className="text-xs font-semibold text-gray-700 dark:text-gray-200 poppins-semibold px-1 truncate">
-                            {c.name}
-                          </p>
-                          <p className="text-[10px] flex items-center gap-1 px-1 mb-2">
-                            {c.isOnline ? (
-                              <>
-                                <Wifi size={10} className="text-emerald-500" />
-                                <span className="text-emerald-600">Online</span>
-                              </>
-                            ) : (
-                              <>
-                                <WifiOff size={10} className="text-gray-400" />
-                                <span className="text-gray-400">Offline</span>
-                              </>
-                            )}
-                          </p>
-                          <button
-                            onClick={() => openDm(c.userId, c.name)}
-                            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors poppins-regular"
-                          >
-                            <MessageCircle size={13} />
-                            Message
-                            {unreadDmFrom.has(c.userId) && (
-                              <span className="ml-auto w-2 h-2 rounded-full bg-emerald-400" />
-                            )}
-                          </button>
-                          <button
-                            onClick={() => inviteCompanion(c.userId)}
-                            disabled={!c.isOnline}
-                            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-gray-700 dark:text-gray-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors poppins-regular disabled:opacity-40 disabled:cursor-not-allowed"
-                          >
-                            <DoorOpen size={13} />
-                            Invite to My Room
-                          </button>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  )}
+              <div className="relative flex flex-col items-center text-center space-y-3">
+                {/* Animated avatar stack placeholder */}
+                <div className="flex -space-x-3 mb-1">
+                  {["bg-indigo-300 dark:bg-indigo-700", "bg-purple-300 dark:bg-purple-700", "bg-pink-300 dark:bg-pink-700"].map((color, i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, scale: 0.5 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: 0.15 * i, type: "spring", stiffness: 260, damping: 20 }}
+                      className={`w-10 h-10 rounded-full ${color} border-2 border-white dark:border-gray-900 flex items-center justify-center`}
+                    >
+                      <UserPlus size={14} className="text-white/70" />
+                    </motion.div>
+                  ))}
                 </div>
-              ))}
-            </div>
 
-            {/* Logged-out overlay hint */}
-            {!isAuthenticated && (
-              <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-r from-white/0 via-white/60 to-white/0 dark:from-gray-950/0 dark:via-gray-950/60 dark:to-gray-950/0 pointer-events-none">
-                <span className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm px-4 py-2 rounded-full text-xs text-indigo-600 dark:text-indigo-400 poppins-semibold shadow-md border border-indigo-100 dark:border-indigo-900/50 hover:shadow-lg transition-shadow">
-                  Login to connect with study companions
-                </span>
+                <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 poppins-semibold">
+                  Your study circle is empty
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 poppins-regular max-w-xs leading-relaxed">
+                  Search for people above and add them as companions to chat, collaborate on whiteboards, and study together in real time.
+                </p>
+                <button
+                  onClick={() => setShowAddModal(true)}
+                  className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white text-xs poppins-semibold shadow-md hover:shadow-lg transition-all duration-200"
+                >
+                  <UserPlus size={13} />
+                  Find Study Companions
+                </button>
               </div>
-            )}
-          </div>
+            </motion.div>
+          ) : (
+            <div className={`relative ${showDummy ? "mt-3" : ""}`}>
+              <div className="flex gap-4 overflow-x-auto pt-1 pb-1 scrollbar-none">
+                {companionList.map((c) => (
+                  <div key={c.userId} className="relative flex-shrink-0">
+                    <button
+                      onClick={() => {
+                        if (!isAuthenticated) { navigate("/login"); return; }
+                        if (showDummy) return;
+                        setOpenPopover(openPopover === c.userId ? null : c.userId);
+                      }}
+                      className="flex flex-col items-center gap-1.5 group"
+                    >
+                      <div className="relative">
+                        <div
+                          className={`w-14 h-14 rounded-full flex items-center justify-center text-white text-sm font-bold poppins-semibold ${getAvatarColor(c.userId)} transition-all duration-300 ${
+                            (showDummy ? dummyUnreadIds.has(c.userId) : unreadDmFrom.has(c.userId))
+                              ? "ring-[3px] ring-emerald-400"
+                              : "ring-2 ring-gray-300 dark:ring-gray-700"
+                          }`}
+                        >
+                          {getInitials(c.name)}
+                        </div>
+                        <span
+                          className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-gray-50 dark:border-gray-950 ${
+                            c.isOnline ? "bg-emerald-400" : "bg-gray-300 dark:bg-gray-600"
+                          }`}
+                        />
+                      </div>
+                      <span className="text-[11px] text-gray-600 dark:text-gray-400 poppins-regular max-w-[56px] truncate">
+                        {c.name.split(" ")[0]}
+                      </span>
+                    </button>
+
+                    {/* Popover — only for real companions when logged in */}
+                    {isAuthenticated && !showDummy && (
+                      <AnimatePresence>
+                        {openPopover === c.userId && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.92, y: 8 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.92, y: 8 }}
+                            transition={{ type: "spring", damping: 24, stiffness: 300 }}
+                            className="absolute top-[76px] left-1/2 -translate-x-1/2 z-50 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 p-3 w-44 space-y-1"
+                          >
+                            <p className="text-xs font-semibold text-gray-700 dark:text-gray-200 poppins-semibold px-1 truncate">
+                              {c.name}
+                            </p>
+                            <p className="text-[10px] flex items-center gap-1 px-1 mb-2">
+                              {c.isOnline ? (
+                                <>
+                                  <Wifi size={10} className="text-emerald-500" />
+                                  <span className="text-emerald-600">Online</span>
+                                </>
+                              ) : (
+                                <>
+                                  <WifiOff size={10} className="text-gray-400" />
+                                  <span className="text-gray-400">Offline</span>
+                                </>
+                              )}
+                            </p>
+                            <button
+                              onClick={() => openDm(c.userId, c.name)}
+                              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors poppins-regular"
+                            >
+                              <MessageCircle size={13} />
+                              Message
+                              {unreadDmFrom.has(c.userId) && (
+                                <span className="ml-auto w-2 h-2 rounded-full bg-emerald-400" />
+                              )}
+                            </button>
+                            <button
+                              onClick={() => inviteCompanion(c.userId)}
+                              disabled={!c.isOnline}
+                              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-gray-700 dark:text-gray-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors poppins-regular disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              <DoorOpen size={13} />
+                              Invite to My Room
+                            </button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Logged-out overlay hint */}
+              {!isAuthenticated && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-r from-white/0 via-white/60 to-white/0 dark:from-gray-950/0 dark:via-gray-950/60 dark:to-gray-950/0 pointer-events-none">
+                  <span className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm px-4 py-2 rounded-full text-xs text-indigo-600 dark:text-indigo-400 poppins-semibold shadow-md border border-indigo-100 dark:border-indigo-900/50 hover:shadow-lg transition-shadow">
+                    Login to connect with study companions
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
         </section>
 
         {/* Close popover on outside click */}

@@ -8,6 +8,8 @@ import { RATE_LIMIT_CONFIG } from './middlewares/rateLimiter';
 
 let io: Server;
 const userSocketMap = new Map<string, string>(); // userId → socketId
+// roomId → Set of { socketId, userId, userName }
+const roomParticipants = new Map<string, Map<string, { userId: string; userName: string }>>();
 
 // ── Socket event throttling ──────────────────────────────────────────────────
 // Map<userId, Map<eventName, lastTimestamp>>
@@ -139,10 +141,25 @@ export function initSocketServer(httpServer: http.Server): Server {
 
     socket.on('joinRoom', ({ roomId, name }: { roomId: string; name: string }) => {
       socket.join(roomId);
-      io.to(roomId).emit(`message:${roomId}`, {
-        msg: `Welcome ${name} to the room`,
-        sentby: 'bot',
-      });
+
+      // Track participants — avoid duplicate welcome on reconnect
+      if (!roomParticipants.has(roomId)) {
+        roomParticipants.set(roomId, new Map());
+      }
+      const participants = roomParticipants.get(roomId)!;
+      const isNewParticipant = !participants.has(userId);
+      participants.set(userId, { userId, userName: name });
+
+      if (isNewParticipant) {
+        io.to(roomId).emit(`message:${roomId}`, {
+          msg: `${name} joined the room`,
+          sentby: 'bot',
+        });
+      }
+
+      // Emit updated participant list to everyone in the room
+      const participantList = Array.from(participants.values());
+      io.to(roomId).emit(`room:participants:${roomId}`, participantList);
     });
 
     socket.on(
@@ -308,9 +325,44 @@ export function initSocketServer(httpServer: http.Server): Server {
 
     // ── Disconnect ──────────────────────────────────────────────────────────
 
+    // Leave room explicitly
+    socket.on('leaveRoom', ({ roomId }: { roomId: string }) => {
+      socket.leave(roomId);
+      const participants = roomParticipants.get(roomId);
+      if (participants) {
+        participants.delete(userId);
+        if (participants.size === 0) {
+          roomParticipants.delete(roomId);
+        } else {
+          io.to(roomId).emit(`room:participants:${roomId}`, Array.from(participants.values()));
+          io.to(roomId).emit(`message:${roomId}`, {
+            msg: `${userName} left the room`,
+            sentby: 'bot',
+          });
+        }
+      }
+    });
+
     socket.on('disconnect', async () => {
       userSocketMap.delete(userId);
       socketThrottles.delete(userId);
+
+      // Clean up room participants on disconnect
+      for (const [roomId, participants] of roomParticipants.entries()) {
+        if (participants.has(userId)) {
+          participants.delete(userId);
+          if (participants.size === 0) {
+            roomParticipants.delete(roomId);
+          } else {
+            io.to(roomId).emit(`room:participants:${roomId}`, Array.from(participants.values()));
+            io.to(roomId).emit(`message:${roomId}`, {
+              msg: `${userName} left the room`,
+              sentby: 'bot',
+            });
+          }
+        }
+      }
+
       console.log(`User ${userName} disconnected`);
       const updatedCompanionIds = await getAcceptedCompanionIds(userId);
       updatedCompanionIds.forEach((cId) => {
