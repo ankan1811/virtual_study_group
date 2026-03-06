@@ -267,7 +267,7 @@ function InlineDm({
 type ChatView = "list" | "room" | { dm: string; name: string };
 
 export default function ChatTabPanel({ roomId, onMessagesChange, onSaveChats }: ChatTabPanelProps) {
-  const [view, setView] = useState<ChatView>("list");
+  const [view, setView] = useState<ChatView>("room");
   const companions = useSelector((state: AuthState) => state.companion.companions);
 
   // Conversation list view
@@ -372,7 +372,7 @@ export default function ChatTabPanel({ roomId, onMessagesChange, onSaveChats }: 
             Room Chat
           </p>
         </div>
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 min-h-0">
           <ChatComponent
             roomId={roomId}
             onMessagesChange={onMessagesChange}
