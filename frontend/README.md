@@ -14,6 +14,7 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
 - **Axios** for REST API calls
 - **Web Speech API** for voice input in AI panel
 - **@excalidraw/excalidraw** for collaborative whiteboard (lazy-loaded)
+- **SomaFM** internet radio streams for Study Radio (ambient/chill background music)
 
 ## Features
 
@@ -56,14 +57,14 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
 - Empty state when no conversations yet
 
 ### Navbar
-- **Sidebar** (left) — hamburger toggle, slide-in panel with navigation links (Home, Chats, My Room, Streaming, Ask AI, Contact us), dark mode toggle, logout
+- **Sidebar** (left) — hamburger toggle, slide-in panel with navigation links (Home, Chats, My Room, Study Radio, Streaming, Ask AI, Contact us), dark mode toggle, logout
 - **Profile Avatar** (top-right) — gradient circle with user initials. Click opens a dropdown with: My Profile, Settings, My Room, Ask AI, Logout. Logged-out users see a login icon button.
 - **Dark Mode Toggle** — persistent toggle in both the floating top-left button and inside the sidebar
 - **Logout** — properly clears JWT from localStorage, disconnects socket, resets Redux state, redirects to `/login`
 
 ### Room Call (`RoomCallPage`)
 - Agora RTC video/audio with mic/camera controls (App ID via `VITE_AGORA_APP_ID` env var)
-- Tab panel: Chat / AI Doubt Solver / Summary / Whiteboard
+- Tab panel: Chat / AI Doubt Solver / Summary / Whiteboard (Whiteboard tab navigates to full-page `/whiteboard/:roomId`)
 - Room ID from Redux state (not URL or localStorage)
 - Bot messages in chat support clickable URLs (Linkify helper) with special styling for summary notifications
 - **Opt-in chat persistence:**
@@ -80,12 +81,20 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
 - Both summaries can be saved to Cloudflare R2 with presigned download URLs
 - **Save Summary** — one-click save to Cloudflare R2 (S3-compatible) as a styled HTML document. Returns a presigned download URL (valid 7 days). After saving, a VSG Bot message is broadcast to the room chat with the download link so all participants can access it.
 
-### AI Whiteboard (`WhiteboardPanel` + `WhiteboardExplainPanel`)
-- **Excalidraw-powered whiteboard** — full drawing tools (shapes, text, freehand, arrows) rendered in the center video area when the Whiteboard tab is active. Lazy-loaded via `React.lazy()` to avoid bloating the initial bundle.
-- **Real-time collaboration** — all room participants see the same whiteboard live via Socket.IO. Drawing changes are debounced (150ms client-side) and throttled (100ms server-side) to balance responsiveness and bandwidth. Echo-loop prevention via `isRemoteUpdate` ref flag.
-- **AI Explain panel** (right 380px panel) — "Explain This" button sends a compact text description of whiteboard elements to Gemini/Grok for analysis. Custom question input for asking specific questions about the drawing. Q&A history with teal-accented chat bubbles and Framer Motion animations.
-- **Drawing preserved across tab switches** — whiteboard scene state is lifted to `RoomCallPage` via `whiteboardSceneRef` and restored via `initialData` on re-mount.
-- **Whiteboard data for AI** — elements are simplified before sending to the LLM: text content for text elements, type + dimensions for shapes. No raw Excalidraw JSON sent (too verbose).
+### AI Whiteboard (`WhiteboardPage`)
+- **Full-page collaborative whiteboard** — opens as a dedicated route (`/whiteboard/:roomId`) when the Whiteboard tab is clicked in `RoomCallPage`. Full drawing tools (shapes, text, freehand, arrows) powered by `@excalidraw/excalidraw`, lazy-loaded via `React.lazy()`.
+- **Real-time collaboration** — all room participants see the same whiteboard live via Socket.IO. Drawing changes are debounced (200ms client-side) and throttled (100ms server-side). Echo-loop prevention via `isRemoteUpdate` ref flag.
+- **Built-in AI Assist sidebar** — collapsible right panel (360px, Framer Motion spring animation) with "Explain This" button and custom question input. Sends compact text descriptions to Gemini/Grok. Q&A history with teal-accented chat bubbles.
+- **Toolbar** — top bar with Back to Room, Clear whiteboard, and AI Assist toggle buttons.
+- **Whiteboard data for AI** — elements are simplified before sending to the LLM: text content for text elements, type + dimensions for shapes. No raw JSON sent (too verbose).
+
+### Study Radio (`RadioPage`)
+- **Full-page radio player** at `/radio` — browse and play curated internet radio channels from SomaFM (ambient, chill, electronic, etc.)
+- **8 curated channels** — Groove Salad, Drone Zone, Lush, Space Station Soma, DEF CON Radio, Boot Liquor, Fluid, Groove Salad Classic. Defined in `data/radioChannels.ts`.
+- **RadioContext** — global React context (`context/RadioContext.tsx`) with `useReducer` for state management. Manages `HTMLAudioElement` + `Web Audio API` (`AnalyserNode`) for real-time visualizations. State persisted to `sessionStorage` across navigation.
+- **Audio visualizer** — canvas-based frequency bar visualization (`RadioVisualizer`) with full and mini variants. Falls back to animated CSS bars when `AnalyserNode` returns zero data.
+- **MiniPlayer** — floating bottom-right mini player (`MiniPlayer.tsx`) shown on all pages except `/radio`. Play/pause, volume, mute, expand to full page, and close controls. Auto-hides when no channel is playing.
+- **Accessible from sidebar** — "Study Radio" nav item with headphones icon.
 
 ### Live Streaming (`Streampage`)
 - Camera preview, YouTube RTMP stream key input, start/stop controls

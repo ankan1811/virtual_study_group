@@ -14,7 +14,8 @@ A full-stack web application for creating virtual study group spaces with real-t
 | **AI**               | Switchable: Google Gemini 2.5 Flash (default) / xAI Grok          |
 | **Cloud Storage**    | Cloudflare R2 (S3-compatible, free tier) for summary persistence  |
 | **State Management** | Redux Toolkit                                                     |
-| **Whiteboard**       | Excalidraw (MIT, client-side, lazy-loaded)                        |
+| **Whiteboard**       | @excalidraw/excalidraw (MIT, client-side, lazy-loaded)            |
+| **Study Radio**      | SomaFM internet radio streams (ambient/chill/electronic)          |
 | **Styling**          | Tailwind CSS, shadcn/ui, Framer Motion                            |
 | **Auth**             | Stateless OTP (HMAC-SHA256) + Google OAuth + JWT + nodemailer     |
 | **Rate Limiting**    | express-rate-limit (per-user + per-IP, all thresholds via env vars) |
