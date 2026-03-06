@@ -55,6 +55,9 @@ function extractUserIdFromToken(req: Request): string {
 }
 
 // ── Tier 1a: Auth per-email limiter ──────────────────────────────────────────
+// Disable IPv6 keyGenerator validation — we handle fallback with || 'unknown'
+const noIpValidation = { validate: false as const };
+
 export const authEmailLimiter = rateLimit({
   windowMs: RATE_LIMIT_CONFIG.AUTH_WINDOW_MS,
   max: RATE_LIMIT_CONFIG.AUTH_MAX_PER_EMAIL,
@@ -62,6 +65,7 @@ export const authEmailLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req: Request) => (req.body?.email as string)?.toLowerCase?.() || req.ip || 'unknown',
   message: { error: 'Too many attempts for this account. Please try again later.' },
+  ...noIpValidation,
 });
 
 // ── Tier 1b: Auth per-IP limiter ─────────────────────────────────────────────
@@ -72,6 +76,7 @@ export const authIpLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req: Request) => req.ip || 'unknown',
   message: { error: 'Too many requests from this IP. Please try again later.' },
+  ...noIpValidation,
 });
 
 // ── Tier 2a: OTP send per-email limiter ──────────────────────────────────────
@@ -82,6 +87,7 @@ export const otpEmailLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req: Request) => (req.body?.email as string)?.toLowerCase?.() || req.ip || 'unknown',
   message: { error: 'Too many OTP requests for this email. Please try again later.' },
+  ...noIpValidation,
 });
 
 // ── Tier 2b: OTP send per-IP limiter ─────────────────────────────────────────
@@ -92,6 +98,7 @@ export const otpIpLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req: Request) => req.ip || 'unknown',
   message: { error: 'Too many OTP requests from this IP. Please try again later.' },
+  ...noIpValidation,
 });
 
 // ── Tier 3: AI endpoints per-user limiter ────────────────────────────────────
@@ -102,6 +109,7 @@ export const aiLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req: Request) => extractUserIdFromToken(req),
   message: { error: 'AI rate limit reached. Please wait before asking another question.' },
+  ...noIpValidation,
 });
 
 // ── Tier 4: User search per-user limiter ─────────────────────────────────────
@@ -112,6 +120,7 @@ export const searchLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req: Request) => extractUserIdFromToken(req),
   message: { error: 'Too many searches. Please slow down.' },
+  ...noIpValidation,
 });
 
 // ── Tier 5: Global safety net per-IP limiter ─────────────────────────────────
@@ -122,4 +131,5 @@ export const globalLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req: Request) => req.ip || 'unknown',
   message: { error: 'Too many requests. Please try again later.' },
+  ...noIpValidation,
 });
