@@ -43,7 +43,8 @@ A full-stack web application for creating virtual study group spaces with real-t
 ### Personal Rooms & Invite System
 
 - Every user has a personal room (`user_{userId}`) — no room IDs to remember
-- Only study companions can invite each other to rooms
+- **Shareable invite link** — "Invite" button in the room call page copies a permanent link (`/join/{roomId}`) to clipboard with animated feedback. Anyone with the link can join (logged-in users only; unauthenticated users are redirected to login and auto-joined after auth)
+- Only study companions can invite each other directly via real-time socket invites
 - Real-time invite notifications with accept/decline overlay
 - "Enter My Room" one-click access from the home page and sidebar
 
@@ -344,6 +345,7 @@ VITE_GOOGLE_CLIENT_ID=your_google_client_id # Google OAuth Client ID (from https
 | `/profile`   | User Profile    |      Yes      |
 | `/chats`     | Recent Chats    |      Yes      |
 | `/room/call` | Video Call Room |      Yes      |
+| `/join/:roomId` | Join Room via Invite Link | No (redirects to login) |
 | `/whiteboard/:roomId` | Collaborative Whiteboard |  Yes  |
 | `/radio`     | Study Radio     |      Yes      |
 | `/stream`    | Live Streaming  |      Yes      |

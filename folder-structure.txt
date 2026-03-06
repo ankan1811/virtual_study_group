@@ -291,6 +291,12 @@ virtual_study_group/
         |   |                          play/pause, volume slider, and canvas-based
         |   |                          audio visualizer. Uses RadioContext for
         |   |                          global playback state
+        |   |-- JoinRoomPage.tsx     # Auth-gated join redirect at /join/:roomId.
+        |   |                          If authenticated: dispatches enterRoom and
+        |   |                          navigates to /room/call. If not: stores
+        |   |                          roomId in sessionStorage, redirects to
+        |   |                          /login, auto-joins after auth. Permanent
+        |   |                          link (room ID never changes)
         |   |-- Streampage.tsx       # Live streaming page - camera preview, YouTube
         |   |                          stream key input, start/stop controls
         |   |-- AskAiPage.tsx        # AI voice input page - mic component with

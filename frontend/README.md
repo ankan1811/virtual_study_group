@@ -22,7 +22,7 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
 - **Two auth methods:** OTP-based email verification and single-click Google OAuth
 - **Google OAuth** — "Continue with Google" button using `@react-oauth/google`. Uses `useGoogleLogin` hook to get an access token, sends it to `POST /auth/google` for backend verification. Works for both new registrations and existing logins. Google Client ID via `VITE_GOOGLE_CLIENT_ID` env var.
 - **OTP flow** — two-step: enter email → receive OTP → enter OTP → authenticated. Resend OTP with 30-second cooldown, "Change email" back button.
-- On success: dispatches Redux login, stores JWT in localStorage, connects socket, navigates to `/home`
+- On success: dispatches Redux login, stores JWT in localStorage, connects socket, navigates to `/home` (or to a pending invite room if the user arrived via a `/join/:roomId` link)
 
 ### Home Dashboard (`RoomPage`)
 - **Global People Search** — inline search bar at the top of the page. Debounced live search when logged in. Logged-out users see blurred dummy cards with a "Login to search" prompt.
@@ -66,6 +66,7 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
 - Agora RTC video/audio with mic/camera controls (App ID via `VITE_AGORA_APP_ID` env var)
 - Tab panel: Chat / AI Doubt Solver / Summary / Whiteboard (Whiteboard tab navigates to full-page `/whiteboard/:roomId`)
 - Room ID from Redux state (not URL or localStorage)
+- **Shareable invite link** — "Invite" button in the tab bar copies a permanent link (`/join/{roomId}`) to clipboard. Animated swap to a green "Copied!" checkmark for 2 seconds (Framer Motion). The link is permanent since room IDs (`user_{userId}`) never change
 - Bot messages in chat support clickable URLs (Linkify helper) with special styling for summary notifications
 - **Opt-in chat persistence:**
   - Inline "Save" button in chat panel — disabled when nothing to save, re-enables on new messages, shows "Saved" checkmark on success
@@ -95,6 +96,12 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
 - **Audio visualizer** — canvas-based frequency bar visualization (`RadioVisualizer`) with full and mini variants. Falls back to animated CSS bars when `AnalyserNode` returns zero data.
 - **MiniPlayer** — floating bottom-right mini player (`MiniPlayer.tsx`) shown on all pages except `/radio`. Play/pause, volume, mute, expand to full page, and close controls. Auto-hides when no channel is playing.
 - **Accessible from sidebar** — "Study Radio" nav item with headphones icon.
+
+### Join Room via Link (`JoinRoomPage`)
+- Auth-gated redirect page at `/join/:roomId` — handles shareable invite links
+- If logged in: dispatches `enterRoom({ roomId, isOwner: false })` and redirects to `/room/call`
+- If not logged in: stores roomId in `sessionStorage("pendingJoinRoom")`, redirects to `/login`. After successful auth, automatically redirects back to the room
+- Link is **permanent** — room IDs (`user_{userId}`) never change, so the same link always works
 
 ### Live Streaming (`Streampage`)
 - Camera preview, YouTube RTMP stream key input, start/stop controls
