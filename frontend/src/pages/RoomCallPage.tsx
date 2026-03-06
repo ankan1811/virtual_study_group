@@ -3,7 +3,7 @@ import { useSelector, useDispatch } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
 import Navbar from "../components/Navbar";
-import { Users, Loader2, LogOut, MessageSquare, Bot, FileText, PenTool } from "lucide-react";
+import { Users, LogOut, MessageSquare, Bot, FileText, PenTool } from "lucide-react";
 import Stream from "../components/Stream";
 import type {
   ICameraVideoTrack,
@@ -21,14 +21,9 @@ import {
 } from "agora-rtc-sdk-ng/esm";
 import ChatTabPanel from "../components/ChatTabPanel";
 import AiPanel from "../components/AiPanel";
-import WhiteboardExplainPanel from "../components/WhiteboardExplainPanel";
 import SaveChatPrompt from "../components/SaveChatPrompt";
 import { AuthState } from "../store/authStore/store";
 import { leaveRoom } from "../store/RoomStore/roomSlice";
-
-const WhiteboardPanel = React.lazy(
-  () => import("../components/WhiteboardPanel")
-);
 
 onCameraChanged((device) => {
   console.log("onCameraChanged: ", device);
@@ -46,13 +41,6 @@ let audioTrack: IMicrophoneAudioTrack;
 let videoTrack: ICameraVideoTrack;
 
 type TabType = "chat" | "ai" | "summary" | "whiteboard";
-
-interface WhiteboardElement {
-  type: string;
-  text?: string;
-  width: number;
-  height: number;
-}
 
 interface Message {
   msg: string;
@@ -245,10 +233,10 @@ export default function RoomCallPage() {
     { key: "whiteboard", label: "Whiteboard", icon: PenTool },
   ];
 
-  const handleWhiteboardSceneChange = (elements: WhiteboardElement[]) => {
+  const handleWhiteboardSceneChange = useCallback((elements: WhiteboardElement[]) => {
     setWhiteboardElements(elements);
     whiteboardSceneRef.current = elements;
-  };
+  }, []);
 
   return (
     <div className="h-screen flex flex-col bg-gray-100 dark:bg-gray-900">

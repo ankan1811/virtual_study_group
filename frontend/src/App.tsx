@@ -13,6 +13,7 @@ import DemoAiPage from "./pages/DemoAiPage";
 import ProfilePage from "./pages/ProfilePage";
 import ChatsPage from "./pages/ChatsPage";
 import RadioPage from "./pages/RadioPage";
+import WhiteboardPage from "./pages/WhiteboardPage";
 import { login } from "./store/authStore/authSlice";
 import { connectSocket } from "./utils/socketInstance";
 import InviteNotificationOverlay from "./components/InviteNotificationOverlay";
@@ -56,6 +57,8 @@ function AppInner() {
           <Route element={<ChatsPage />} path="/chats" />
           <Route element={<RoomCallPage />} path="/room/call" />
           <Route element={<RadioPage />} path="/radio" />
+          <Route element={<WhiteboardPage />} path="/whiteboard/:roomId" />
+          <Route element={<WhiteboardPage />} path="/whiteboard" />
         </Routes>
       </RadioProvider>
     </BrowserRouter>

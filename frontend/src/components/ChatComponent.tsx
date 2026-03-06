@@ -57,6 +57,11 @@ export default function ChatComponent({ roomId, onMessagesChange, onSaveChats }:
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
+  // Sync messages to parent (separate effect to avoid setState-during-render)
+  useEffect(() => {
+    onMessagesChange?.(messages);
+  }, [messages]);
+
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
@@ -64,11 +69,7 @@ export default function ChatComponent({ roomId, onMessagesChange, onSaveChats }:
     socket.emit("joinRoom", { roomId, name: user?.name });
 
     const handleMessage = ({ msg, sentby }: Message) => {
-      setMessages((prev) => {
-        const next = [...prev, { msg, sentby }];
-        onMessagesChange?.(next);
-        return next;
-      });
+      setMessages((prev) => [...prev, { msg, sentby }]);
     };
 
     socket.on(`message:${roomId}`, handleMessage);
