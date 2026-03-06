@@ -14,6 +14,7 @@ import ChatsPage from "./pages/ChatsPage";
 import RadioPage from "./pages/RadioPage";
 import WhiteboardPage from "./pages/WhiteboardPage";
 import JoinRoomPage from "./pages/JoinRoomPage";
+import NotFoundPage from "./pages/NotFoundPage";
 import { login } from "./store/authStore/authSlice";
 import { connectSocket } from "./utils/socketInstance";
 import InviteNotificationOverlay from "./components/InviteNotificationOverlay";
@@ -59,6 +60,7 @@ function AppInner() {
           <Route element={<JoinRoomPage />} path="/join/:roomId" />
           <Route element={<WhiteboardPage />} path="/whiteboard/:roomId" />
           <Route element={<WhiteboardPage />} path="/whiteboard" />
+          <Route element={<NotFoundPage />} path="*" />
         </Routes>
       </RadioProvider>
     </BrowserRouter>
