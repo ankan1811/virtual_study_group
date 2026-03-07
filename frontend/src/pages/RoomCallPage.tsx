@@ -3,7 +3,7 @@ import { useSelector, useDispatch } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
 import Navbar from "../components/Navbar";
-import { Users, LogOut, MessageSquare, Bot, FileText, PenTool, Share2, Check } from "lucide-react";
+import { Users, LogOut, MessageSquare, Bot, FileText, PenTool, Share2, Check, Video } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Stream from "../components/Stream";
 import type {
@@ -73,6 +73,7 @@ export default function RoomCallPage() {
   const appid = useRef(import.meta.env.VITE_AGORA_APP_ID || "");
   const token = useRef("");
   const [isJoined, setIsJoined] = useState(false);
+  const [isInCall, setIsInCall] = useState(false);
 
   // ---- Chat persistence state ----
   const [showSavePrompt, setShowSavePrompt] = useState(false);
@@ -149,12 +150,25 @@ export default function RoomCallPage() {
     setIsAudioPubed(true);
   };
 
+  const handleStartCall = async () => {
+    try {
+      await joinChannel();
+      setIsInCall(true);
+    } catch (err) {
+      console.error("Failed to join Agora:", err);
+    }
+  };
+
+  const handleEndCall = async () => {
+    await leaveChannelInternal();
+    setIsInCall(false);
+  };
+
   useEffect(() => {
     channel.current = roomId;
     AgoraRTC.setLogLevel(4);
-    joinChannel().catch((err) => console.error("Agora join failed:", err));
     return () => {
-      leaveChannelInternal();
+      if (isJoined) leaveChannelInternal();
       dispatch(leaveRoom());
     };
   }, []);
@@ -194,7 +208,8 @@ export default function RoomCallPage() {
   const completeExit = () => {
     setShowSavePrompt(false);
     if (pendingNavigationPath) {
-      leaveChannel();
+      if (isInCall) leaveChannel();
+      else dispatch(leaveRoom());
       navigate(pendingNavigationPath);
       setPendingNavigationPath(null);
     }
@@ -206,7 +221,8 @@ export default function RoomCallPage() {
       setShowSavePrompt(true);
       setPendingNavigationPath("/home");
     } else {
-      leaveChannel();
+      if (isInCall) leaveChannel();
+      else dispatch(leaveRoom());
       navigate("/home");
     }
   };
@@ -264,24 +280,47 @@ export default function RoomCallPage() {
           )}
         </div>
 
-        {/* Center: Video */}
+        {/* Center: Video / Lobby */}
         <div className="flex-1 overflow-hidden">
-          <Stream
-            isAudioOn={isAudioOn}
-            isVideoOn={isVideoOn}
-            isAudioPubed={isAudioPubed}
-            isVideoPubed={isVideoPubed}
-            isVideoSubed={isVideoSubed}
-            setIsAudioOn={setIsAudioOn}
-            setIsAudioPubed={setIsAudioPubed}
-            setIsVideoOn={setIsVideoOn}
-            setIsVideoPubed={setIsVideoPubed}
-            setIsVideoSubed={setIsVideoSubed}
-            turnOnCamera={turnOnCamera}
-            turnOnMicrophone={turnOnMicrophone}
-            publishAudio={publishAudio}
-            publishVideo={publishVideo}
-          />
+          {isInCall ? (
+            <Stream
+              isAudioOn={isAudioOn}
+              isVideoOn={isVideoOn}
+              isAudioPubed={isAudioPubed}
+              isVideoPubed={isVideoPubed}
+              isVideoSubed={isVideoSubed}
+              setIsAudioOn={setIsAudioOn}
+              setIsAudioPubed={setIsAudioPubed}
+              setIsVideoOn={setIsVideoOn}
+              setIsVideoPubed={setIsVideoPubed}
+              setIsVideoSubed={setIsVideoSubed}
+              turnOnCamera={turnOnCamera}
+              turnOnMicrophone={turnOnMicrophone}
+              publishAudio={publishAudio}
+              publishVideo={publishVideo}
+              onEndCall={handleEndCall}
+            />
+          ) : (
+            <div className="h-full flex flex-col items-center justify-center bg-gray-950">
+              <div className="text-center space-y-6">
+                <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
+                  <Video size={36} className="text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl text-white poppins-semibold">Room Ready</h2>
+                  <p className="text-gray-400 text-sm mt-1 poppins-regular">
+                    Use chat, AI, and tools freely. Start a video call when you're ready.
+                  </p>
+                </div>
+                <button
+                  onClick={handleStartCall}
+                  className="px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 text-white poppins-semibold hover:opacity-90 transition-opacity"
+                >
+                  Start Video Call
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right: Tabbed panel */}

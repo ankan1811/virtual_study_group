@@ -5,6 +5,7 @@ import {
   Mic,
   MicOff,
   MonitorUp,
+  PhoneOff,
   Users,
 } from "lucide-react";
 
@@ -24,6 +25,7 @@ interface propsInterface {
   turnOnMicrophone: VoidFunction;
   publishVideo: VoidFunction;
   publishAudio: VoidFunction;
+  onEndCall?: () => void;
 }
 
 function useVoiceActivity(isAudioOn: boolean) {
@@ -174,6 +176,14 @@ export default function Stream(prop: propsInterface) {
           >
             <MonitorUp size={20} />
           </button>
+          {prop.onEndCall && (
+            <button
+              onClick={prop.onEndCall}
+              className="p-3 rounded-xl bg-red-500 text-white hover:bg-red-600 transition-all duration-200"
+            >
+              <PhoneOff size={20} />
+            </button>
+          )}
         </div>
       </div>
     </div>
