@@ -426,37 +426,35 @@ export default function RoomCallPage() {
                 )}
               </AnimatePresence>
             </button>
-            {chatMessages.filter((m) => m.sentby !== "bot").length > 0 && (
-              <button
-                onClick={async () => {
-                  setLobbySummaryLoading(true);
-                  try {
-                    await generateAndSaveSummary(
-                      "/ai/summary",
-                      { messages: chatMessages },
-                      { type: "room", contextId: roomId, contextLabel: `Room ${roomId}` }
-                    );
-                    setLobbySummaryDone(true);
-                    setTimeout(() => setLobbySummaryDone(false), 2500);
-                  } catch (err) {
-                    console.error("Summary failed:", err);
-                  } finally {
-                    setLobbySummaryLoading(false);
-                  }
-                }}
-                disabled={lobbySummaryLoading}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-50 dark:bg-violet-950/30 text-violet-500 hover:bg-violet-100 dark:hover:bg-violet-900/40 text-[11px] font-semibold poppins-semibold transition-colors disabled:opacity-40"
-              >
-                {lobbySummaryLoading ? (
-                  <Loader2 size={12} className="animate-spin" />
-                ) : lobbySummaryDone ? (
-                  <Check size={12} className="text-emerald-500" />
-                ) : (
-                  <Sparkles size={12} />
-                )}
-                {lobbySummaryLoading ? "Saving..." : lobbySummaryDone ? "Saved!" : "Summary"}
-              </button>
-            )}
+            <button
+              onClick={async () => {
+                setLobbySummaryLoading(true);
+                try {
+                  await generateAndSaveSummary(
+                    "/ai/summary",
+                    { messages: chatMessages },
+                    { type: "room", contextId: roomId, contextLabel: `Room ${roomId}` }
+                  );
+                  setLobbySummaryDone(true);
+                  setTimeout(() => setLobbySummaryDone(false), 2500);
+                } catch (err) {
+                  console.error("Summary failed:", err);
+                } finally {
+                  setLobbySummaryLoading(false);
+                }
+              }}
+              disabled={lobbySummaryLoading || chatMessages.filter((m) => m.sentby !== "bot").length === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-50 dark:bg-violet-950/30 text-violet-500 hover:bg-violet-100 dark:hover:bg-violet-900/40 text-[11px] font-semibold poppins-semibold transition-colors disabled:opacity-40"
+            >
+              {lobbySummaryLoading ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : lobbySummaryDone ? (
+                <Check size={12} className="text-emerald-500" />
+              ) : (
+                <Sparkles size={12} />
+              )}
+              {lobbySummaryLoading ? "Saving..." : lobbySummaryDone ? "Saved!" : "Summary"}
+            </button>
           </div>
         </div>
       </div>
