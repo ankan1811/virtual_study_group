@@ -227,20 +227,20 @@ export default function AiPanel({ tab, chatMessages, roomId, whiteboardElements 
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4"
+              className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-4"
             >
               <div className="flex items-center gap-2 mb-3">
-                <div className="p-1.5 bg-violet-100 rounded-lg">
-                  <FileText size={14} className="text-violet-600" />
+                <div className="p-1.5 bg-violet-100 dark:bg-violet-950/50 rounded-lg">
+                  <FileText size={14} className="text-violet-600 dark:text-violet-400" />
                 </div>
-                <p className="text-sm font-semibold text-gray-800 poppins-semibold">
+                <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 poppins-semibold">
                   {summarySubTab === "chat" ? "Chat Summary" : "Whiteboard Summary"}
                 </p>
               </div>
-              <p className="text-sm text-gray-700 poppins-regular leading-relaxed whitespace-pre-line">
+              <p className="text-sm text-gray-700 dark:text-gray-300 poppins-regular leading-relaxed whitespace-pre-line">
                 {content}
               </p>
-              <div className="mt-4 pt-3 border-t border-gray-100">
+              <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
                 {url ? (
                   <motion.a
                     initial={{ opacity: 0, scale: 0.95 }}
@@ -248,7 +248,7 @@ export default function AiPanel({ tab, chatMessages, roomId, whiteboardElements 
                     href={url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-2 w-full py-2 rounded-xl bg-emerald-50 text-emerald-700 text-sm font-semibold poppins-semibold hover:bg-emerald-100 transition-colors border border-emerald-200"
+                    className="flex items-center justify-center gap-2 w-full py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 text-sm font-semibold poppins-semibold hover:bg-emerald-100 dark:hover:bg-emerald-950/50 transition-colors border border-emerald-200 dark:border-emerald-800"
                   >
                     <Check size={14} />
                     Saved! View Summary
@@ -275,14 +275,14 @@ export default function AiPanel({ tab, chatMessages, roomId, whiteboardElements 
             </motion.div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
-              <div className="p-4 bg-violet-50 rounded-2xl">
+              <div className="p-4 bg-violet-50 dark:bg-violet-950/30 rounded-2xl">
                 <FileText size={28} className="text-violet-400" />
               </div>
-              <p className="text-sm text-gray-500 poppins-regular">{emptyLabel}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 poppins-regular">{emptyLabel}</p>
             </div>
           )}
         </div>
-        <div className="p-4 border-t border-gray-100">
+        <div className="p-4 border-t border-gray-100 dark:border-gray-700">
           <button
             onClick={onGenerate}
             disabled={isLoading}
@@ -303,9 +303,9 @@ export default function AiPanel({ tab, chatMessages, roomId, whiteboardElements 
     );
 
     return (
-      <div className="flex flex-col flex-1 overflow-hidden bg-gray-50">
+      <div className="flex flex-col flex-1 overflow-hidden bg-gray-50 dark:bg-gray-900">
         {/* Sub-tab bar */}
-        <div className="flex border-b border-gray-200 bg-white flex-shrink-0">
+        <div className="flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex-shrink-0">
           {(
             [
               { key: "chat" as SummarySubTab, label: "Chat Summary" },
@@ -317,8 +317,8 @@ export default function AiPanel({ tab, chatMessages, roomId, whiteboardElements 
               onClick={() => setSummarySubTab(st.key)}
               className={`flex-1 py-2 text-[11px] font-semibold poppins-semibold transition-colors ${
                 summarySubTab === st.key
-                  ? "text-violet-700 border-b-2 border-violet-500 bg-violet-50/50"
-                  : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
+                  ? "text-violet-700 dark:text-violet-400 border-b-2 border-violet-500 bg-violet-50/50 dark:bg-violet-950/30"
+                  : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
               }`}
             >
               {st.label}
@@ -355,14 +355,14 @@ export default function AiPanel({ tab, chatMessages, roomId, whiteboardElements 
 
   // AI Doubt Solver tab
   return (
-    <div className="flex flex-col flex-1 overflow-hidden bg-gray-50">
+    <div className="flex flex-col flex-1 overflow-hidden bg-gray-50 dark:bg-gray-900">
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {qaHistory.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
-            <div className="p-4 bg-indigo-50 rounded-2xl">
+            <div className="p-4 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl">
               <Sparkles size={28} className="text-indigo-400" />
             </div>
-            <p className="text-sm text-gray-500 poppins-regular">
+            <p className="text-sm text-gray-500 dark:text-gray-400 poppins-regular">
               Ask any study question — AI will answer
             </p>
           </div>
@@ -382,10 +382,10 @@ export default function AiPanel({ tab, chatMessages, roomId, whiteboardElements 
                 animate={{ opacity: 1, y: 0 }}
                 className="flex justify-start"
               >
-                <div className="max-w-[85%] bg-white border border-gray-100 px-3.5 py-2.5 rounded-2xl rounded-bl-sm text-sm text-gray-800 poppins-regular shadow-sm leading-relaxed">
+                <div className="max-w-[85%] bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3.5 py-2.5 rounded-2xl rounded-bl-sm text-sm text-gray-800 dark:text-gray-200 poppins-regular shadow-sm leading-relaxed">
                   <div className="flex items-center gap-1.5 mb-1.5">
-                    <Sparkles size={11} className="text-indigo-500" />
-                    <span className="text-[10px] font-semibold text-indigo-500 poppins-semibold">
+                    <Sparkles size={11} className="text-indigo-500 dark:text-indigo-400" />
+                    <span className="text-[10px] font-semibold text-indigo-500 dark:text-indigo-400 poppins-semibold">
                       AI Assistant
                     </span>
                   </div>
@@ -397,7 +397,7 @@ export default function AiPanel({ tab, chatMessages, roomId, whiteboardElements 
         ))}
         {loading && (
           <div className="flex justify-start">
-            <div className="bg-white border border-gray-100 px-4 py-3 rounded-2xl rounded-bl-sm shadow-sm">
+            <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-4 py-3 rounded-2xl rounded-bl-sm shadow-sm">
               <Loader2 size={14} className="animate-spin text-indigo-400" />
             </div>
           </div>
@@ -406,14 +406,14 @@ export default function AiPanel({ tab, chatMessages, roomId, whiteboardElements 
       </div>
 
       {/* Input */}
-      <div className="p-3 border-t border-gray-100 flex gap-2 items-center">
+      <div className="p-3 border-t border-gray-100 dark:border-gray-700 flex gap-2 items-center">
         {SpeechRecognitionAPI && (
           <button
             onClick={isListening ? stopListening : startListening}
             className={`p-2.5 rounded-xl transition-colors flex-shrink-0 ${
               isListening
-                ? "bg-red-100 text-red-600 hover:bg-red-200"
-                : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                ? "bg-red-100 dark:bg-red-950/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-950/50"
+                : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
             }`}
             title={isListening ? "Stop listening" : "Voice input"}
           >
@@ -426,7 +426,7 @@ export default function AiPanel({ tab, chatMessages, roomId, whiteboardElements 
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="flex-1 px-3.5 py-2 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-transparent poppins-regular"
+          className="flex-1 px-3.5 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-600 focus:border-transparent poppins-regular placeholder:text-gray-400 dark:placeholder:text-gray-500"
         />
         <button
           onClick={askQuestion}
