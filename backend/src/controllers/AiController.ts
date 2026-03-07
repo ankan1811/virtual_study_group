@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/middleware';
 import OpenAI from 'openai';
+import DirectMessage from '../models/DirectMessage';
 
 // ── Provider config ──────────────────────────────────────────────
 const providers = {
@@ -161,6 +162,60 @@ export const explainWhiteboard = async (req: AuthenticatedRequest, res: Response
     res.status(200).json({ explanation });
   } catch (error: any) {
     console.error('AI whiteboard error:', error?.message);
+    res.status(500).json({ error: 'AI is currently unavailable. Please try again later.' });
+  }
+};
+
+// ── DM summary ──────────────────────────────────────────────────
+export const summarizeDm = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { companionId } = req.body as { companionId: string };
+    const me = req.user?.userId;
+
+    if (!companionId) {
+      res.status(400).json({ error: 'companionId is required' });
+      return;
+    }
+
+    const messages = await DirectMessage.find({
+      $or: [
+        { from: me, to: companionId },
+        { from: companionId, to: me },
+      ],
+    })
+      .sort({ createdAt: 1 })
+      .limit(100)
+      .populate('from', 'name');
+
+    if (!messages.length) {
+      res.status(400).json({ error: 'No DM messages to summarize' });
+      return;
+    }
+
+    const chatText = messages
+      .map((m) => `${(m.from as any).name}: ${m.content}`)
+      .join('\n');
+
+    const completion = await getClient().chat.completions.create({
+      model: getModel(),
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are a study session summarizer. Given a direct message conversation between two study companions, produce a concise bullet-point summary highlighting: the main topics discussed, key concepts explained, any questions that were raised, and conclusions or next steps. Be brief and useful.',
+        },
+        {
+          role: 'user',
+          content: `Summarize this DM conversation:\n\n${chatText}`,
+        },
+      ],
+      max_tokens: 400,
+    });
+
+    const summary = completion.choices[0]?.message?.content || 'Could not generate summary.';
+    res.status(200).json({ summary });
+  } catch (error: any) {
+    console.error('AI DM summary error:', error?.message);
     res.status(500).json({ error: 'AI is currently unavailable. Please try again later.' });
   }
 };

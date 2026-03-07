@@ -13,9 +13,12 @@ import {
   Loader2,
   Trash2,
   PenTool,
+  FileText,
+  Check,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
+import { generateAndSaveSummary } from "../utils/summaryApi";
 
 const Excalidraw = React.lazy(() =>
   import("@excalidraw/excalidraw").then((mod) => ({
@@ -56,6 +59,8 @@ export default function WhiteboardPage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [customPrompt, setCustomPrompt] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [wbSummaryLoading, setWbSummaryLoading] = useState(false);
+  const [wbSummaryDone, setWbSummaryDone] = useState(false);
 
   // Excalidraw onChange — fully debounced to avoid infinite loops
   const handleChange = useCallback(
@@ -197,6 +202,35 @@ export default function WhiteboardPage() {
           >
             <Trash2 size={13} />
             Clear
+          </button>
+          <button
+            onClick={async () => {
+              setWbSummaryLoading(true);
+              try {
+                await generateAndSaveSummary(
+                  "/ai/whiteboard-summary",
+                  { elements },
+                  { type: "whiteboard", contextId: roomId, contextLabel: `Whiteboard ${roomId}` }
+                );
+                setWbSummaryDone(true);
+                setTimeout(() => setWbSummaryDone(false), 2500);
+              } catch (err) {
+                console.error("Whiteboard summary failed:", err);
+              } finally {
+                setWbSummaryLoading(false);
+              }
+            }}
+            disabled={wbSummaryLoading || elements.length === 0}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-gray-400 hover:text-emerald-400 hover:bg-emerald-950/30 transition-colors text-xs poppins-medium disabled:opacity-40"
+          >
+            {wbSummaryLoading ? (
+              <Loader2 size={13} className="animate-spin" />
+            ) : wbSummaryDone ? (
+              <Check size={13} className="text-emerald-400" />
+            ) : (
+              <FileText size={13} />
+            )}
+            {wbSummaryLoading ? "Saving..." : wbSummaryDone ? "Saved!" : "Summary"}
           </button>
           <button
             onClick={() => setShowAi(!showAi)}

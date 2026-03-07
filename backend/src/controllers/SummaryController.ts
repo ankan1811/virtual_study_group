@@ -5,6 +5,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { getIO } from '../socketServer';
 import UploadCounter from '../models/UploadCounter';
 import { RATE_LIMIT_CONFIG } from '../middlewares/rateLimiter';
+import Summary from '../models/Summary';
 
 // ── Lazy-initialized R2 client ──────────────────────────────────
 let _s3: S3Client | null = null;
@@ -126,10 +127,24 @@ function buildSummaryHTML(summary: string, userName: string, roomId: string): st
 </html>`;
 }
 
-// ── Save summary to R2 ─────────────────────────────────────────
+// ── Save summary to R2 + MongoDB ────────────────────────────────
 export const saveSummary = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { summary, roomId } = req.body as { summary: string; roomId: string };
+    const {
+      summary,
+      roomId,
+      type = 'room',
+      contextId,
+      contextLabel = '',
+      title,
+    } = req.body as {
+      summary: string;
+      roomId: string;
+      type?: 'room' | 'dm' | 'whiteboard';
+      contextId?: string;
+      contextLabel?: string;
+      title?: string;
+    };
     const userName = req.user?.name || 'Unknown';
     const userId = req.user?.userId || 'unknown';
 
@@ -151,9 +166,10 @@ export const saveSummary = async (req: AuthenticatedRequest, res: Response): Pro
       return;
     }
 
+    const resolvedContextId = contextId || roomId;
     const timestamp = Date.now();
-    const key = `summaries/${userId}/${roomId}_${timestamp}.html`;
-    const html = buildSummaryHTML(summary, userName, roomId);
+    const key = `summaries/${userId}/${resolvedContextId}_${timestamp}.html`;
+    const html = buildSummaryHTML(summary, userName, resolvedContextId);
 
     await getR2Client().send(
       new PutObjectCommand({
@@ -178,9 +194,23 @@ export const saveSummary = async (req: AuthenticatedRequest, res: Response): Pro
       { expiresIn: 7 * 24 * 60 * 60 }
     );
 
+    // ── Persist to MongoDB ──────────────────────────────────────
+    const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const typeLabels = { room: 'Room Chat', dm: 'DM', whiteboard: 'Whiteboard' };
+    await Summary.create({
+      userId,
+      type,
+      contextId: resolvedContextId,
+      contextLabel,
+      title: title || `${typeLabels[type]} Summary - ${dateStr}`,
+      content: summary,
+      r2Key: key,
+      r2Url: downloadUrl,
+    });
+
     // Broadcast the summary link to the room chat as a VSG Bot message
     const io = getIO();
-    if (io && roomId) {
+    if (io && roomId && type !== 'dm') {
       io.to(roomId).emit(`message:${roomId}`, {
         msg: `📄 ${userName} saved a session summary! View it here: ${downloadUrl}`,
         sentby: 'bot',
@@ -191,5 +221,47 @@ export const saveSummary = async (req: AuthenticatedRequest, res: Response): Pro
   } catch (error: any) {
     console.error('R2 upload error:', error?.message);
     res.status(500).json({ error: 'Failed to save summary. Please try again.' });
+  }
+};
+
+// ── List user's summaries ───────────────────────────────────────
+export const listSummaries = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    const { type } = req.query as { type?: string };
+
+    const filter: any = { userId };
+    if (type && ['room', 'dm', 'whiteboard'].includes(type)) {
+      filter.type = type;
+    }
+
+    const summaries = await Summary.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .select('type contextId contextLabel title content r2Key createdAt');
+
+    res.status(200).json({ summaries });
+  } catch (error: any) {
+    console.error('List summaries error:', error?.message);
+    res.status(500).json({ error: 'Failed to fetch summaries.' });
+  }
+};
+
+// ── Delete a summary ────────────────────────────────────────────
+export const deleteSummary = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    const { id } = req.params;
+
+    const doc = await Summary.findOneAndDelete({ _id: id, userId });
+    if (!doc) {
+      res.status(404).json({ error: 'Summary not found' });
+      return;
+    }
+
+    res.status(200).json({ success: true });
+  } catch (error: any) {
+    console.error('Delete summary error:', error?.message);
+    res.status(500).json({ error: 'Failed to delete summary.' });
   }
 };

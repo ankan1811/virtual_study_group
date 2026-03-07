@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
-import { X, Send, Loader2, Check, CheckCheck, Clock } from "lucide-react";
+import { X, Send, Loader2, Check, CheckCheck, Clock, FileText } from "lucide-react";
 import { useSelector } from "react-redux";
 import { AuthState } from "../store/authStore/store";
 import { getSocket } from "../utils/socketInstance";
+import { generateAndSaveSummary } from "../utils/summaryApi";
 
 const API = import.meta.env.VITE_API_URL as string;
 
@@ -42,6 +43,8 @@ export default function DmPanel({ companionId, companionName, onClose }: DmPanel
   const [messages, setMessages] = useState<DmMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
+  const [dmSummaryLoading, setDmSummaryLoading] = useState(false);
+  const [dmSummaryDone, setDmSummaryDone] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const markRead = useCallback(() => {
@@ -191,12 +194,48 @@ export default function DmPanel({ companionId, companionName, onClose }: DmPanel
               {companionName}
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 transition-colors"
-          >
-            <X size={15} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={async () => {
+                setDmSummaryLoading(true);
+                try {
+                  await generateAndSaveSummary(
+                    "/ai/dm-summary",
+                    { companionId },
+                    {
+                      type: "dm",
+                      contextId: companionId,
+                      contextLabel: companionName,
+                      title: `DM with ${companionName}`,
+                    }
+                  );
+                  setDmSummaryDone(true);
+                  setTimeout(() => setDmSummaryDone(false), 2500);
+                } catch (err) {
+                  console.error("DM summary failed:", err);
+                } finally {
+                  setDmSummaryLoading(false);
+                }
+              }}
+              disabled={dmSummaryLoading || messages.length === 0}
+              className="p-1.5 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/30 text-gray-400 hover:text-indigo-500 transition-colors disabled:opacity-40"
+              title="Generate conversation summary"
+            >
+              {dmSummaryLoading ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : dmSummaryDone ? (
+                <Check size={14} className="text-emerald-500" />
+              ) : (
+                <FileText size={14} />
+              )}
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 transition-colors"
+            >
+              <X size={15} />
+            </button>
+          </div>
         </div>
 
         {/* Messages */}

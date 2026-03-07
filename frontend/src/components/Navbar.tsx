@@ -18,6 +18,7 @@ import {
   Settings,
   BookOpen,
   Headphones,
+  FileText,
 } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { AuthState } from "../store/authStore/store";
@@ -31,6 +32,7 @@ import NotificationBell from "./NotificationBell";
 const navItems = [
   { title: "Home", path: "/home", icon: Home },
   { title: "Chats", path: "/chats", icon: MessageCircle },
+  { title: "Summaries", path: "/summaries", icon: FileText },
   { title: "My Room", path: "/room/call", icon: DoorOpen },
   { title: "Ask AI", path: "/ask", icon: Bot },
   { title: "Study Radio", path: "/radio", icon: Headphones },

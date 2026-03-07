@@ -3,7 +3,7 @@ import { useSelector, useDispatch } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
 import Navbar from "../components/Navbar";
-import { Users, LogOut, MessageSquare, Bot, FileText, PenTool, Share2, Check, Video } from "lucide-react";
+import { Users, LogOut, MessageSquare, Bot, FileText, PenTool, Share2, Check, Video, Sparkles, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Stream from "../components/Stream";
 import type {
@@ -25,6 +25,7 @@ import AiPanel from "../components/AiPanel";
 import SaveChatPrompt from "../components/SaveChatPrompt";
 import { AuthState } from "../store/authStore/store";
 import { leaveRoom } from "../store/RoomStore/roomSlice";
+import { generateAndSaveSummary } from "../utils/summaryApi";
 
 onCameraChanged((device) => {
   console.log("onCameraChanged: ", device);
@@ -74,6 +75,8 @@ export default function RoomCallPage() {
   const token = useRef("");
   const [isJoined, setIsJoined] = useState(false);
   const [isInCall, setIsInCall] = useState(false);
+  const [lobbySummaryLoading, setLobbySummaryLoading] = useState(false);
+  const [lobbySummaryDone, setLobbySummaryDone] = useState(false);
 
   // ---- Chat persistence state ----
   const [showSavePrompt, setShowSavePrompt] = useState(false);
@@ -318,6 +321,41 @@ export default function RoomCallPage() {
                 >
                   Start Video Call
                 </button>
+                {chatMessages.filter((m) => m.sentby !== "bot").length > 0 && (
+                  <button
+                    onClick={async () => {
+                      setLobbySummaryLoading(true);
+                      try {
+                        await generateAndSaveSummary(
+                          "/ai/summary",
+                          { messages: chatMessages },
+                          { type: "room", contextId: roomId, contextLabel: `Room ${roomId}` }
+                        );
+                        setLobbySummaryDone(true);
+                        setTimeout(() => setLobbySummaryDone(false), 2500);
+                      } catch (err) {
+                        console.error("Summary failed:", err);
+                      } finally {
+                        setLobbySummaryLoading(false);
+                      }
+                    }}
+                    disabled={lobbySummaryLoading}
+                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 text-white text-sm poppins-semibold hover:opacity-90 transition-opacity disabled:opacity-40 flex items-center gap-2 mx-auto"
+                  >
+                    {lobbySummaryLoading ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : lobbySummaryDone ? (
+                      <Check size={14} />
+                    ) : (
+                      <Sparkles size={14} />
+                    )}
+                    {lobbySummaryLoading
+                      ? "Generating..."
+                      : lobbySummaryDone
+                      ? "Summary Saved!"
+                      : "Generate Chat Summary"}
+                  </button>
+                )}
               </div>
             </div>
           )}

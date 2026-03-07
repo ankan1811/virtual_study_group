@@ -11,6 +11,7 @@ import AskAiPage from "./pages/AskAiPage";
 import DemoAiPage from "./pages/DemoAiPage";
 import ProfilePage from "./pages/ProfilePage";
 import ChatsPage from "./pages/ChatsPage";
+import SummariesPage from "./pages/SummariesPage";
 import RadioPage from "./pages/RadioPage";
 import WhiteboardPage from "./pages/WhiteboardPage";
 import JoinRoomPage from "./pages/JoinRoomPage";
@@ -55,6 +56,7 @@ function AppInner() {
           <Route element={<AuthPage />} path="/register" />
           <Route element={<ProfilePage />} path="/profile" />
           <Route element={<ChatsPage />} path="/chats" />
+          <Route element={<SummariesPage />} path="/summaries" />
           <Route element={<RoomCallPage />} path="/room/call" />
           <Route element={<RadioPage />} path="/radio" />
           <Route element={<JoinRoomPage />} path="/join/:roomId" />
