@@ -115,8 +115,7 @@ A full-stack web application for creating virtual study group spaces with real-t
   - "Explain This" button to analyze the entire whiteboard
   - Custom question input to ask specific questions about the drawing
   - Q&A history with teal-accented chat bubbles and Framer Motion animations
-- **Toolbar** — top bar with Back to Room, Clear whiteboard, and AI Assist toggle
-- **Whiteboard Summary** — accessible from the Summary tab's "Whiteboard Summary" sub-tab, generates a bullet-point summary of whiteboard content and can be saved to R2
+- **Toolbar** — top bar with Back to Room, Clear whiteboard, Summary (generates + saves whiteboard summary to R2 + MongoDB), and AI Assist toggle
 - **Smart AI payloads** — sends compact text descriptions (element type, text content, dimensions) rather than raw JSON
 
 ### Study Radio
@@ -130,11 +129,11 @@ A full-stack web application for creating virtual study group spaces with real-t
 
 ### Video Calling (Agora RTC)
 
-- Real-time video and audio calls using Agora SDK
-- Agora App ID loaded from environment variable (`VITE_AGORA_APP_ID`) — no longer hardcoded
+- **Opt-in video calls** — Agora RTC only starts when the user clicks "Start Video Call" in the room lobby. Chat, AI, and whiteboard tools are available immediately without consuming Agora hours
+- Agora App ID loaded from environment variable (`VITE_AGORA_APP_ID`)
 - Multi-user video grid supporting up to 5 participants
-- Camera toggle (on/off)
-- Microphone toggle (mute/unmute)
+- Camera toggle (on/off), microphone toggle (mute/unmute)
+- End call button (red PhoneOff) in the video grid to leave the call without leaving the room
 - Automatic remote user subscription
 
 ### Real-time Chat
@@ -155,7 +154,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 
 ### AI Doubt Solver
 
-- In-room AI panel accessible via the "AI Doubt" tab during calls
+- In-room AI panel accessible via the "AI Doubt" tab in the room lobby (no video call required)
 - Switchable AI provider via `AI_PROVIDER` env variable:
   - **Gemini 2.5 Flash** (default) — Google's free tier (250 requests/day, resets daily)
   - **Grok 3 Mini** — xAI's API (fallback option)
@@ -163,22 +162,24 @@ A full-stack web application for creating virtual study group spaces with real-t
 - Text input with full conversation history
 - Voice input via Web Speech API (browser mic button)
 - Styled Q&A cards with generic "AI Assistant" branding
+- **Full dark mode support** — input field, Q&A bubbles, loading indicators, mic button, and all backgrounds properly themed
 
-### Session Summary
+### Summaries
 
-- "Summary" tab in the call room with **two sub-tabs:**
-  - **Chat Summary** — generates an AI summary of the chat session messages
-  - **Whiteboard Summary** — generates an AI summary of whiteboard drawings and diagrams
-- Both use the same switchable AI provider as the Doubt Solver
-- One-click generation with loading state
-- Formatted summary card display
-- **Save to Cloudflare R2** — "Save Summary" button (available on both sub-tabs) uploads the summary as a beautifully styled HTML document to Cloudflare R2 (S3-compatible storage)
+- **Dedicated Summaries page** at `/summaries` accessible from sidebar ("Summaries" nav item)
+- **Three sub-tabs:** Room Chat, DM Chat, Whiteboard — each shows persistent summaries filtered by type
+- Summaries stored in **MongoDB** (`Summary` model) alongside Cloudflare R2 HTML uploads
+- Summary cards with type badge, title, date, expandable content, and delete button (with ownership check)
+- **Generate summary buttons** placed contextually throughout the app:
+  - **Room chat:** Summary button in bottom action bar of RoomCallPage (visible only on Chat tab, disabled when no user messages)
+  - **Whiteboard:** Summary button in WhiteboardPage toolbar (between Clear and AI Assist)
+  - **DM:** Summary icon button (FileText) in DmPanel header
+- All use shared `generateAndSaveSummary()` utility for consistent generate-then-save flow
+- **DM Summary** — `POST /ai/dm-summary` fetches up to 100 DMs between user and companion, formats as chat transcript, generates AI summary
+- **Save to Cloudflare R2** — uploads summary as styled HTML document to R2 (S3-compatible storage)
   - Generates a presigned download URL valid for 7 days
-  - After saving, a **VSG Bot message** is broadcast to the room chat with the download link so all call participants can access it
-  - Saved summaries include: session date, user name, room ID, and formatted bullet-point content
-  - Button transitions to a green "Saved! View Summary" link after successful upload
-  - Re-generating a new summary resets the save state
-  - **Monthly upload quota:** configurable via `R2_MAX_UPLOADS_PER_MONTH` env var (default: 10 per user). Tracked per calendar month in MongoDB
+  - After saving, a VSG Bot message is broadcast to the room chat with the download link
+  - **Monthly upload quota:** configurable via `R2_MAX_UPLOADS_PER_MONTH` env var (default: 10 per user)
 
 ### Home Page
 
@@ -192,7 +193,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 
 - Collapsible sidebar (not a top bar) with framer-motion spring animation
 - Hamburger toggle at top-left
-- Sidebar items: Home, Chats, My Room, Study Radio, Streaming, Ask AI, Contact us
+- Sidebar items: Home, Chats, Summaries, My Room, Study Radio, Streaming, Ask AI, Contact us
 - "My Room" menu item dispatches room entry and navigates to call
 - Profile avatar dropdown with: My Profile, Settings, My Room, Ask AI, Logout
 - Active route highlighting
@@ -344,6 +345,7 @@ VITE_GOOGLE_CLIENT_ID=your_google_client_id # Google OAuth Client ID (from https
 | `/home`      | Room Dashboard  |      Yes      |
 | `/profile`   | User Profile    |      Yes      |
 | `/chats`     | Recent Chats    |      Yes      |
+| `/summaries` | Summaries       |      Yes      |
 | `/room/call` | Video Call Room |      Yes      |
 | `/join/:roomId` | Join Room via Invite Link | No (redirects to login) |
 | `/whiteboard/:roomId` | Collaborative Whiteboard |  Yes  |
@@ -372,7 +374,10 @@ VITE_GOOGLE_CLIENT_ID=your_google_client_id # Google OAuth Client ID (from https
 | POST   | `/ai/summary`             | Generate AI chat session summary (rate limited: per-user)            |
 | POST   | `/ai/whiteboard-explain`  | AI analysis of whiteboard drawing (rate limited: per-user)           |
 | POST   | `/ai/whiteboard-summary`  | Generate AI whiteboard summary (rate limited: per-user)              |
-| POST   | `/ai/save-summary`        | Save summary to Cloudflare R2, broadcast link to room chat           |
+| POST   | `/ai/save-summary`        | Save summary to Cloudflare R2 + MongoDB, broadcast link to room chat |
+| POST   | `/ai/dm-summary`          | Generate AI summary of DM conversation with a companion              |
+| GET    | `/ai/summaries`           | List saved summaries (filter by `?type=room\|dm\|whiteboard`)        |
+| DELETE | `/ai/summaries/:id`       | Delete a saved summary (ownership check)                             |
 | POST   | `/chat/bulk-save`         | Bulk-save room chat messages to MongoDB (auth required, max 500)     |
 | GET    | `/dm/recent`              | Get recent chats (last message per companion, sorted by time)        |
 | GET    | `/dm/:companionId`        | Get DM history (includes `_id`, `read` state)                        |

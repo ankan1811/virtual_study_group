@@ -57,16 +57,17 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
 - Empty state when no conversations yet
 
 ### Navbar
-- **Sidebar** (left) — hamburger toggle, slide-in panel with navigation links (Home, Chats, My Room, Study Radio, Streaming, Ask AI, Contact us), dark mode toggle, logout
+- **Sidebar** (left) — hamburger toggle, slide-in panel with navigation links (Home, Chats, Summaries, My Room, Study Radio, Streaming, Ask AI, Contact us), dark mode toggle, logout
 - **Profile Avatar** (top-right) — gradient circle with user initials. Click opens a dropdown with: My Profile, Settings, My Room, Ask AI, Logout. Logged-out users see a login icon button.
 - **Dark Mode Toggle** — persistent toggle in both the floating top-left button and inside the sidebar
 - **Logout** — properly clears JWT from localStorage, disconnects socket, resets Redux state, redirects to `/login`
 
 ### Room Call (`RoomCallPage`)
-- Agora RTC video/audio with mic/camera controls (App ID via `VITE_AGORA_APP_ID` env var)
-- Tab panel: Chat / AI Doubt Solver / Summary / Whiteboard (Whiteboard tab navigates to full-page `/whiteboard/:roomId`)
+- **Agora opt-in** — video call only starts when the user clicks "Start Video Call" in the lobby. Chat, AI, and whiteboard tools are available immediately without consuming Agora hours. End call via red PhoneOff button in the video grid.
+- Tab panel: Chat / AI Doubt / Whiteboard (Whiteboard tab navigates to full-page `/whiteboard/:roomId`)
 - Room ID from Redux state (not URL or localStorage)
-- **Shareable invite link** — "Invite" button in the tab bar copies a permanent link (`/join/{roomId}`) to clipboard. Animated swap to a green "Copied!" checkmark for 2 seconds (Framer Motion). The link is permanent since room IDs (`user_{userId}`) never change
+- **Bottom action bar** — below the tab content with Invite and Summary buttons. Summary button only appears on the Chat tab, disabled when no user messages exist, shows loading/saved states.
+- **Shareable invite link** — "Invite" button copies a permanent link (`/join/{roomId}`) to clipboard. Animated swap to a green "Copied!" checkmark for 2 seconds (Framer Motion). The link is permanent since room IDs (`user_{userId}`) never change
 - Bot messages in chat support clickable URLs (Linkify helper) with special styling for summary notifications
 - **Opt-in chat persistence:**
   - Inline "Save" button in chat panel — disabled when nothing to save, re-enables on new messages, shows "Saved" checkmark on success
@@ -74,19 +75,28 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
   - `useBlocker` intercepts React Router navigation; `beforeunload` guards browser tab close
   - `NavbarCall` exit button uses programmatic navigation (no `<Link>`) to allow interception
 
+### Summaries (`SummariesPage`)
+- Dedicated page at `/summaries` accessible from sidebar ("Summaries" nav item with FileText icon)
+- **Three sub-tabs:** Room Chat, DM Chat, Whiteboard — each shows saved summaries filtered by type
+- Fetches `GET /ai/summaries?type=room|dm|whiteboard` on mount and tab switch
+- Summary cards with type badge, title, date, expandable content, and delete button
+- Delete calls `DELETE /ai/summaries/:id` with ownership check
+- Follows ChatsPage layout pattern with consistent dark mode support
+- **Generate summary buttons** placed contextually:
+  - Room chat: Summary button in bottom action bar of RoomCallPage (Chat tab only)
+  - Whiteboard: Summary button in WhiteboardPage toolbar (between Clear and AI Assist)
+  - DM: Summary icon button (FileText) in DmPanel header
+- All use shared `generateAndSaveSummary()` utility from `utils/summaryApi.ts`
+
 ### AI Integration
-- **Doubt Solver** — text + voice input (Web Speech API), powered by switchable AI (Gemini/Grok)
-- **Session Summary** — Summary tab has two sub-tabs:
-  - **Chat Summary** — generates AI summary from chat messages
-  - **Whiteboard Summary** — generates AI summary from whiteboard drawings
-- Both summaries can be saved to Cloudflare R2 with presigned download URLs
-- **Save Summary** — one-click save to Cloudflare R2 (S3-compatible) as a styled HTML document. Returns a presigned download URL (valid 7 days). After saving, a VSG Bot message is broadcast to the room chat with the download link so all participants can access it.
+- **Doubt Solver** — text + voice input (Web Speech API), powered by switchable AI (Gemini/Grok). Full dark mode support for input, Q&A bubbles, loading states, and mic button.
+- **Save Summary** — one-click save to Cloudflare R2 (S3-compatible) as a styled HTML document + MongoDB persistence. Returns a presigned download URL (valid 7 days). After saving, a VSG Bot message is broadcast to the room chat with the download link so all participants can access it.
 
 ### AI Whiteboard (`WhiteboardPage`)
 - **Full-page collaborative whiteboard** — opens as a dedicated route (`/whiteboard/:roomId`) when the Whiteboard tab is clicked in `RoomCallPage`. Full drawing tools (shapes, text, freehand, arrows) powered by `@excalidraw/excalidraw`, lazy-loaded via `React.lazy()`.
 - **Real-time collaboration** — all room participants see the same whiteboard live via Socket.IO. Drawing changes are debounced (200ms client-side) and throttled (100ms server-side). Echo-loop prevention via `isRemoteUpdate` ref flag.
 - **Built-in AI Assist sidebar** — collapsible right panel (360px, Framer Motion spring animation) with "Explain This" button and custom question input. Sends compact text descriptions to Gemini/Grok. Q&A history with teal-accented chat bubbles.
-- **Toolbar** — top bar with Back to Room, Clear whiteboard, and AI Assist toggle buttons.
+- **Toolbar** — top bar with Back to Room, Clear whiteboard, Summary (generates + saves whiteboard summary), and AI Assist toggle buttons.
 - **Whiteboard data for AI** — elements are simplified before sending to the LLM: text content for text elements, type + dimensions for shapes. No raw JSON sent (too verbose).
 
 ### Study Radio (`RadioPage`)

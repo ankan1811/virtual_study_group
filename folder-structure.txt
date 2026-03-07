@@ -92,9 +92,12 @@ virtual_study_group/
 |       |   |                          POST /ai/whiteboard-explain (elements +
 |       |   |                          optional question -> explanation)
 |       |   |                          POST /ai/whiteboard-summary (elements ->
-|       |   |                          summary). describeWhiteboardElements()
-|       |   |                          helper converts elements to compact text
-|       |   |-- SummaryController.ts # Save AI summary to Cloudflare R2 (S3-compatible).
+|       |   |                          summary). POST /ai/dm-summary (fetches
+|       |   |                          up to 100 DMs between user and companion,
+|       |   |                          formats as transcript, generates summary).
+|       |   |                          describeWhiteboardElements() helper
+|       |   |                          converts elements to compact text
+|       |   |-- SummaryController.ts # Save AI summary to Cloudflare R2 + MongoDB.
 |       |   |                          Monthly upload quota per user via UploadCounter
 |       |   |                          model (R2_MAX_UPLOADS_PER_MONTH env var, def 10).
 |       |   |                          Builds styled HTML document with purple gradient
@@ -102,8 +105,10 @@ virtual_study_group/
 |       |   |                          bullet-point content. Uploads via @aws-sdk/client-s3.
 |       |   |                          Returns presigned download URL (7-day expiry).
 |       |   |                          Broadcasts VSG Bot message with link to room chat
-|       |   |                          via Socket.IO so all participants can access it.
+|       |   |                          via Socket.IO (skipped for DM summaries).
 |       |   |                          POST /ai/save-summary (summary + roomId -> url)
+|       |   |                          GET /ai/summaries (list by type, 50 per page)
+|       |   |                          DELETE /ai/summaries/:id (ownership check)
 |       |   |-- DmController.ts      # getRecentChats: aggregation pipeline returning
 |       |   |                          last message per conversation partner, sorted
 |       |   |                          by most recent, with unread counts.
@@ -133,7 +138,10 @@ virtual_study_group/
 |       |   |-- aiRoutes.ts          # /ai/ask, /ai/summary (per-user rate limited),
 |       |   |                          /ai/whiteboard-explain, /ai/whiteboard-summary
 |       |   |                          (per-user rate limited),
-|       |   |                          /ai/save-summary (auth required, saves to R2)
+|       |   |                          /ai/save-summary (auth required, saves to R2+MongoDB),
+|       |   |                          /ai/dm-summary (generate DM summary),
+|       |   |                          GET /ai/summaries (list saved summaries),
+|       |   |                          DELETE /ai/summaries/:id (delete summary)
 |       |   |-- dmRoutes.ts          # GET /dm/recent (recent chats aggregation),
 |       |   |                          GET /dm/unread-counts (before /:companionId to
 |       |   |                          avoid shadowing), GET /dm/:companionId,
@@ -157,6 +165,11 @@ virtual_study_group/
 |       |   |-- DirectMessage.ts     # DM model: from, to (User refs), content, read (bool,
 |       |   |                          default false), timestamps. Indexes: from+to, to+from,
 |       |   |                          to+read (for fast unread-count queries)
+|       |   |-- Summary.ts           # Persistent summary model: userId (User ref),
+|       |   |                          type ('room'|'dm'|'whiteboard'), contextId,
+|       |   |                          contextLabel, title, content, r2Key, r2Url.
+|       |   |                          Index on { userId, type, createdAt: -1 }.
+|       |   |                          Used by SummariesPage for listing saved summaries
 |       |   |-- UploadCounter.ts     # Upload quota tracker: userId, monthKey ("2026-03"),
 |       |   |                          count. Unique compound index on userId+monthKey.
 |       |   |                          Used by SummaryController for monthly R2 limit
@@ -268,14 +281,17 @@ virtual_study_group/
         |   |                          avatar, name, last message preview, timestamp,
         |   |                          unread badge. Click opens DmPanel. Real-time
         |   |                          updates via dm:receive socket event
-        |   |-- RoomCallPage.tsx     # Video call page - Agora RTC integration,
-        |   |                          mic/camera controls, remote user streams.
-        |   |                          Tab panel: Chat / AI Doubt / Summary /
-        |   |                          Whiteboard. Whiteboard tab navigates to
-        |   |                          /whiteboard/:roomId (full-page). RoomId
-        |   |                          from Redux. Agora App ID from env var.
-        |   |                          Chat persistence: beforeunload for tab
-        |   |                          close, SaveChatPrompt overlay on exit,
+        |   |-- RoomCallPage.tsx     # Room lobby + video call page. Agora opt-in:
+        |   |                          video call only starts on "Start Video
+        |   |                          Call" button click (saves Agora hours).
+        |   |                          Tab panel: Chat / AI Doubt / Whiteboard.
+        |   |                          Whiteboard tab navigates to full-page
+        |   |                          /whiteboard/:roomId. Bottom action bar
+        |   |                          with Invite + Summary buttons (Summary
+        |   |                          only on Chat tab, disabled when no user
+        |   |                          messages). RoomId from Redux. Agora App
+        |   |                          ID from env var. Chat persistence:
+        |   |                          beforeunload, SaveChatPrompt overlay,
         |   |                          inline save callback, lastSavedCountRef
         |   |-- WhiteboardPage.tsx   # Full-page collaborative whiteboard at
         |   |                          /whiteboard/:roomId. Lazy-loads
