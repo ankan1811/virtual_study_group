@@ -300,8 +300,16 @@ virtual_study_group/
         |   |                          200ms). Built-in AI Assist sidebar (360px,
         |   |                          Framer Motion spring) with "Explain This"
         |   |                          + custom questions. Toolbar: Back to Room,
-        |   |                          Clear, AI Assist toggle. Simplifies elements
-        |   |                          for AI payloads (type + text + dimensions)
+        |   |                          Clear, Summary (generates + saves whiteboard
+        |   |                          summary), AI Assist toggle. Simplifies
+        |   |                          elements for AI payloads (type + text +
+        |   |                          dimensions)
+        |   |-- SummariesPage.tsx    # Dedicated summaries page at /summaries.
+        |   |                          3 sub-tabs: Room Chat, DM Chat, Whiteboard.
+        |   |                          Fetches GET /ai/summaries?type= on mount
+        |   |                          and tab switch. Summary cards with type
+        |   |                          badge, title, date, expandable content,
+        |   |                          delete button. Follows ChatsPage layout
         |   |-- RadioPage.tsx        # Study Radio — full-page radio player.
         |   |                          Displays 8 SomaFM channel cards with
         |   |                          play/pause, volume slider, and canvas-based
@@ -327,9 +335,9 @@ virtual_study_group/
         |   |                          OTP-based registration directly)
         |   |-- Navbar.tsx           # Collapsible sidebar (not top bar) - hamburger
         |   |                          toggle, framer-motion spring animation.
-        |   |                          Nav items: Home, Chats, My Room, Study Radio,
-        |   |                          Streaming, Ask AI, Contact us. Active route
-        |   |                          highlighting.
+        |   |                          Nav items: Home, Chats, Summaries, My Room,
+        |   |                          Study Radio, Streaming, Ask AI, Contact us.
+        |   |                          Active route highlighting.
         |   |                          Profile avatar (top-right) with dropdown:
         |   |                          My Profile, Settings, My Room, Ask AI,
         |   |                          Logout. Login icon shown when logged out.
@@ -359,26 +367,19 @@ virtual_study_group/
         |   |                          Emits dm:markRead on open (REST + socket).
         |   |                          Filters dm:receive to current conversation only.
         |   |                          Listens for dm:readUpdate to upgrade ticks.
+        |   |                          Summary icon button (FileText) in header
+        |   |                          generates DM summary via generateAndSaveSummary
         |   |-- NotificationBell.tsx # Bell icon with unread badge in Navbar (top-right).
         |   |                          Fetches GET /notifications on mount.
         |   |                          Listens for notification:new socket events.
         |   |                          Dropdown: type icons, relative timestamps, mark
         |   |                          read on click, bulk "Mark all read", inline delete.
-        |   |-- AiPanel.tsx          # AI panel with two modes:
-        |   |                          - "ai" tab: AI doubt solver (text + voice
-        |   |                            via Web Speech API), Q&A history cards
-        |   |                            Generic "AI Assistant" branding
-        |   |                          - "summary" tab: two sub-tabs:
-        |   |                            * Chat Summary: generates session summary
-        |   |                              from chat messages via POST /ai/summary
-        |   |                            * Whiteboard Summary: generates summary
-        |   |                              from whiteboard elements via POST
-        |   |                              /ai/whiteboard-summary
-        |   |                            Both sub-tabs have "Save Summary" button
-        |   |                            that uploads styled HTML to Cloudflare R2
-        |   |                            via POST /ai/save-summary. Shows presigned
-        |   |                            download link after save. Broadcasts link
-        |   |                            to room chat as bot message
+        |   |-- AiPanel.tsx          # AI doubt solver panel (text + voice via
+        |   |                          Web Speech API), Q&A history cards with
+        |   |                          generic "AI Assistant" branding. Full
+        |   |                          dark mode support: input field, Q&A
+        |   |                          bubbles, loading states, mic button,
+        |   |                          borders all have dark: variants
         |   |-- ChatTabPanel.tsx    # Extracted chat tab for RoomCallPage. Wraps
         |   |                          ChatComponent with room member list header
         |   |                          (fetches companion list), DM panel integration,
@@ -410,7 +411,9 @@ virtual_study_group/
         |   |                          + emits companion:acceptNotify
         |   |-- Messages.tsx         # Placeholder message component for AI demo page
         |   |-- Stream.tsx           # Video stream grid - up to 5 video slots,
-        |   |                          camera/mic/screenshare controls, expandable view
+        |   |                          camera/mic/screenshare controls, expandable view.
+        |   |                          onEndCall prop: red PhoneOff button to
+        |   |                          leave call without leaving the room
         |   |
         |   |-- shared/              # Shared/utility components
         |       |-- BackgroundImage.tsx  # Background image wrapper component
@@ -468,6 +471,11 @@ virtual_study_group/
         |   |-- socketInstance.ts    # Socket.IO singleton - connectSocket(token),
         |   |                          getSocket(), disconnectSocket(). All components
         |   |                          share one connection with JWT auth
+        |   |-- summaryApi.ts       # Shared generate+save summary utility.
+        |   |                          generateAndSaveSummary(genEndpoint, genPayload,
+        |   |                          saveParams) — calls AI endpoint, then saves
+        |   |                          to R2+MongoDB via /ai/save-summary. Used by
+        |   |                          RoomCallPage, WhiteboardPage, and DmPanel
         |   |-- useDarkMode.ts      # Dark mode hook - toggles 'dark' class on
         |   |                          document, persists preference
         |   |-- roomCallUtils.ts     # Room call utilities (empty, placeholder)
@@ -530,7 +538,10 @@ API ROUTES SUMMARY
     POST   /ai/summary             Generate AI summary of chat messages
     POST   /ai/whiteboard-explain  AI analysis of whiteboard drawing (+ optional question)
     POST   /ai/whiteboard-summary  Generate AI summary of whiteboard content
-    POST   /ai/save-summary        Save summary to Cloudflare R2, broadcast link to room chat
+    POST   /ai/save-summary        Save summary to Cloudflare R2 + MongoDB, broadcast link
+    POST   /ai/dm-summary          Generate AI summary of DM conversation
+    GET    /ai/summaries           List saved summaries (filter by ?type=room|dm|whiteboard)
+    DELETE /ai/summaries/:id       Delete a saved summary (ownership check)
 
   DMs:
     GET    /dm/recent               Get recent chats (last message per companion, sorted by time)
@@ -606,5 +617,9 @@ DATABASE COLLECTIONS
   notifications    ->  { recipient: ObjectId, type: String, fromUserId: String,
                          fromUserName: String, data: Mixed, read: Boolean, timestamps }
                        TTL index on createdAt: auto-deleted after 10 days
+  summaries        ->  { userId: ObjectId, type: 'room'|'dm'|'whiteboard', contextId: String,
+                         contextLabel: String, title: String, content: String, r2Key: String,
+                         r2Url: String, timestamps }
+                       Index on { userId, type, createdAt: -1 }
   uploadcounters   ->  { userId: String, monthKey: String ("2026-03"), count: Number }
                        Unique compound index on { userId, monthKey }
