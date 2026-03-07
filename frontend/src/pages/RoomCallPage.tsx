@@ -3,7 +3,7 @@ import { useSelector, useDispatch } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
 import Navbar from "../components/Navbar";
-import { Users, LogOut, MessageSquare, Bot, FileText, PenTool, Share2, Check, Video, Sparkles, Loader2 } from "lucide-react";
+import { Users, LogOut, MessageSquare, Bot, PenTool, Share2, Check, Video, Sparkles, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Stream from "../components/Stream";
 import type {
@@ -42,7 +42,7 @@ const client: IAgoraRTCClient = createClient({
 let audioTrack: IMicrophoneAudioTrack;
 let videoTrack: ICameraVideoTrack;
 
-type TabType = "chat" | "ai" | "summary" | "whiteboard";
+type TabType = "chat" | "ai" | "whiteboard";
 
 interface Message {
   msg: string;
@@ -246,7 +246,6 @@ export default function RoomCallPage() {
   const tabItems: { key: TabType; label: string; icon: typeof MessageSquare }[] = [
     { key: "chat", label: "Chat", icon: MessageSquare },
     { key: "ai", label: "AI Doubt", icon: Bot },
-    { key: "summary", label: "Summary", icon: FileText },
     { key: "whiteboard", label: "Whiteboard", icon: PenTool },
   ];
 
@@ -321,41 +320,6 @@ export default function RoomCallPage() {
                 >
                   Start Video Call
                 </button>
-                {chatMessages.filter((m) => m.sentby !== "bot").length > 0 && (
-                  <button
-                    onClick={async () => {
-                      setLobbySummaryLoading(true);
-                      try {
-                        await generateAndSaveSummary(
-                          "/ai/summary",
-                          { messages: chatMessages },
-                          { type: "room", contextId: roomId, contextLabel: `Room ${roomId}` }
-                        );
-                        setLobbySummaryDone(true);
-                        setTimeout(() => setLobbySummaryDone(false), 2500);
-                      } catch (err) {
-                        console.error("Summary failed:", err);
-                      } finally {
-                        setLobbySummaryLoading(false);
-                      }
-                    }}
-                    disabled={lobbySummaryLoading}
-                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 text-white text-sm poppins-semibold hover:opacity-90 transition-opacity disabled:opacity-40 flex items-center gap-2 mx-auto"
-                  >
-                    {lobbySummaryLoading ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : lobbySummaryDone ? (
-                      <Check size={14} />
-                    ) : (
-                      <Sparkles size={14} />
-                    )}
-                    {lobbySummaryLoading
-                      ? "Generating..."
-                      : lobbySummaryDone
-                      ? "Summary Saved!"
-                      : "Generate Chat Summary"}
-                  </button>
-                )}
               </div>
             </div>
           )}
@@ -366,7 +330,7 @@ export default function RoomCallPage() {
           {/* Spacer to clear fixed navbar buttons (hamburger/avatar/bell) */}
           <div className="h-14 flex-shrink-0" />
 
-          {/* Tab bar + Exit button row */}
+          {/* Tab bar + Exit */}
           <div className="flex items-center border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0">
             {tabItems.map((t) => {
               const Icon = t.icon;
@@ -375,7 +339,7 @@ export default function RoomCallPage() {
                 <button
                   key={t.key}
                   onClick={() => handleTabClick(t.key)}
-                  className={`flex-1 py-3 flex items-center justify-center gap-1.5 text-[11px] font-semibold poppins-semibold transition-all duration-200 ${
+                  className={`flex-1 py-3 flex items-center justify-center gap-1.5 text-[12px] font-semibold poppins-semibold transition-all duration-200 ${
                     isWhiteboard
                       ? "text-teal-500 dark:text-teal-400 hover:text-teal-600 dark:hover:text-teal-300"
                       : activeTab === t.key
@@ -388,6 +352,34 @@ export default function RoomCallPage() {
                 </button>
               );
             })}
+            <button
+              onClick={handleExitClick}
+              className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 mr-2 rounded-lg bg-red-50 dark:bg-red-950/30 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/40 text-[11px] font-semibold poppins-semibold transition-colors"
+            >
+              <LogOut size={12} />
+              Exit
+            </button>
+          </div>
+
+          {/* Tab content */}
+          <div className="flex-1 overflow-hidden flex flex-col">
+            {activeTab === "chat" ? (
+              <ChatTabPanel
+                roomId={roomId}
+                onMessagesChange={setChatMessages}
+                onSaveChats={handleInlineSaveChats}
+              />
+            ) : (
+              <AiPanel
+                tab={activeTab as "ai"}
+                chatMessages={chatMessages}
+                roomId={roomId}
+              />
+            )}
+          </div>
+
+          {/* Bottom action bar: Invite + Summary */}
+          <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
             <button
               onClick={async () => {
                 const link = `${window.location.origin}/join/${roomId}`;
@@ -404,7 +396,7 @@ export default function RoomCallPage() {
                 setCopied(true);
                 setTimeout(() => setCopied(false), 2000);
               }}
-              className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 mr-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 text-indigo-500 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-[11px] font-semibold poppins-semibold transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 text-indigo-500 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-[11px] font-semibold poppins-semibold transition-colors"
             >
               <AnimatePresence mode="wait" initial={false}>
                 {copied ? (
@@ -434,29 +426,36 @@ export default function RoomCallPage() {
                 )}
               </AnimatePresence>
             </button>
-            <button
-              onClick={handleExitClick}
-              className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 mr-2 rounded-lg bg-red-50 dark:bg-red-950/30 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/40 text-[11px] font-semibold poppins-semibold transition-colors"
-            >
-              <LogOut size={12} />
-              Exit
-            </button>
-          </div>
-
-          {/* Tab content */}
-          <div className="flex-1 overflow-hidden flex flex-col">
-            {activeTab === "chat" ? (
-              <ChatTabPanel
-                roomId={roomId}
-                onMessagesChange={setChatMessages}
-                onSaveChats={handleInlineSaveChats}
-              />
-            ) : (
-              <AiPanel
-                tab={activeTab as "ai" | "summary"}
-                chatMessages={chatMessages}
-                roomId={roomId}
-              />
+            {chatMessages.filter((m) => m.sentby !== "bot").length > 0 && (
+              <button
+                onClick={async () => {
+                  setLobbySummaryLoading(true);
+                  try {
+                    await generateAndSaveSummary(
+                      "/ai/summary",
+                      { messages: chatMessages },
+                      { type: "room", contextId: roomId, contextLabel: `Room ${roomId}` }
+                    );
+                    setLobbySummaryDone(true);
+                    setTimeout(() => setLobbySummaryDone(false), 2500);
+                  } catch (err) {
+                    console.error("Summary failed:", err);
+                  } finally {
+                    setLobbySummaryLoading(false);
+                  }
+                }}
+                disabled={lobbySummaryLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-50 dark:bg-violet-950/30 text-violet-500 hover:bg-violet-100 dark:hover:bg-violet-900/40 text-[11px] font-semibold poppins-semibold transition-colors disabled:opacity-40"
+              >
+                {lobbySummaryLoading ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : lobbySummaryDone ? (
+                  <Check size={12} className="text-emerald-500" />
+                ) : (
+                  <Sparkles size={12} />
+                )}
+                {lobbySummaryLoading ? "Saving..." : lobbySummaryDone ? "Saved!" : "Summary"}
+              </button>
             )}
           </div>
         </div>
