@@ -105,7 +105,7 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
   - AI-generated answers with source citation badges (color-coded by summary type)
   - Rate limit and error handling with amber warning styling
   - Framer Motion AnimatePresence for smooth expand/collapse
-  - Calls `POST /ai/summary-qa` — backend embeds the question via Gemini `text-embedding-004`, finds top 5 most similar summaries via cosine similarity, passes them as context to Gemini 2.5 Flash
+  - Calls `POST /ai/summary-qa` — backend embeds the question via Gemini embedding model (configurable via `GEMINI_EMBEDDING_MODEL` env var, default `text-embedding-004`), finds top 5 most similar summaries via cosine similarity, passes them as context to Gemini 2.5 Flash
   - All state local (no Redux): `qaOpen`, `qaQuestion`, `qaAnswer`, `qaSources`, `qaLoading`, `qaError`
 
 ### AI Integration
