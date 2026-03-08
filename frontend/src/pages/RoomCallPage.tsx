@@ -42,7 +42,7 @@ const client: IAgoraRTCClient = createClient({
 let audioTrack: IMicrophoneAudioTrack;
 let videoTrack: ICameraVideoTrack;
 
-type TabType = "chat" | "ai" | "whiteboard";
+type TabType = "chat" | "ai";
 
 interface Message {
   msg: string;
@@ -246,15 +246,10 @@ export default function RoomCallPage() {
   const tabItems: { key: TabType; label: string; icon: typeof MessageSquare }[] = [
     { key: "chat", label: "Chat", icon: MessageSquare },
     { key: "ai", label: "AI Doubt", icon: Bot },
-    { key: "whiteboard", label: "Whiteboard", icon: PenTool },
   ];
 
   const handleTabClick = (key: TabType) => {
-    if (key === "whiteboard") {
-      navigate(`/whiteboard/${roomId}`);
-    } else {
-      setActiveTab(key);
-    }
+    setActiveTab(key);
   };
 
   return (
@@ -327,22 +322,27 @@ export default function RoomCallPage() {
 
         {/* Right: Tabbed panel */}
         <div className="w-[380px] flex-shrink-0 h-full flex flex-col bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700">
-          {/* Spacer to clear fixed navbar buttons (hamburger/avatar/bell) */}
-          <div className="h-14 flex-shrink-0" />
+          {/* Top bar: Whiteboard button (left of bell icon area) */}
+          <div className="h-14 flex-shrink-0 flex items-center justify-start px-3 gap-2">
+            <button
+              onClick={() => navigate(`/whiteboard/${roomId}`)}
+              className="group flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 text-white text-[11px] font-semibold poppins-semibold shadow-md shadow-teal-500/20 dark:shadow-teal-500/10 hover:shadow-lg hover:shadow-teal-500/30 hover:scale-[1.03] active:scale-[0.98] transition-all duration-200"
+            >
+              <PenTool size={13} className="group-hover:rotate-[-12deg] transition-transform duration-200" />
+              Whiteboard
+            </button>
+          </div>
 
           {/* Tab bar + Exit */}
           <div className="flex items-center border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0">
             {tabItems.map((t) => {
               const Icon = t.icon;
-              const isWhiteboard = t.key === "whiteboard";
               return (
                 <button
                   key={t.key}
                   onClick={() => handleTabClick(t.key)}
                   className={`flex-1 py-3 flex items-center justify-center gap-1.5 text-[12px] font-semibold poppins-semibold transition-all duration-200 ${
-                    isWhiteboard
-                      ? "text-teal-500 dark:text-teal-400 hover:text-teal-600 dark:hover:text-teal-300"
-                      : activeTab === t.key
+                    activeTab === t.key
                       ? "text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-500"
                       : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                   }`}

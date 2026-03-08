@@ -704,7 +704,7 @@ export default function RoomPage() {
             </motion.div>
           ) : (
             <div className={`relative ${showDummy ? "mt-3" : ""}`}>
-              <div className="flex gap-4 overflow-x-auto pt-1 pb-1 scrollbar-none">
+              <div className={`flex gap-4 overflow-x-auto pt-1 pb-1 scrollbar-none ${showDummy ? "blur-[2px] select-none pointer-events-none" : ""}`}>
                 {companionList.map((c) => (
                   <div key={c.userId} className="relative flex-shrink-0">
                     <button
