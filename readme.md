@@ -311,6 +311,7 @@ PORT=7002
 JWT_SECRET=your_jwt_secret
 AI_PROVIDER=gemini                # "gemini" (default) or "grok"
 GEMINI_API_KEY=your_gemini_key    # from https://aistudio.google.com
+GEMINI_EMBEDDING_MODEL=text-embedding-004  # Embedding model for RAG Q&A (default: text-embedding-004)
 GROK_API_KEY=your_xai_api_key     # from https://console.x.ai (optional, for grok provider)
 R2_ACCOUNT_ID=your_cloudflare_id  # Cloudflare account ID (from dashboard URL)
 R2_ACCESS_KEY_ID=your_r2_key      # R2 API token access key

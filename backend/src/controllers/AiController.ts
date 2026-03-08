@@ -277,7 +277,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   }
 
   const response = await getClient().embeddings.create({
-    model: 'text-embedding-004',
+    model: process.env.GEMINI_EMBEDDING_MODEL || 'text-embedding-004',
     input: text.slice(0, 2048),
   });
   return response.data[0].embedding;

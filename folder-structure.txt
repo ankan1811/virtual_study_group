@@ -10,7 +10,8 @@ virtual_study_group/
 |-- backend/                         # Node.js + Express + TypeScript backend
 |   |-- .env                         # Environment variables (MONGODB_URI, JWT_SECRET,
 |   |                                  PORT, OTP_SECRET, OTP_EXPIRY_MINUTES,
-|   |                                  AI_PROVIDER, GEMINI_API_KEY, GROK_API_KEY,
+|   |                                  AI_PROVIDER, GEMINI_API_KEY, GEMINI_EMBEDDING_MODEL,
+|   |                                  GROK_API_KEY,
 |   |                                  R2_*, AGORA_APP_ID, SMTP_*,
 |   |                                  + optional rate limit overrides)
 |   |-- .gitignore                   # Git ignore rules for backend
@@ -541,7 +542,7 @@ virtual_study_group/
 ENV CONFIGURATION
 =================
   backend/.env   ->  MONGODB_URI, PORT, JWT_SECRET, OTP_SECRET, OTP_EXPIRY_MINUTES,
-                     AI_PROVIDER, GEMINI_API_KEY, GROK_API_KEY,
+                     AI_PROVIDER, GEMINI_API_KEY, GEMINI_EMBEDDING_MODEL, GROK_API_KEY,
                      R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME,
                      R2_MAX_UPLOADS_PER_MONTH, AGORA_APP_ID,
                      SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS,
