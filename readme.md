@@ -207,6 +207,7 @@ A full-stack web application for creating virtual study group spaces with real-t
     - Global daily: `EMBEDDING_DAILY_MAX` (default 400) embedding API calls/day across all users, tracked via `EmbeddingCounter` collection
     - Save-time embeddings naturally limited by existing R2 upload quota
   - **Backfill script** (`backend/src/scripts/backfillEmbeddings.ts`) for generating embeddings on existing summaries
+  - **[Full technical documentation with flowcharts](SEMANTIC_QA_DOCUMENTATION.md)** — detailed step-by-step breakdown of the entire RAG pipeline, summary generation flows, embedding mechanics, cosine similarity, and rate limiting architecture
 
 ### Home Page
 
