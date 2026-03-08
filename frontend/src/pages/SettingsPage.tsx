@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { motion } from "framer-motion";
@@ -145,6 +145,12 @@ export default function SettingsPage() {
 
   const [notifications, setNotifications] = useState(true);
   const [soundEffects, setSoundEffects] = useState(true);
+
+  useEffect(() => {
+    if (!isAuthenticated && !localStorage.getItem("token")) {
+      navigate("/login");
+    }
+  }, [isAuthenticated]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");

@@ -79,7 +79,8 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      navigate("/login");
+      // Don't redirect if token exists — JWT rehydration may still be in progress
+      if (!localStorage.getItem("token")) navigate("/login");
       return;
     }
     const token = localStorage.getItem("token");
