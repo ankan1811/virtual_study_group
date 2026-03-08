@@ -27,6 +27,7 @@ import { enterRoom } from "../store/RoomStore/roomSlice";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDarkMode } from "../utils/useDarkMode";
 import { disconnectSocket } from "../utils/socketInstance";
+import { getAvatarById } from "../utils/avatars";
 import NotificationBell from "./NotificationBell";
 
 const navItems = [
@@ -63,6 +64,8 @@ export default function Navbar() {
   const getInitials = (name: string) =>
     name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 
+  const userAvatar = user?.avatar ? getAvatarById(user.avatar) : null;
+
   return (
     <>
       {/* Floating menu toggle + dark mode toggle */}
@@ -94,9 +97,9 @@ export default function Navbar() {
           <div className="relative">
             <button
               onClick={() => setShowProfile(!showProfile)}
-              className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-sm font-bold poppins-semibold shadow-md hover:shadow-lg transition-all hover:scale-105 active:scale-95 ring-2 ring-white/20 dark:ring-white/10"
+              className={`w-10 h-10 rounded-full bg-gradient-to-br ${userAvatar ? userAvatar.gradient : "from-indigo-500 to-violet-600"} flex items-center justify-center ${userAvatar ? "text-xl" : "text-white text-sm font-bold poppins-semibold"} shadow-md hover:shadow-lg transition-all hover:scale-105 active:scale-95 ring-2 ring-white/20 dark:ring-white/10`}
             >
-              {getInitials(user.name)}
+              {userAvatar ? userAvatar.emoji : getInitials(user.name)}
             </button>
 
             {/* Dropdown */}
@@ -119,8 +122,8 @@ export default function Navbar() {
                     {/* User info header */}
                     <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-xs font-bold poppins-semibold flex-shrink-0">
-                          {getInitials(user.name)}
+                        <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${userAvatar ? userAvatar.gradient : "from-indigo-500 to-violet-600"} flex items-center justify-center ${userAvatar ? "text-lg" : "text-white text-xs font-bold poppins-semibold"} flex-shrink-0`}>
+                          {userAvatar ? userAvatar.emoji : getInitials(user.name)}
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 poppins-semibold truncate">

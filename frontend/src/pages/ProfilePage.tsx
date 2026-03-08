@@ -17,47 +17,9 @@ import {
 import Navbar from "../components/Navbar";
 import { AuthState } from "../store/authStore/store";
 import { updateName, updateAvatar } from "../store/authStore/authSlice";
+import { DEFAULT_AVATARS } from "../utils/avatars";
 
 const API = import.meta.env.VITE_API_URL;
-
-/* ── 5 default avatar options (inline SVG data URIs) ── */
-const DEFAULT_AVATARS = [
-  {
-    id: "avatar_1",
-    label: "Cool Guy",
-    gradient: "from-blue-500 to-cyan-400",
-    emoji: "\u{1F60E}", // sunglasses
-    bg: "#3B82F6",
-  },
-  {
-    id: "avatar_2",
-    label: "Scholar",
-    gradient: "from-violet-500 to-purple-400",
-    emoji: "\u{1F9D1}\u200D\u{1F393}", // student
-    bg: "#8B5CF6",
-  },
-  {
-    id: "avatar_3",
-    label: "Scientist",
-    gradient: "from-emerald-500 to-teal-400",
-    emoji: "\u{1F9D1}\u200D\u{1F52C}", // scientist
-    bg: "#10B981",
-  },
-  {
-    id: "avatar_4",
-    label: "Artist",
-    gradient: "from-pink-500 to-rose-400",
-    emoji: "\u{1F9D1}\u200D\u{1F3A8}", // artist
-    bg: "#EC4899",
-  },
-  {
-    id: "avatar_5",
-    label: "Astronaut",
-    gradient: "from-amber-500 to-orange-400",
-    emoji: "\u{1F9D1}\u200D\u{1F680}", // astronaut
-    bg: "#F59E0B",
-  },
-];
 
 export default function ProfilePage() {
   const dispatch = useDispatch();

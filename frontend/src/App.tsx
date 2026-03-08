@@ -17,8 +17,9 @@ import WhiteboardPage from "./pages/WhiteboardPage";
 import JoinRoomPage from "./pages/JoinRoomPage";
 import SettingsPage from "./pages/SettingsPage";
 import NotFoundPage from "./pages/NotFoundPage";
-import { login } from "./store/authStore/authSlice";
+import { login, updateAvatar } from "./store/authStore/authSlice";
 import { connectSocket } from "./utils/socketInstance";
+import axios from "axios";
 import InviteNotificationOverlay from "./components/InviteNotificationOverlay";
 import CompanionRequestOverlay from "./components/CompanionRequestOverlay";
 import { RadioProvider } from "./context/RadioContext";
@@ -35,6 +36,15 @@ function AppInner() {
         if (payload.userId && payload.name) {
           dispatch(login({ name: payload.name, userId: payload.userId }));
           connectSocket(token);
+          // Fetch avatar from API (not stored in JWT)
+          axios
+            .get(`${import.meta.env.VITE_API_URL}/user/profile`, {
+              headers: { authorization: token },
+            })
+            .then((res) => {
+              if (res.data.avatar) dispatch(updateAvatar(res.data.avatar));
+            })
+            .catch(() => {});
         }
       } catch {
         localStorage.removeItem("token");
