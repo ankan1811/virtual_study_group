@@ -23,6 +23,13 @@ export const RATE_LIMIT_CONFIG = {
   AI_WINDOW_MS:            envInt('AI_WINDOW_MIN', 15) * 60 * 1000,
   AI_MAX_PER_USER:         envInt('AI_MAX_PER_USER', 20),
 
+  // Summary Q&A — per authenticated userId (tighter: each call = embedding + chat completion)
+  SUMMARY_QA_WINDOW_MS:    envInt('SUMMARY_QA_WINDOW_MIN', 15) * 60 * 1000,
+  SUMMARY_QA_MAX_PER_USER: envInt('SUMMARY_QA_MAX_PER_USER', 10),
+
+  // Embedding daily global cap (across all users, protects Gemini free tier)
+  EMBEDDING_DAILY_MAX:     envInt('EMBEDDING_DAILY_MAX', 400),
+
   // User search — per authenticated userId
   SEARCH_WINDOW_MS:        envInt('SEARCH_WINDOW_MIN', 1) * 60 * 1000,
   SEARCH_MAX_PER_USER:     envInt('SEARCH_MAX_PER_USER', 30),
@@ -109,6 +116,17 @@ export const aiLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req: Request) => extractUserIdFromToken(req),
   message: { error: 'AI rate limit reached. Please wait before asking another question.' },
+  ...noIpValidation,
+});
+
+// ── Tier 3b: Summary Q&A per-user limiter ───────────────────────────────
+export const summaryQaLimiter = rateLimit({
+  windowMs: RATE_LIMIT_CONFIG.SUMMARY_QA_WINDOW_MS,
+  max: RATE_LIMIT_CONFIG.SUMMARY_QA_MAX_PER_USER,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => extractUserIdFromToken(req),
+  message: { error: 'Q&A rate limit reached. Please wait before asking another question.' },
   ...noIpValidation,
 });
 

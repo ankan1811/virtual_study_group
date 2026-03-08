@@ -6,6 +6,7 @@ import { getIO } from '../socketServer';
 import UploadCounter from '../models/UploadCounter';
 import { RATE_LIMIT_CONFIG } from '../middlewares/rateLimiter';
 import Summary from '../models/Summary';
+import { generateEmbedding } from './AiController';
 
 // ── Lazy-initialized R2 client ──────────────────────────────────
 let _s3: S3Client | null = null;
@@ -194,6 +195,15 @@ export const saveSummary = async (req: AuthenticatedRequest, res: Response): Pro
       { expiresIn: 7 * 24 * 60 * 60 }
     );
 
+    // ── Generate embedding for RAG search ──────────────────────
+    const resolvedTitle = title || `${({ room: 'Room Chat', dm: 'DM', whiteboard: 'Whiteboard' } as const)[type]} Summary`;
+    let embedding: number[] = [];
+    try {
+      embedding = await generateEmbedding(`${resolvedTitle} ${summary}`);
+    } catch (err: any) {
+      console.warn('Embedding generation failed, saving without:', err?.message);
+    }
+
     // ── Persist to MongoDB ──────────────────────────────────────
     const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     const typeLabels = { room: 'Room Chat', dm: 'DM', whiteboard: 'Whiteboard' };
@@ -206,6 +216,7 @@ export const saveSummary = async (req: AuthenticatedRequest, res: Response): Pro
       content: summary,
       r2Key: key,
       r2Url: downloadUrl,
+      embedding,
     });
 
     // Broadcast the summary link to the room chat as a VSG Bot message

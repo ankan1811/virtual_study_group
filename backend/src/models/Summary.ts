@@ -9,6 +9,7 @@ export interface ISummary extends Document {
   content: string;
   r2Key?: string;
   r2Url?: string;
+  embedding?: number[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -23,6 +24,7 @@ const summarySchema: Schema = new Schema(
     content: { type: String, required: true },
     r2Key: { type: String },
     r2Url: { type: String },
+    embedding: { type: [Number], default: [] },
   },
   { timestamps: true }
 );

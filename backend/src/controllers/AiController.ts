@@ -2,6 +2,9 @@ import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/middleware';
 import OpenAI from 'openai';
 import DirectMessage from '../models/DirectMessage';
+import Summary from '../models/Summary';
+import EmbeddingCounter from '../models/EmbeddingCounter';
+import { RATE_LIMIT_CONFIG } from '../middlewares/rateLimiter';
 
 // ── Provider config ──────────────────────────────────────────────
 const providers = {
@@ -256,6 +259,138 @@ export const summarizeWhiteboard = async (req: AuthenticatedRequest, res: Respon
     res.status(200).json({ summary });
   } catch (error: any) {
     console.error('AI whiteboard summary error:', error?.message);
+    res.status(500).json({ error: 'AI is currently unavailable. Please try again later.' });
+  }
+};
+
+// ── Embedding helpers ───────────────────────────────────────────
+
+export async function generateEmbedding(text: string): Promise<number[]> {
+  const today = new Date().toISOString().slice(0, 10);
+  const counter = await EmbeddingCounter.findOneAndUpdate(
+    { dateKey: today },
+    { $inc: { count: 1 } },
+    { upsert: true, new: true }
+  );
+  if (counter.count > RATE_LIMIT_CONFIG.EMBEDDING_DAILY_MAX) {
+    throw new Error('Daily embedding limit reached. Please try again tomorrow.');
+  }
+
+  const response = await getClient().embeddings.create({
+    model: 'text-embedding-004',
+    input: text.slice(0, 2048),
+  });
+  return response.data[0].embedding;
+}
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  let dot = 0, normA = 0, normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+
+// ── Summary Q&A (RAG) ──────────────────────────────────────────
+
+export const querySummaries = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { question } = req.body as { question: string };
+    const userId = req.user?.userId;
+
+    if (!question || question.trim().length === 0) {
+      res.status(400).json({ error: 'Question is required' });
+      return;
+    }
+
+    // Fetch all user summaries that have embeddings
+    const summaries = await Summary.find({
+      userId,
+      'embedding.0': { $exists: true },
+    }).select('title type contextLabel content embedding createdAt');
+
+    if (summaries.length === 0) {
+      res.status(200).json({
+        answer: "You don't have any summaries yet. Save some session summaries first, then come back to ask questions about them!",
+        sources: [],
+      });
+      return;
+    }
+
+    // Embed the question
+    let questionEmbedding: number[];
+    try {
+      questionEmbedding = await generateEmbedding(question.trim());
+    } catch (err: any) {
+      if (err.message?.includes('Daily embedding limit')) {
+        res.status(429).json({ error: err.message });
+      } else {
+        res.status(500).json({ error: 'Failed to process your question. Please try again.' });
+      }
+      return;
+    }
+
+    // Compute similarity and rank
+    const scored = summaries.map((s) => ({
+      doc: s,
+      score: cosineSimilarity(questionEmbedding, s.embedding as number[]),
+    }));
+    scored.sort((a, b) => b.score - a.score);
+
+    // Take top 5
+    const topK = scored.slice(0, 5);
+
+    // Build context for the AI
+    const context = topK
+      .map((item, i) => {
+        const date = new Date(item.doc.createdAt).toLocaleDateString('en-US', {
+          weekday: 'short',
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+        });
+        const content = item.doc.content.length > 1000
+          ? item.doc.content.slice(0, 1000) + '...'
+          : item.doc.content;
+        return `--- Summary ${i + 1} ---\nType: ${item.doc.type}\nTitle: ${item.doc.title}\nDate: ${date}\nContext: ${item.doc.contextLabel || 'N/A'}\nContent:\n${content}`;
+      })
+      .join('\n\n');
+
+    const completion = await getClient().chat.completions.create({
+      model: getModel(),
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are a study assistant with access to the user\'s saved session summaries. ' +
+            'Answer their question based ONLY on the provided summaries. ' +
+            'If the answer is not found in any summary, say so honestly. ' +
+            'Always cite which summary title and date your answer comes from. ' +
+            'Format your answer with bullet points for clarity.',
+        },
+        {
+          role: 'user',
+          content: `Here are my saved study summaries:\n\n${context}\n\n---\n\nMy question: ${question.trim()}`,
+        },
+      ],
+      max_tokens: 800,
+    });
+
+    const answer = completion.choices[0]?.message?.content || 'Sorry, I could not generate an answer.';
+
+    const sources = topK.map((item) => ({
+      _id: item.doc._id,
+      title: item.doc.title,
+      type: item.doc.type,
+      createdAt: item.doc.createdAt,
+      score: Math.round(item.score * 100) / 100,
+    }));
+
+    res.status(200).json({ answer, sources });
+  } catch (error: any) {
+    console.error('Summary Q&A error:', error?.message);
     res.status(500).json({ error: 'AI is currently unavailable. Please try again later.' });
   }
 };
