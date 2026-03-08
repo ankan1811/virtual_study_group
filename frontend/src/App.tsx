@@ -15,6 +15,7 @@ import SummariesPage from "./pages/SummariesPage";
 import RadioPage from "./pages/RadioPage";
 import WhiteboardPage from "./pages/WhiteboardPage";
 import JoinRoomPage from "./pages/JoinRoomPage";
+import SettingsPage from "./pages/SettingsPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import { login } from "./store/authStore/authSlice";
 import { connectSocket } from "./utils/socketInstance";
@@ -55,6 +56,7 @@ function AppInner() {
           <Route element={<AuthPage />} path="/login" />
           <Route element={<AuthPage />} path="/register" />
           <Route element={<ProfilePage />} path="/profile" />
+          <Route element={<SettingsPage />} path="/settings" />
           <Route element={<ChatsPage />} path="/chats" />
           <Route element={<SummariesPage />} path="/summaries" />
           <Route element={<RoomCallPage />} path="/room/call" />
