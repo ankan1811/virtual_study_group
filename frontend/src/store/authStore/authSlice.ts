@@ -4,6 +4,7 @@ export interface AuthUser {
   name: string;
   userId: string;
   roomId: string; // always "user_${userId}"
+  avatar: string;
 }
 
 interface AuthState {
@@ -20,12 +21,13 @@ const authSlice = createSlice({
   name: "auth",
   initialState,
   reducers: {
-    login(state, action: PayloadAction<{ name: string; userId: string }>) {
+    login(state, action: PayloadAction<{ name: string; userId: string; avatar?: string }>) {
       state.isAuthenticated = true;
       state.user = {
         name: action.payload.name,
         userId: action.payload.userId,
         roomId: `user_${action.payload.userId}`,
+        avatar: action.payload.avatar || "",
       };
     },
     logout(state) {
@@ -37,8 +39,13 @@ const authSlice = createSlice({
         state.user.name = action.payload;
       }
     },
+    updateAvatar(state, action: PayloadAction<string>) {
+      if (state.user) {
+        state.user.avatar = action.payload;
+      }
+    },
   },
 });
 
-export const { login, logout, updateName } = authSlice.actions;
+export const { login, logout, updateName, updateAvatar } = authSlice.actions;
 export default authSlice.reducer;

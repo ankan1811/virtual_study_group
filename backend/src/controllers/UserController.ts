@@ -32,11 +32,12 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response): Prom
 export const updateProfile = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const me = req.user.userId;
-    const { name, bio } = req.body;
+    const { name, bio, avatar } = req.body;
 
     const update: Record<string, string> = {};
     if (name && name.trim()) update.name = name.trim();
     if (bio !== undefined) update.bio = bio;
+    if (avatar !== undefined) update.avatar = avatar;
 
     const user = await User.findByIdAndUpdate(me, update, { new: true }).select('name email bio avatar');
     if (!user) {
