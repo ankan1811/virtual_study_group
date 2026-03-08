@@ -12,6 +12,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 | **Real-time**        | Socket.IO                                                         |
 | **Video Calls**      | Agora RTC SDK                                                     |
 | **AI**               | Switchable: Google Gemini 2.5 Flash (default) / xAI Grok          |
+| **RAG / Embeddings** | Gemini `text-embedding-004` (768-dim vectors, free tier)          |
 | **Cloud Storage**    | Cloudflare R2 (S3-compatible, free tier) for summary persistence  |
 | **State Management** | Redux Toolkit                                                     |
 | **Whiteboard**       | @excalidraw/excalidraw (MIT, client-side, lazy-loaded)            |
@@ -195,6 +196,17 @@ A full-stack web application for creating virtual study group spaces with real-t
   - Generates a presigned download URL valid for 7 days
   - After saving, a VSG Bot message is broadcast to the room chat with the download link
   - **Monthly upload quota:** configurable via `R2_MAX_UPLOADS_PER_MONTH` env var (default: 10 per user)
+- **RAG-powered Q&A** — ask natural language questions across all saved summaries (e.g., "What did we discuss about React?", "What topics this week?")
+  - Proper **vector embeddings** using Gemini `text-embedding-004` (768-dim, free tier)
+  - Summaries are embedded at save time, stored as vectors in MongoDB
+  - At query time: question is embedded, cosine similarity finds the top 5 most relevant summaries, which are passed as context to Gemini 2.5 Flash for answering
+  - AI answers cite which summary and date the information comes from
+  - **Collapsible Q&A panel** on the Summaries page with suggestion chips, loading states, and source citation badges
+  - **Three-layer rate limiting** to protect the free tier:
+    - Per-user: `SUMMARY_QA_MAX_PER_USER` (default 10) per `SUMMARY_QA_WINDOW_MIN` (default 15 min)
+    - Global daily: `EMBEDDING_DAILY_MAX` (default 400) embedding API calls/day across all users, tracked via `EmbeddingCounter` collection
+    - Save-time embeddings naturally limited by existing R2 upload quota
+  - **Backfill script** (`backend/src/scripts/backfillEmbeddings.ts`) for generating embeddings on existing summaries
 
 ### Home Page
 
@@ -228,8 +240,10 @@ A full-stack web application for creating virtual study group spaces with real-t
   - Send OTP: `OTP_MAX_PER_EMAIL` (default 5) / `OTP_MAX_PER_IP` (default 7) per `OTP_WINDOW_MIN` (default 15 min)
 - **Per-userId rate limiting on authenticated endpoints:**
   - AI Doubt Solver & Session Summary: `AI_MAX_PER_USER` (default 20) per `AI_WINDOW_MIN` (default 15 min)
+  - Summary Q&A: `SUMMARY_QA_MAX_PER_USER` (default 10) per `SUMMARY_QA_WINDOW_MIN` (default 15 min) — tighter limit since each Q&A call makes both an embedding call and a chat completion call
   - User Search: `SEARCH_MAX_PER_USER` (default 30) per `SEARCH_WINDOW_MIN` (default 1 min)
 - **R2 summary upload quota:** `R2_MAX_UPLOADS_PER_MONTH` (default 10) per user per calendar month, tracked via MongoDB `UploadCounter` collection
+- **Embedding daily cap:** `EMBEDDING_DAILY_MAX` (default 400) embedding API calls per day across all users, tracked via MongoDB `EmbeddingCounter` collection. Protects Gemini free tier (~1,500 RPD for embeddings)
 - **Global safety net:** `GLOBAL_MAX_PER_IP` (default 200) per `GLOBAL_WINDOW_MIN` (default 15 min) across all routes
 - **Socket event throttling** (per-user, in-memory, configurable via env):
   - `dm:send`: `SOCKET_DM_INTERVAL_MS` (default 200ms)
@@ -323,6 +337,9 @@ OTP_EXPIRY_MINUTES=5              # OTP validity duration (default: 5 minutes)
 # SEARCH_MAX_PER_USER=30         # Max searches per user per window
 # GLOBAL_WINDOW_MIN=15           # Global safety net window in minutes
 # GLOBAL_MAX_PER_IP=200          # Max requests per IP per window (all routes)
+# SUMMARY_QA_WINDOW_MIN=15       # Summary Q&A window in minutes
+# SUMMARY_QA_MAX_PER_USER=10     # Max Q&A questions per user per window
+# EMBEDDING_DAILY_MAX=400        # Max embedding API calls per day (global, all users)
 # SOCKET_DM_INTERVAL_MS=200      # Min ms between DM sends per user
 # SOCKET_COMPANION_REQ_INTERVAL_MS=5000  # Min ms between companion requests
 # SOCKET_INVITE_INTERVAL_MS=3000 # Min ms between room invites
@@ -392,6 +409,7 @@ VITE_GOOGLE_CLIENT_ID=your_google_client_id # Google OAuth Client ID (from https
 | POST   | `/ai/whiteboard-summary`  | Generate AI whiteboard summary (rate limited: per-user)              |
 | POST   | `/ai/save-summary`        | Save summary to Cloudflare R2 + MongoDB, broadcast link to room chat |
 | POST   | `/ai/dm-summary`          | Generate AI summary of DM conversation with a companion              |
+| POST   | `/ai/summary-qa`          | RAG Q&A: ask questions across saved summaries (rate limited: per-user + daily embedding cap) |
 | GET    | `/ai/summaries`           | List saved summaries (filter by `?type=room\|dm\|whiteboard`)        |
 | DELETE | `/ai/summaries/:id`       | Delete a saved summary (ownership check)                             |
 | POST   | `/chat/bulk-save`         | Bulk-save room chat messages to MongoDB (auth required, max 500)     |

@@ -99,6 +99,14 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
   - Whiteboard: Summary button in WhiteboardPage toolbar (between Clear and AI Assist)
   - DM: Summary icon button (FileText) in DmPanel header
 - All use shared `generateAndSaveSummary()` utility from `utils/summaryApi.ts`
+- **RAG-powered Q&A panel** — collapsible panel above the sub-tabs with:
+  - Text input + send button for natural language questions across all saved summaries
+  - 3 suggestion chips ("What topics did I study this week?", "Summarize my recent sessions", "What questions came up in my last study session?")
+  - AI-generated answers with source citation badges (color-coded by summary type)
+  - Rate limit and error handling with amber warning styling
+  - Framer Motion AnimatePresence for smooth expand/collapse
+  - Calls `POST /ai/summary-qa` — backend embeds the question via Gemini `text-embedding-004`, finds top 5 most similar summaries via cosine similarity, passes them as context to Gemini 2.5 Flash
+  - All state local (no Redux): `qaOpen`, `qaQuestion`, `qaAnswer`, `qaSources`, `qaLoading`, `qaError`
 
 ### AI Integration
 - **Doubt Solver** — text + voice input (Web Speech API), powered by switchable AI (Gemini/Grok). Full dark mode support for input, Q&A bubbles, loading states, and mic button.

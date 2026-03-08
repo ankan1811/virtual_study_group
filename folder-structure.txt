@@ -96,7 +96,16 @@ virtual_study_group/
 |       |   |                          up to 100 DMs between user and companion,
 |       |   |                          formats as transcript, generates summary).
 |       |   |                          describeWhiteboardElements() helper
-|       |   |                          converts elements to compact text
+|       |   |                          converts elements to compact text.
+|       |   |                          RAG Q&A: generateEmbedding() uses Gemini
+|       |   |                          text-embedding-004 (768-dim vectors) with
+|       |   |                          global daily cap via EmbeddingCounter.
+|       |   |                          cosineSimilarity() for in-memory vector
+|       |   |                          comparison. querySummaries() controller:
+|       |   |                          embeds question -> cosine similarity search
+|       |   |                          across user's summaries -> top 5 as context
+|       |   |                          -> Gemini chat completion -> answer with
+|       |   |                          source citations
 |       |   |-- SummaryController.ts # Save AI summary to Cloudflare R2 + MongoDB.
 |       |   |                          Monthly upload quota per user via UploadCounter
 |       |   |                          model (R2_MAX_UPLOADS_PER_MONTH env var, def 10).
@@ -106,6 +115,8 @@ virtual_study_group/
 |       |   |                          Returns presigned download URL (7-day expiry).
 |       |   |                          Broadcasts VSG Bot message with link to room chat
 |       |   |                          via Socket.IO (skipped for DM summaries).
+|       |   |                          Generates vector embedding at save time via
+|       |   |                          generateEmbedding() (non-blocking on failure).
 |       |   |                          POST /ai/save-summary (summary + roomId -> url)
 |       |   |                          GET /ai/summaries (list by type, 50 per page)
 |       |   |                          DELETE /ai/summaries/:id (ownership check)
@@ -140,6 +151,7 @@ virtual_study_group/
 |       |   |                          (per-user rate limited),
 |       |   |                          /ai/save-summary (auth required, saves to R2+MongoDB),
 |       |   |                          /ai/dm-summary (generate DM summary),
+|       |   |                          POST /ai/summary-qa (RAG Q&A, summaryQaLimiter),
 |       |   |                          GET /ai/summaries (list saved summaries),
 |       |   |                          DELETE /ai/summaries/:id (delete summary)
 |       |   |-- dmRoutes.ts          # GET /dm/recent (recent chats aggregation),
@@ -167,9 +179,14 @@ virtual_study_group/
 |       |   |                          to+read (for fast unread-count queries)
 |       |   |-- Summary.ts           # Persistent summary model: userId (User ref),
 |       |   |                          type ('room'|'dm'|'whiteboard'), contextId,
-|       |   |                          contextLabel, title, content, r2Key, r2Url.
+|       |   |                          contextLabel, title, content, r2Key, r2Url,
+|       |   |                          embedding ([Number], 768-dim vector for RAG).
 |       |   |                          Index on { userId, type, createdAt: -1 }.
 |       |   |                          Used by SummariesPage for listing saved summaries
+|       |   |-- EmbeddingCounter.ts  # Global daily embedding usage counter: dateKey
+|       |   |                          ("2026-03-08"), count. Unique index on dateKey.
+|       |   |                          Used by generateEmbedding() to enforce daily cap
+|       |   |                          (EMBEDDING_DAILY_MAX env var, default 400)
 |       |   |-- UploadCounter.ts     # Upload quota tracker: userId, monthKey ("2026-03"),
 |       |   |                          count. Unique compound index on userId+monthKey.
 |       |   |                          Used by SummaryController for monthly R2 limit
@@ -178,21 +195,34 @@ virtual_study_group/
 |       |   |                          fromUserId, fromUserName, data (Mixed), read (bool).
 |       |   |                          TTL index on createdAt: auto-deleted after 10 days
 |       |
+|       |-- scripts/                 # One-time migration scripts
+|       |   |-- backfillEmbeddings.ts # Generates vector embeddings for existing
+|       |                              summaries that don't have them. Connects
+|       |                              to MongoDB, finds summaries with empty
+|       |                              embedding arrays, calls generateEmbedding()
+|       |                              for each with 1-second delay between calls.
+|       |                              Respects daily embedding cap. Run with:
+|       |                              npx ts-node src/scripts/backfillEmbeddings.ts
+|       |
 |       |-- middlewares/             # Express middleware
 |           |-- middleware.ts        # JWT token verification - extracts userId from
 |           |                          Authorization header. Exports AuthenticatedRequest
 |           |-- rateLimiter.ts       # Rate limiting middleware (express-rate-limit).
 |                                      RATE_LIMIT_CONFIG: every threshold reads from
 |                                      env vars via envInt() helper with defaults.
-|                                      Exports 7 limiters + config object:
+|                                      Exports 8 limiters + config object:
 |                                      authEmailLimiter (AUTH_MAX_PER_EMAIL, def 7),
 |                                      authIpLimiter (AUTH_MAX_PER_IP, def 15),
 |                                      otpEmailLimiter (OTP_MAX_PER_EMAIL, def 5),
 |                                      otpIpLimiter (OTP_MAX_PER_IP, def 7),
 |                                      aiLimiter (AI_MAX_PER_USER, def 20),
+|                                      summaryQaLimiter (SUMMARY_QA_MAX_PER_USER,
+|                                      def 10, tighter for RAG Q&A: each call =
+|                                      embedding + chat completion),
 |                                      searchLimiter (SEARCH_MAX_PER_USER, def 30),
 |                                      globalLimiter (GLOBAL_MAX_PER_IP, def 200).
-|                                      Also exports R2_MAX_UPLOADS_PER_MONTH (def 10)
+|                                      Also exports EMBEDDING_DAILY_MAX (def 400),
+|                                      R2_MAX_UPLOADS_PER_MONTH (def 10),
 |                                      and socket throttle intervals (SOCKET_*_MS)
 |                                      used by socketServer.ts + SummaryController.ts
 
@@ -317,6 +347,11 @@ virtual_study_group/
         |   |                          elements for AI payloads (type + text +
         |   |                          dimensions)
         |   |-- SummariesPage.tsx    # Dedicated summaries page at /summaries.
+        |   |                          RAG Q&A panel (collapsible, above tabs):
+        |   |                          text input + suggestion chips, calls
+        |   |                          POST /ai/summary-qa, displays AI answer
+        |   |                          with source citation badges. Error/rate
+        |   |                          limit handling with amber warning style.
         |   |                          3 sub-tabs: Room Chat, DM Chat, Whiteboard.
         |   |                          Fetches GET /ai/summaries?type= on mount
         |   |                          and tab switch. Summary cards with type
@@ -513,7 +548,9 @@ ENV CONFIGURATION
                      + Rate limiting env vars (all optional with defaults):
                        AUTH_WINDOW_MIN, AUTH_MAX_PER_EMAIL, AUTH_MAX_PER_IP,
                        OTP_WINDOW_MIN, OTP_MAX_PER_EMAIL, OTP_MAX_PER_IP,
-                       AI_WINDOW_MIN, AI_MAX_PER_USER, SEARCH_WINDOW_MIN,
+                       AI_WINDOW_MIN, AI_MAX_PER_USER,
+                       SUMMARY_QA_WINDOW_MIN, SUMMARY_QA_MAX_PER_USER,
+                       EMBEDDING_DAILY_MAX, SEARCH_WINDOW_MIN,
                        SEARCH_MAX_PER_USER, GLOBAL_WINDOW_MIN, GLOBAL_MAX_PER_IP,
                        SOCKET_DM_INTERVAL_MS, SOCKET_COMPANION_REQ_INTERVAL_MS,
                        SOCKET_INVITE_INTERVAL_MS
@@ -559,6 +596,7 @@ API ROUTES SUMMARY
     POST   /ai/whiteboard-summary  Generate AI summary of whiteboard content
     POST   /ai/save-summary        Save summary to Cloudflare R2 + MongoDB, broadcast link
     POST   /ai/dm-summary          Generate AI summary of DM conversation
+    POST   /ai/summary-qa          RAG Q&A: embed question, cosine similarity search, AI answer with sources
     GET    /ai/summaries           List saved summaries (filter by ?type=room|dm|whiteboard)
     DELETE /ai/summaries/:id       Delete a saved summary (ownership check)
 
@@ -638,7 +676,9 @@ DATABASE COLLECTIONS
                        TTL index on createdAt: auto-deleted after 10 days
   summaries        ->  { userId: ObjectId, type: 'room'|'dm'|'whiteboard', contextId: String,
                          contextLabel: String, title: String, content: String, r2Key: String,
-                         r2Url: String, timestamps }
+                         r2Url: String, embedding: [Number] (768-dim vector), timestamps }
                        Index on { userId, type, createdAt: -1 }
+  embeddingcounters -> { dateKey: String ("2026-03-08"), count: Number }
+                       Unique index on dateKey. Tracks daily embedding API calls globally
   uploadcounters   ->  { userId: String, monthKey: String ("2026-03"), count: Number }
                        Unique compound index on { userId, monthKey }
