@@ -80,7 +80,7 @@ virtual_study_group/
 |       |   |                          Emits real-time socket notifications
 |       |   |-- UserController.ts    # getProfile: returns name, email, bio, avatar,
 |       |   |                          companionCount for authenticated user.
-|       |   |                          updateProfile: updates name/bio, re-issues JWT.
+|       |   |                          updateProfile: updates name/bio/avatar, re-issues JWT.
 |       |   |                          searchUsers: search by name/email (case-insensitive,
 |       |   |                          excludes self, limit 10)
 |       |   |-- AiController.ts      # Switchable AI provider (Gemini/Grok) via
@@ -273,9 +273,21 @@ virtual_study_group/
         |   |                          - Add Companion modal with user search
         |   |                          - DM panel integration
         |   |-- ProfilePage.tsx      # User profile page - gradient banner, large
-        |   |                          initials avatar, editable name/bio, email
-        |   |                          display, companion count stats. Calls
-        |   |                          GET/PUT /user/profile, re-issues JWT on save
+        |   |                          avatar circle (emoji or initials), editable
+        |   |                          name/bio, email display, companion count.
+        |   |                          Default avatar picker: 5 themed avatars
+        |   |                          (camera icon opens modal, instant save to
+        |   |                          backend + Redux updateAvatar). Uses shared
+        |   |                          DEFAULT_AVATARS from utils/avatars.ts.
+        |   |                          Calls GET/PUT /user/profile, re-issues JWT
+        |   |-- SettingsPage.tsx     # Settings page at /settings. Sections:
+        |   |                          Appearance (dark mode toggle), Notifications
+        |   |                          (push + sound toggles), General (language,
+        |   |                          privacy), About (version). Account actions:
+        |   |                          Edit Profile + Log Out. Premium design with
+        |   |                          staggered Framer Motion animations, decorative
+        |   |                          blobs, grouped cards. Auth-guarded with JWT
+        |   |                          rehydration race condition handling
         |   |-- ChatsPage.tsx        # WhatsApp-style recent chats list. Fetches
         |   |                          GET /dm/recent on mount. Each row: companion
         |   |                          avatar, name, last message preview, timestamp,
@@ -338,8 +350,10 @@ virtual_study_group/
         |   |                          Nav items: Home, Chats, Summaries, My Room,
         |   |                          Study Radio, Streaming, Ask AI, Contact us.
         |   |                          Active route highlighting.
-        |   |                          Profile avatar (top-right) with dropdown:
-        |   |                          My Profile, Settings, My Room, Ask AI,
+        |   |                          Profile avatar (top-right): shows emoji avatar
+        |   |                          with matching gradient when set, initials when
+        |   |                          not. Uses getAvatarById() from utils/avatars.ts.
+        |   |                          Dropdown: My Profile, Settings, My Room, Ask AI,
         |   |                          Logout. Login icon shown when logged out.
         |   |                          Logout: clears localStorage token, disconnects
         |   |                          socket, resets Redux, redirects to /login
@@ -431,8 +445,8 @@ virtual_study_group/
         |   |   |-- store.ts         # Combined store config - 5 reducers: auth, room,
         |   |   |                      invite, companion, notification. Exports RootState,
         |   |   |                      AppDispatch, AuthState (backwards-compat alias)
-        |   |   |-- authSlice.ts     # Auth slice: login/logout/updateName actions.
-        |   |                          AuthUser: { name, userId, roomId }
+        |   |   |-- authSlice.ts     # Auth slice: login/logout/updateName/updateAvatar.
+        |   |                          AuthUser: { name, userId, roomId, avatar }
         |   |-- RoomStore/
         |   |   |-- store.ts         # Room store (legacy, unused - store is combined)
         |   |   |-- roomSlice.ts     # Room slice: { currentRoomId, isOwner }.
@@ -471,6 +485,11 @@ virtual_study_group/
         |   |-- socketInstance.ts    # Socket.IO singleton - connectSocket(token),
         |   |                          getSocket(), disconnectSocket(). All components
         |   |                          share one connection with JWT auth
+        |   |-- avatars.ts          # Shared default avatar constants. 5 themed
+        |   |                          avatars (Cool Guy, Scholar, Scientist, Artist,
+        |   |                          Astronaut) with id, label, gradient, emoji, bg.
+        |   |                          Exports DEFAULT_AVATARS array + getAvatarById()
+        |   |                          helper. Used by ProfilePage + Navbar
         |   |-- summaryApi.ts       # Shared generate+save summary utility.
         |   |                          generateAndSaveSummary(genEndpoint, genPayload,
         |   |                          saveParams) — calls AI endpoint, then saves
@@ -530,7 +549,7 @@ API ROUTES SUMMARY
 
   Users:
     GET    /user/profile             Get authenticated user's profile (name, email, bio, companionCount)
-    PUT    /user/profile             Update profile (name, bio) — re-issues JWT
+    PUT    /user/profile             Update profile (name, bio, avatar) — re-issues JWT
     GET    /user/search?q=          Search users by name/email
 
   AI (Gemini / Grok — switchable via AI_PROVIDER env var):

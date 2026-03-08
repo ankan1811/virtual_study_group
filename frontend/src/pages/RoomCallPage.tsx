@@ -326,7 +326,7 @@ export default function RoomCallPage() {
           <div className="h-14 flex-shrink-0 flex items-center justify-start px-3 gap-2">
             <button
               onClick={() => navigate(`/whiteboard/${roomId}`)}
-              className="group flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 text-white text-[11px] font-semibold poppins-semibold shadow-md shadow-teal-500/20 dark:shadow-teal-500/10 hover:shadow-lg hover:shadow-teal-500/30 hover:scale-[1.03] active:scale-[0.98] transition-all duration-200"
+              className="group flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-violet-500 to-indigo-500 text-white text-[11px] font-semibold poppins-semibold shadow-md shadow-violet-500/20 dark:shadow-violet-500/10 hover:shadow-lg hover:shadow-violet-500/30 hover:scale-[1.03] active:scale-[0.98] transition-all duration-200"
             >
               <PenTool size={13} className="group-hover:rotate-[-12deg] transition-transform duration-200" />
               Whiteboard

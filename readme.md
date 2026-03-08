@@ -60,11 +60,26 @@ A full-stack web application for creating virtual study group spaces with real-t
 ### User Profile
 
 - Profile page accessible from the profile avatar dropdown ("My Profile")
-- Gradient banner with large initials-based avatar, name, and "Student" label
+- Gradient banner with large avatar circle, name, and "Student" label
+- **Default avatar picker** — 5 themed avatars (Cool Guy, Scholar, Scientist, Artist, Astronaut) with emoji + gradient backgrounds. Camera icon overlay opens a modal picker with spring animations. "Use Initials Instead" option to revert to letter-based avatar
+- Avatar selection **saved instantly** to backend and Redux store. Persists across refreshes via API fetch on JWT rehydration (avatar not stored in JWT)
+- Avatar updates reflect **live across all UI** — Navbar top-right button, profile dropdown header, and profile page all read from Redux
+- Shared avatar constants in `frontend/src/utils/avatars.ts` (used by ProfilePage + Navbar)
 - Editable name and bio with inline edit/save mode
 - Stats row showing companion count and email
 - Profile updates re-issue JWT and sync Redux state instantly
 - Extended User model with `bio` and `avatar` fields
+
+### Settings
+
+- **Settings page** at `/settings` accessible from the profile avatar dropdown ("Settings")
+- **Appearance** section — functional dark mode toggle (uses existing `useDarkMode` hook), display preferences link
+- **Notifications** section — push notifications toggle, sound effects toggle
+- **General** section — language, privacy & security links
+- **About** section — app version info
+- **Account actions** — Edit Profile button (navigates to `/profile`), Log Out button
+- Premium design with staggered Framer Motion entry animations, decorative background blobs, grouped setting cards with dividers
+- Auth-guarded — redirects to login if not authenticated (with JWT rehydration race condition handling)
 
 ### Direct Messaging (DM)
 
@@ -195,7 +210,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 - Hamburger toggle at top-left
 - Sidebar items: Home, Chats, Summaries, My Room, Study Radio, Streaming, Ask AI, Contact us
 - "My Room" menu item dispatches room entry and navigates to call
-- Profile avatar dropdown with: My Profile, Settings, My Room, Ask AI, Logout
+- Profile avatar dropdown (shows emoji avatar when set, initials otherwise) with: My Profile, Settings, My Room, Ask AI, Logout
 - Active route highlighting
 
 ### Live Streaming (YouTube)
@@ -344,6 +359,7 @@ VITE_GOOGLE_CLIENT_ID=your_google_client_id # Google OAuth Client ID (from https
 | `/register`  | Register        |      No       |
 | `/home`      | Room Dashboard  |      Yes      |
 | `/profile`   | User Profile    |      Yes      |
+| `/settings`  | Settings        |      Yes      |
 | `/chats`     | Recent Chats    |      Yes      |
 | `/summaries` | Summaries       |      Yes      |
 | `/room/call` | Video Call Room |      Yes      |
@@ -367,7 +383,7 @@ VITE_GOOGLE_CLIENT_ID=your_google_client_id # Google OAuth Client ID (from https
 | GET    | `/companion/list`         | Get accepted companions                                              |
 | GET    | `/companion/pending`      | Get pending requests                                                 |
 | GET    | `/user/profile`           | Get authenticated user's profile (name, email, bio, companion count) |
-| PUT    | `/user/profile`           | Update profile (name, bio) — re-issues JWT                           |
+| PUT    | `/user/profile`           | Update profile (name, bio, avatar) — re-issues JWT                   |
 | GET    | `/user/search?q=`         | Search users by name/email (rate limited: per-user)                  |
 | GET    | `/news`                   | Get news feed articles                                               |
 | POST   | `/ai/ask`                 | Ask AI a study question (rate limited: per-user)                     |

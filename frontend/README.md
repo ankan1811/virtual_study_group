@@ -39,12 +39,24 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
 
 ### User Profile (`ProfilePage`)
 - Accessible from the profile avatar dropdown ("My Profile") — navigates to `/profile`
-- Gradient banner with large initials-based avatar circle, user name, and "Student" label
+- Gradient banner with large avatar circle, user name, and "Student" label
+- **Default avatar picker** — 5 themed avatars (Cool Guy, Scholar, Scientist, Artist, Astronaut) with emoji + gradient backgrounds. Camera icon overlay on the avatar opens a modal picker (Framer Motion spring). "Use Initials Instead" option to revert to letter-based avatar. Avatar saved instantly to backend + Redux (`updateAvatar` action)
+- Avatar persists on refresh — `AppInner` fetches `/user/profile` on JWT rehydration and dispatches `updateAvatar`. Shared constants in `utils/avatars.ts`
 - **Editable fields:** name (inline input) and bio (textarea)
 - **Read-only:** email display
 - Stats row showing companion count and email
-- Save button calls `PUT /user/profile`, re-issues JWT, updates Redux auth state with new name
+- Save button calls `PUT /user/profile` (name, bio, avatar), re-issues JWT, updates Redux auth state
 - Styled with Tailwind + Framer Motion (consistent with existing pages)
+
+### Settings (`SettingsPage`)
+- Accessible from the profile avatar dropdown ("Settings") — navigates to `/settings`
+- **Appearance** — dark mode toggle (functional, uses `useDarkMode` hook), display link
+- **Notifications** — push notifications toggle, sound effects toggle
+- **General** — language, privacy & security links
+- **About** — version info
+- **Account actions** — Edit Profile (navigates to `/profile`), Log Out
+- Premium design: staggered Framer Motion entry animations, decorative background blobs, grouped cards with custom toggle switches
+- Auth-guarded with JWT rehydration race condition handling
 
 ### Chats (`ChatsPage`)
 - WhatsApp-style recent conversations list at `/chats`, accessible from sidebar ("Chats" nav item)
@@ -58,7 +70,7 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
 
 ### Navbar
 - **Sidebar** (left) — hamburger toggle, slide-in panel with navigation links (Home, Chats, Summaries, My Room, Study Radio, Streaming, Ask AI, Contact us), dark mode toggle, logout
-- **Profile Avatar** (top-right) — gradient circle with user initials. Click opens a dropdown with: My Profile, Settings, My Room, Ask AI, Logout. Logged-out users see a login icon button.
+- **Profile Avatar** (top-right) — gradient circle showing emoji avatar (when set) or initials (default). Click opens a dropdown with: My Profile, Settings, My Room, Ask AI, Logout. Avatar gradient and emoji update live from Redux. Logged-out users see a login icon button.
 - **Dark Mode Toggle** — persistent toggle in both the floating top-left button and inside the sidebar
 - **Logout** — properly clears JWT from localStorage, disconnects socket, resets Redux state, redirects to `/login`
 
@@ -121,7 +133,7 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
 
 | Slice | State | Key Actions |
 |-------|-------|-------------|
-| `auth` | `isAuthenticated`, `user` | `login`, `logout` (+ token/socket cleanup), `updateName` |
+| `auth` | `isAuthenticated`, `user` | `login`, `logout` (+ token/socket cleanup), `updateName`, `updateAvatar` |
 | `room` | `currentRoomId`, `isOwner` | `enterRoom`, `leaveRoom` |
 | `invite` | `pendingInvite` | `receiveInvite`, `clearInvite` |
 | `companion` | `companions[]`, `pendingRequests[]` | `setCompanions`, `setOnline`, `setOffline`, `setPendingRequests`, `addPendingRequest`, `removePendingRequest`, `addCompanion` |
