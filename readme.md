@@ -68,8 +68,12 @@ A full-stack web application for creating virtual study group spaces with real-t
 - Shared avatar constants in `frontend/src/utils/avatars.ts` (used by ProfilePage + Navbar)
 - Editable name and bio with inline edit/save mode
 - Stats row showing companion count and email
+- **Education section** — degree, institution, and year with inline editing. Displayed as a styled card with bold degree and secondary institution/year line
+- **Projects showcase** — up to 2 projects with title, description, and clickable project link (opens in new tab). Add/remove projects in edit mode with dashed "Add Project" button. Each project rendered as a mini card with "View" link pill
+- **Work Experience** — single entry with company name, role (displayed as indigo badge), duration, and description. Full inline editing with 4 input fields
+- All new sections use consistent Tailwind styling with section icons (`GraduationCap`, `FolderGit2`, `Briefcase`), Framer Motion stagger animations, and full dark mode support
 - Profile updates re-issue JWT and sync Redux state instantly
-- Extended User model with `bio` and `avatar` fields
+- Extended User model with `bio`, `avatar`, `education`, `projects[]`, and `workExperience` fields
 
 ### Settings
 
@@ -401,8 +405,8 @@ VITE_GOOGLE_CLIENT_ID=your_google_client_id # Google OAuth Client ID (from https
 | POST   | `/companion/decline`      | Decline companion request                                            |
 | GET    | `/companion/list`         | Get accepted companions                                              |
 | GET    | `/companion/pending`      | Get pending requests                                                 |
-| GET    | `/user/profile`           | Get authenticated user's profile (name, email, bio, companion count) |
-| PUT    | `/user/profile`           | Update profile (name, bio, avatar) — re-issues JWT                   |
+| GET    | `/user/profile`           | Get authenticated user's profile (name, email, bio, avatar, education, projects, workExperience, companion count) |
+| PUT    | `/user/profile`           | Update profile (name, bio, avatar, education, projects, workExperience) — re-issues JWT |
 | GET    | `/user/search?q=`         | Search users by name/email (rate limited: per-user)                  |
 | GET    | `/news`                   | Get news feed articles                                               |
 | POST   | `/ai/ask`                 | Ask AI a study question (rate limited: per-user)                     |

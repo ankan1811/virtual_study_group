@@ -45,7 +45,13 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
 - **Editable fields:** name (inline input) and bio (textarea)
 - **Read-only:** email display
 - Stats row showing companion count and email
-- Save button calls `PUT /user/profile` (name, bio, avatar), re-issues JWT, updates Redux auth state
+- **Education section** — degree, institution, year. View mode shows styled card; edit mode shows 3 input fields. Icon: `GraduationCap`
+- **Projects showcase** — up to 2 projects (title, description, link). View mode shows mini cards with "View" link pill (`ExternalLink` icon); edit mode shows add/remove project cards with dashed "Add Project" button. Icon: `FolderGit2`
+- **Work Experience** — company, role (indigo badge), duration, description. View mode shows styled card; edit mode shows 4 input fields. Icon: `Briefcase`
+- All sections share global edit toggle — one Edit/Save session covers entire profile
+- Empty states with italic placeholder text ("No education added yet. Click Edit Profile to add!")
+- Staggered Framer Motion entry animations (0.1s delay increments per section)
+- Save button calls `PUT /user/profile` (name, bio, avatar, education, projects, workExperience), re-issues JWT, updates Redux auth state
 - Styled with Tailwind + Framer Motion (consistent with existing pages)
 
 ### Settings (`SettingsPage`)

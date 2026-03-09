@@ -80,8 +80,10 @@ virtual_study_group/
 |       |   |                          get companion list, get pending requests.
 |       |   |                          Emits real-time socket notifications
 |       |   |-- UserController.ts    # getProfile: returns name, email, bio, avatar,
+|       |   |                          education, projects, workExperience,
 |       |   |                          companionCount for authenticated user.
-|       |   |                          updateProfile: updates name/bio/avatar, re-issues JWT.
+|       |   |                          updateProfile: updates name/bio/avatar/
+|       |   |                          education/projects/workExperience, re-issues JWT.
 |       |   |                          searchUsers: search by name/email (case-insensitive,
 |       |   |                          excludes self, limit 10)
 |       |   |-- AiController.ts      # Switchable AI provider (Gemini/Grok) via
@@ -167,6 +169,13 @@ virtual_study_group/
 |       |   |-- User.ts              # User model: name, email (unique),
 |       |   |                          bio (default ''), avatar (default ''),
 |       |   |                          googleId (optional, for Google OAuth users).
+|       |   |                          education: { degree, institution, year }
+|       |   |                          (sub-schema, defaults empty strings).
+|       |   |                          projects: [{ title, description, link }]
+|       |   |                          (array of sub-schemas, max 2, default []).
+|       |   |                          workExperience: { company, role, duration,
+|       |   |                          description } (sub-schema, defaults empty).
+|       |   |                          All sub-schemas use _id: false.
 |       |   |                          Passwordless — no password field
 |       |   |-- Room.ts              # Room model: users[] (references User)
 |       |   |-- Chat.ts              # Chat model: sendBy (User ref), senderName, message,
@@ -310,7 +319,18 @@ virtual_study_group/
         |   |                          (camera icon opens modal, instant save to
         |   |                          backend + Redux updateAvatar). Uses shared
         |   |                          DEFAULT_AVATARS from utils/avatars.ts.
-        |   |                          Calls GET/PUT /user/profile, re-issues JWT
+        |   |                          Education section (GraduationCap icon):
+        |   |                          degree, institution, year with inline edit.
+        |   |                          Projects section (FolderGit2 icon): up to
+        |   |                          2 projects with title, description, link.
+        |   |                          Add/remove in edit mode. View shows mini
+        |   |                          cards with "View" link pill (ExternalLink).
+        |   |                          Work Experience section (Briefcase icon):
+        |   |                          company, role (indigo badge), duration,
+        |   |                          description. All sections share global
+        |   |                          editing toggle with staggered Framer Motion
+        |   |                          animations. Calls GET/PUT /user/profile,
+        |   |                          re-issues JWT
         |   |-- SettingsPage.tsx     # Settings page at /settings. Sections:
         |   |                          Appearance (dark mode toggle), Notifications
         |   |                          (push + sound toggles), General (language,
@@ -586,8 +606,8 @@ API ROUTES SUMMARY
     GET    /companion/pending       Get pending requests
 
   Users:
-    GET    /user/profile             Get authenticated user's profile (name, email, bio, companionCount)
-    PUT    /user/profile             Update profile (name, bio, avatar) — re-issues JWT
+    GET    /user/profile             Get authenticated user's profile (name, email, bio, avatar, education, projects, workExperience, companionCount)
+    PUT    /user/profile             Update profile (name, bio, avatar, education, projects, workExperience) — re-issues JWT
     GET    /user/search?q=          Search users by name/email
 
   AI (Gemini / Grok — switchable via AI_PROVIDER env var):
@@ -662,7 +682,10 @@ SOCKET EVENTS
 
 DATABASE COLLECTIONS
 ====================
-  users            ->  { name, email (unique), bio, avatar, googleId (optional) }
+  users            ->  { name, email (unique), bio, avatar, googleId (optional),
+                         education: { degree, institution, year },
+                         projects: [{ title, description, link }] (max 2),
+                         workExperience: { company, role, duration, description } }
   rooms            ->  { users: [ObjectId -> User] }
   chats            ->  { sendBy: ObjectId -> User, senderName: String, message: String,
                          room_id: String (e.g. "user_{userId}"), sessionId: String (UUID),
