@@ -13,6 +13,11 @@ import {
   Check,
   Camera,
   X,
+  GraduationCap,
+  FolderGit2,
+  ExternalLink,
+  Plus,
+  Briefcase,
 } from "lucide-react";
 import Navbar from "../components/Navbar";
 import { AuthState } from "../store/authStore/store";
@@ -20,6 +25,28 @@ import { updateName, updateAvatar } from "../store/authStore/authSlice";
 import { DEFAULT_AVATARS } from "../utils/avatars";
 
 const API = import.meta.env.VITE_API_URL;
+
+interface Education {
+  degree: string;
+  institution: string;
+  year: string;
+}
+
+interface Project {
+  title: string;
+  description: string;
+  link: string;
+}
+
+interface WorkExperience {
+  company: string;
+  role: string;
+  duration: string;
+  description: string;
+}
+
+const inputClass =
+  "w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-3 text-sm text-gray-700 dark:text-gray-300 outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition-all poppins-regular placeholder:text-gray-400";
 
 export default function ProfilePage() {
   const dispatch = useDispatch();
@@ -39,9 +66,21 @@ export default function ProfilePage() {
   const [editing, setEditing] = useState(false);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
 
+  const [education, setEducation] = useState<Education>({
+    degree: "",
+    institution: "",
+    year: "",
+  });
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [workExperience, setWorkExperience] = useState<WorkExperience>({
+    company: "",
+    role: "",
+    duration: "",
+    description: "",
+  });
+
   useEffect(() => {
     if (!isAuthenticated) {
-      // Don't redirect if token exists — JWT rehydration may still be in progress
       if (!localStorage.getItem("token")) navigate("/login");
       return;
     }
@@ -56,6 +95,9 @@ export default function ProfilePage() {
         setBio(res.data.bio || "");
         setAvatar(res.data.avatar || "");
         setCompanionCount(res.data.companionCount);
+        if (res.data.education) setEducation(res.data.education);
+        if (res.data.projects) setProjects(res.data.projects);
+        if (res.data.workExperience) setWorkExperience(res.data.workExperience);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -68,7 +110,7 @@ export default function ProfilePage() {
     try {
       const res = await axios.put(
         `${API}/user/profile`,
-        { name, bio, avatar },
+        { name, bio, avatar, education, projects, workExperience },
         { headers: { authorization: token } }
       );
       if (res.data.token) {
@@ -111,7 +153,26 @@ export default function ProfilePage() {
       .join("")
       .toUpperCase();
 
+  const updateProject = (index: number, field: keyof Project, value: string) => {
+    setProjects((prev) =>
+      prev.map((p, i) => (i === index ? { ...p, [field]: value } : p))
+    );
+  };
+
+  const addProject = () => {
+    if (projects.length < 2) {
+      setProjects((prev) => [...prev, { title: "", description: "", link: "" }]);
+    }
+  };
+
+  const removeProject = (index: number) => {
+    setProjects((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const currentAvatar = DEFAULT_AVATARS.find((a) => a.id === avatar);
+
+  const hasEducation = education.degree || education.institution || education.year;
+  const hasWorkExp = workExperience.company || workExperience.role;
 
   if (loading) {
     return (
@@ -164,7 +225,6 @@ export default function ProfilePage() {
                   {getInitials(name)}
                 </div>
               )}
-              {/* Change avatar button */}
               <button
                 onClick={() => setShowAvatarPicker(true)}
                 className="absolute -bottom-1 -right-1 w-9 h-9 rounded-full bg-white dark:bg-gray-800 shadow-lg border-2 border-gray-100 dark:border-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:scale-110 active:scale-95 transition-all"
@@ -242,7 +302,6 @@ export default function ProfilePage() {
                     ))}
                   </div>
 
-                  {/* Remove avatar option */}
                   <button
                     onClick={() => handleAvatarSelect("")}
                     className="w-full py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors poppins-regular"
@@ -297,7 +356,7 @@ export default function ProfilePage() {
           </div>
 
           {/* Bio section */}
-          <div className="px-6 py-5">
+          <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-800">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 poppins-semibold uppercase tracking-wide">
                 About
@@ -308,7 +367,7 @@ export default function ProfilePage() {
                   className="flex items-center gap-1.5 text-xs text-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors poppins-regular"
                 >
                   <Pencil size={13} />
-                  Edit
+                  Edit Profile
                 </button>
               )}
             </div>
@@ -319,14 +378,287 @@ export default function ProfilePage() {
                 onChange={(e) => setBio(e.target.value)}
                 placeholder="Write something about yourself..."
                 rows={3}
-                className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-3 text-sm text-gray-700 dark:text-gray-300 outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition-all resize-none poppins-regular placeholder:text-gray-400"
+                className={`${inputClass} resize-none`}
               />
             ) : (
               <p className="text-sm text-gray-600 dark:text-gray-400 poppins-regular leading-relaxed">
-                {bio || "No bio yet. Click Edit to add one!"}
+                {bio || "No bio yet. Click Edit Profile to add one!"}
               </p>
             )}
           </div>
+
+          {/* Education section */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="px-6 py-5 border-b border-gray-100 dark:border-gray-800"
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 flex items-center justify-center">
+                <GraduationCap size={16} className="text-indigo-500" />
+              </div>
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 poppins-semibold uppercase tracking-wide">
+                Education
+              </h2>
+            </div>
+
+            {editing ? (
+              <div className="space-y-3">
+                <input
+                  value={education.degree}
+                  onChange={(e) =>
+                    setEducation((prev) => ({ ...prev, degree: e.target.value }))
+                  }
+                  placeholder="Degree (e.g. B.Tech in Computer Science)"
+                  className={inputClass}
+                />
+                <input
+                  value={education.institution}
+                  onChange={(e) =>
+                    setEducation((prev) => ({
+                      ...prev,
+                      institution: e.target.value,
+                    }))
+                  }
+                  placeholder="Institution (e.g. IIT Delhi)"
+                  className={inputClass}
+                />
+                <input
+                  value={education.year}
+                  onChange={(e) =>
+                    setEducation((prev) => ({ ...prev, year: e.target.value }))
+                  }
+                  placeholder="Year (e.g. 2021 - 2025)"
+                  className={inputClass}
+                />
+              </div>
+            ) : hasEducation ? (
+              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4">
+                <p className="text-sm font-semibold text-gray-900 dark:text-white poppins-semibold">
+                  {education.degree}
+                </p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 poppins-regular mt-1">
+                  {[education.institution, education.year]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 dark:text-gray-500 poppins-regular italic">
+                No education added yet. Click Edit Profile to add!
+              </p>
+            )}
+          </motion.div>
+
+          {/* Projects section */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="px-6 py-5 border-b border-gray-100 dark:border-gray-800"
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-violet-50 dark:bg-violet-950/40 flex items-center justify-center">
+                <FolderGit2 size={16} className="text-violet-500" />
+              </div>
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 poppins-semibold uppercase tracking-wide">
+                Projects
+              </h2>
+            </div>
+
+            {editing ? (
+              <div className="space-y-4">
+                {projects.map((project, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="relative bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 space-y-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-gray-400 dark:text-gray-500 poppins-semibold uppercase tracking-wide">
+                        Project {i + 1}
+                      </span>
+                      <button
+                        onClick={() => removeProject(i)}
+                        className="p-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 text-gray-400 hover:text-red-500 transition-colors"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <input
+                      value={project.title}
+                      onChange={(e) => updateProject(i, "title", e.target.value)}
+                      placeholder="Project Title"
+                      className={inputClass}
+                    />
+                    <textarea
+                      value={project.description}
+                      onChange={(e) =>
+                        updateProject(i, "description", e.target.value)
+                      }
+                      placeholder="Brief description of the project..."
+                      rows={2}
+                      className={`${inputClass} resize-none`}
+                    />
+                    <input
+                      value={project.link}
+                      onChange={(e) => updateProject(i, "link", e.target.value)}
+                      placeholder="Project Link (e.g. https://github.com/...)"
+                      className={inputClass}
+                    />
+                  </motion.div>
+                ))}
+
+                {projects.length < 2 && (
+                  <motion.button
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.99 }}
+                    onClick={addProject}
+                    className="w-full py-3 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 text-sm text-gray-400 dark:text-gray-500 hover:border-indigo-400 hover:text-indigo-500 dark:hover:border-indigo-500 dark:hover:text-indigo-400 transition-all flex items-center justify-center gap-2 poppins-regular"
+                  >
+                    <Plus size={16} />
+                    Add Project ({projects.length}/2)
+                  </motion.button>
+                )}
+              </div>
+            ) : projects.length > 0 ? (
+              <div className="space-y-3">
+                {projects.map((project, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white poppins-semibold">
+                          {project.title}
+                        </h3>
+                        {project.description && (
+                          <p className="text-sm text-gray-500 dark:text-gray-400 poppins-regular mt-1 line-clamp-2">
+                            {project.description}
+                          </p>
+                        )}
+                      </div>
+                      {project.link && (
+                        <a
+                          href={project.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 text-xs font-medium poppins-semibold hover:bg-indigo-100 dark:hover:bg-indigo-950/60 transition-colors"
+                        >
+                          <ExternalLink size={12} />
+                          View
+                        </a>
+                      )}
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 dark:text-gray-500 poppins-regular italic">
+                No projects added yet. Click Edit Profile to showcase your work!
+              </p>
+            )}
+          </motion.div>
+
+          {/* Work Experience section */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="px-6 py-5"
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center">
+                <Briefcase size={16} className="text-emerald-500" />
+              </div>
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 poppins-semibold uppercase tracking-wide">
+                Work Experience
+              </h2>
+            </div>
+
+            {editing ? (
+              <div className="space-y-3">
+                <input
+                  value={workExperience.company}
+                  onChange={(e) =>
+                    setWorkExperience((prev) => ({
+                      ...prev,
+                      company: e.target.value,
+                    }))
+                  }
+                  placeholder="Company Name"
+                  className={inputClass}
+                />
+                <input
+                  value={workExperience.role}
+                  onChange={(e) =>
+                    setWorkExperience((prev) => ({
+                      ...prev,
+                      role: e.target.value,
+                    }))
+                  }
+                  placeholder="Role (e.g. Frontend Developer)"
+                  className={inputClass}
+                />
+                <input
+                  value={workExperience.duration}
+                  onChange={(e) =>
+                    setWorkExperience((prev) => ({
+                      ...prev,
+                      duration: e.target.value,
+                    }))
+                  }
+                  placeholder="Duration (e.g. Jan 2024 - Present)"
+                  className={inputClass}
+                />
+                <textarea
+                  value={workExperience.description}
+                  onChange={(e) =>
+                    setWorkExperience((prev) => ({
+                      ...prev,
+                      description: e.target.value,
+                    }))
+                  }
+                  placeholder="Describe your role and responsibilities..."
+                  rows={2}
+                  className={`${inputClass} resize-none`}
+                />
+              </div>
+            ) : hasWorkExp ? (
+              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white poppins-semibold">
+                    {workExperience.company}
+                  </p>
+                  {workExperience.role && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 text-xs font-medium poppins-semibold">
+                      {workExperience.role}
+                    </span>
+                  )}
+                </div>
+                {workExperience.duration && (
+                  <p className="text-xs text-gray-400 dark:text-gray-500 poppins-regular mt-1.5">
+                    {workExperience.duration}
+                  </p>
+                )}
+                {workExperience.description && (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 poppins-regular mt-2 leading-relaxed">
+                    {workExperience.description}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 dark:text-gray-500 poppins-regular italic">
+                No work experience added yet. Click Edit Profile to add!
+              </p>
+            )}
+          </motion.div>
 
           {/* Action buttons */}
           {editing && (

@@ -7,7 +7,7 @@ import { AuthenticatedRequest } from '../middlewares/middleware';
 export const getProfile = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const me = req.user.userId;
-    const user = await User.findById(me).select('name email bio avatar');
+    const user = await User.findById(me).select('name email bio avatar education projects workExperience');
     if (!user) {
       res.status(404).json({ error: 'User not found' });
       return;
@@ -22,6 +22,9 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response): Prom
       bio: user.bio || '',
       avatar: user.avatar || '',
       companionCount,
+      education: user.education || { degree: '', institution: '', year: '' },
+      projects: user.projects || [],
+      workExperience: user.workExperience || { company: '', role: '', duration: '', description: '' },
     });
   } catch (error) {
     console.error(error);
@@ -32,14 +35,17 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response): Prom
 export const updateProfile = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const me = req.user.userId;
-    const { name, bio, avatar } = req.body;
+    const { name, bio, avatar, education, projects, workExperience } = req.body;
 
-    const update: Record<string, string> = {};
+    const update: Record<string, any> = {};
     if (name && name.trim()) update.name = name.trim();
     if (bio !== undefined) update.bio = bio;
     if (avatar !== undefined) update.avatar = avatar;
+    if (education !== undefined) update.education = education;
+    if (projects !== undefined) update.projects = projects;
+    if (workExperience !== undefined) update.workExperience = workExperience;
 
-    const user = await User.findByIdAndUpdate(me, update, { new: true }).select('name email bio avatar');
+    const user = await User.findByIdAndUpdate(me, update, { new: true }).select('name email bio avatar education projects workExperience');
     if (!user) {
       res.status(404).json({ error: 'User not found' });
       return;
@@ -56,6 +62,9 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response): P
       email: user.email,
       bio: user.bio || '',
       avatar: user.avatar || '',
+      education: user.education || { degree: '', institution: '', year: '' },
+      projects: user.projects || [],
+      workExperience: user.workExperience || { company: '', role: '', duration: '', description: '' },
       token,
     });
   } catch (error) {
