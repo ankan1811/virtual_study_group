@@ -18,7 +18,16 @@ import {
   ExternalLink,
   Plus,
   Briefcase,
+  Github,
+  Gitlab,
+  Youtube,
+  Linkedin,
+  Figma,
+  Dribbble,
+  Codepen,
+  Globe,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import Navbar from "../components/Navbar";
 import { AuthState } from "../store/authStore/store";
 import { updateName, updateAvatar } from "../store/authStore/authSlice";
@@ -44,6 +53,33 @@ interface WorkExperience {
   duration: string;
   description: string;
 }
+
+interface LinkInfo {
+  label: string;
+  icon: LucideIcon;
+  bg: string;
+  text: string;
+}
+
+const LINK_BRANDS: { pattern: RegExp; info: LinkInfo }[] = [
+  { pattern: /github\.com/i, info: { label: "GitHub", icon: Github, bg: "bg-gray-900 dark:bg-gray-700", text: "text-white" } },
+  { pattern: /gitlab\.com/i, info: { label: "GitLab", icon: Gitlab, bg: "bg-orange-50 dark:bg-orange-950/40", text: "text-orange-600 dark:text-orange-400" } },
+  { pattern: /figma\.com/i, info: { label: "Figma", icon: Figma, bg: "bg-purple-50 dark:bg-purple-950/40", text: "text-purple-600 dark:text-purple-400" } },
+  { pattern: /canva\.com/i, info: { label: "Canva", icon: Globe, bg: "bg-teal-50 dark:bg-teal-950/40", text: "text-teal-600 dark:text-teal-400" } },
+  { pattern: /linkedin\.com/i, info: { label: "LinkedIn", icon: Linkedin, bg: "bg-blue-50 dark:bg-blue-950/40", text: "text-blue-600 dark:text-blue-400" } },
+  { pattern: /youtube\.com|youtu\.be/i, info: { label: "YouTube", icon: Youtube, bg: "bg-red-50 dark:bg-red-950/40", text: "text-red-600 dark:text-red-400" } },
+  { pattern: /dribbble\.com/i, info: { label: "Dribbble", icon: Dribbble, bg: "bg-pink-50 dark:bg-pink-950/40", text: "text-pink-600 dark:text-pink-400" } },
+  { pattern: /codepen\.io/i, info: { label: "CodePen", icon: Codepen, bg: "bg-gray-100 dark:bg-gray-800", text: "text-gray-700 dark:text-gray-300" } },
+  { pattern: /vercel\.app|vercel\.com/i, info: { label: "Vercel", icon: Globe, bg: "bg-gray-900 dark:bg-gray-700", text: "text-white" } },
+  { pattern: /netlify\.app|netlify\.com/i, info: { label: "Netlify", icon: Globe, bg: "bg-emerald-50 dark:bg-emerald-950/40", text: "text-emerald-600 dark:text-emerald-400" } },
+  { pattern: /notion\.so|notion\.site/i, info: { label: "Notion", icon: Globe, bg: "bg-gray-100 dark:bg-gray-800", text: "text-gray-700 dark:text-gray-300" } },
+];
+
+const getProjectLinkInfo = (url: string): LinkInfo => {
+  const match = LINK_BRANDS.find((b) => b.pattern.test(url));
+  if (match) return match.info;
+  return { label: "View", icon: ExternalLink, bg: "bg-indigo-50 dark:bg-indigo-950/40", text: "text-indigo-600 dark:text-indigo-400" };
+};
 
 const inputClass =
   "w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-3 text-sm text-gray-700 dark:text-gray-300 outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition-all poppins-regular placeholder:text-gray-400";
@@ -98,6 +134,8 @@ export default function ProfilePage() {
         if (res.data.education) setEducation(res.data.education);
         if (res.data.projects) setProjects(res.data.projects);
         if (res.data.workExperience) setWorkExperience(res.data.workExperience);
+        // Sync avatar to Redux so Navbar top-right circle stays in sync
+        if (res.data.avatar) dispatch(updateAvatar(res.data.avatar));
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -544,17 +582,21 @@ export default function ProfilePage() {
                           </p>
                         )}
                       </div>
-                      {project.link && (
-                        <a
-                          href={project.link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 text-xs font-medium poppins-semibold hover:bg-indigo-100 dark:hover:bg-indigo-950/60 transition-colors"
-                        >
-                          <ExternalLink size={12} />
-                          View
-                        </a>
-                      )}
+                      {project.link && (() => {
+                        const linkInfo = getProjectLinkInfo(project.link);
+                        const LinkIcon = linkInfo.icon;
+                        return (
+                          <a
+                            href={project.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg ${linkInfo.bg} ${linkInfo.text} text-xs font-medium poppins-semibold hover:opacity-80 transition-all hover:scale-105 active:scale-95`}
+                          >
+                            <LinkIcon size={13} />
+                            {linkInfo.label}
+                          </a>
+                        );
+                      })()}
                     </div>
                   </motion.div>
                 ))}
