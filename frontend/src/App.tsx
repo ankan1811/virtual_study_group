@@ -13,6 +13,7 @@ import ProfilePage from "./pages/ProfilePage";
 import ChatsPage from "./pages/ChatsPage";
 import SummariesPage from "./pages/SummariesPage";
 import RadioPage from "./pages/RadioPage";
+import PodcastsPage from "./pages/PodcastsPage";
 import WhiteboardPage from "./pages/WhiteboardPage";
 import JoinRoomPage from "./pages/JoinRoomPage";
 import SettingsPage from "./pages/SettingsPage";
@@ -71,6 +72,7 @@ function AppInner() {
           <Route element={<SummariesPage />} path="/summaries" />
           <Route element={<RoomCallPage />} path="/room/call" />
           <Route element={<RadioPage />} path="/radio" />
+          <Route element={<PodcastsPage />} path="/podcasts" />
           <Route element={<JoinRoomPage />} path="/join/:roomId" />
           <Route element={<WhiteboardPage />} path="/whiteboard/:roomId" />
           <Route element={<WhiteboardPage />} path="/whiteboard" />

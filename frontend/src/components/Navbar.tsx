@@ -19,6 +19,7 @@ import {
   BookOpen,
   Headphones,
   FileText,
+  Mic2,
 } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { AuthState } from "../store/authStore/store";
@@ -37,6 +38,7 @@ const navItems = [
   { title: "My Room", path: "/room/call", icon: DoorOpen },
   { title: "Ask AI", path: "/ask", icon: Bot },
   { title: "Study Radio", path: "/radio", icon: Headphones },
+  { title: "Podcasts", path: "/podcasts", icon: Mic2 },
   { title: "Contact us", path: "/contact", icon: Mail },
 ];
 
