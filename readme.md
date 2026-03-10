@@ -17,6 +17,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 | **State Management** | Redux Toolkit                                                     |
 | **Whiteboard**       | @excalidraw/excalidraw (MIT, client-side, lazy-loaded)            |
 | **Study Radio**      | SomaFM internet radio streams (ambient/chill/electronic)          |
+| **Podcasts**         | Listen Notes API (300 free calls/month) — curated across 5 topics, JSON file cache, node-cron bi-weekly refresh |
 | **Styling**          | Tailwind CSS, shadcn/ui, Framer Motion                            |
 | **Auth**             | Stateless OTP (HMAC-SHA256) + Google OAuth + JWT + nodemailer     |
 | **Rate Limiting**    | express-rate-limit (per-user + per-IP, all thresholds via env vars) |
