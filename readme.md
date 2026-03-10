@@ -21,8 +21,6 @@ A full-stack web application for creating virtual study group spaces with real-t
 | **Styling**          | Tailwind CSS, shadcn/ui, Framer Motion                            |
 | **Auth**             | Stateless OTP (HMAC-SHA256) + Google OAuth + JWT + nodemailer     |
 | **Rate Limiting**    | express-rate-limit (per-user + per-IP, all thresholds via env vars) |
-| **Streaming**        | FFmpeg (RTMP to YouTube Live)                                     |
-| **Audio Viz**        | P5.js                                                             |
 | **News Feed**        | Mock articles (AI / Tech / Productivity categories, 30-min cache) |
 
 ## Features
@@ -247,13 +245,6 @@ A full-stack web application for creating virtual study group spaces with real-t
 - Profile avatar dropdown (shows emoji avatar when set, initials otherwise) with: My Profile, Settings, My Room, Ask AI, Logout
 - Active route highlighting
 
-### Live Streaming (YouTube)
-
-- Camera preview with device controls
-- FFmpeg child process for RTMP streaming
-- YouTube Live stream key integration
-- H264/AAC encoding pipeline
-
 ### Rate Limiting & Security
 
 - **All rate limit thresholds configurable via env vars** — every value in `RATE_LIMIT_CONFIG` reads from a corresponding env var with sensible defaults. No code changes needed to tune limits
@@ -286,7 +277,6 @@ A full-stack web application for creating virtual study group spaces with real-t
 ## Coming Soon
 
 - Screen sharing in video calls
-- Full streaming pipeline (frontend-to-backend wiring)
 - Session analytics dashboard
 - Study streak tracking
 - Whiteboard image export to AI (Gemini Vision) for richer spatial analysis
@@ -408,7 +398,6 @@ VITE_GOOGLE_CLIENT_ID=your_google_client_id # Google OAuth Client ID (from https
 | `/whiteboard/:roomId` | Collaborative Whiteboard |  Yes  |
 | `/radio`     | Study Radio     |      Yes      |
 | `/podcasts`  | Podcasts        |      No       |
-| `/stream`    | Live Streaming  |      Yes      |
 | `/ask`       | Ask AI (Voice)  |      Yes      |
 
 ## API Endpoints
