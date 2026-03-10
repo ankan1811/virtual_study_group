@@ -17,6 +17,7 @@ import path from "path";
 import cors from "cors";
 import { initSocketServer } from "./socketServer";
 import { globalLimiter } from "./middlewares/rateLimiter";
+import { startPodcastCacheJob } from "./jobs/podcastCacheJob";
 dotenv.config({ path: path.join(__dirname, "../.env") });
 
 const app = express();
@@ -55,4 +56,5 @@ initSocketServer(httpServer);
 
 httpServer.listen(PORT, () => {
   console.log(`🔥🧯 Server is running on PORT ${PORT} ⚡`);
+  startPodcastCacheJob();
 });

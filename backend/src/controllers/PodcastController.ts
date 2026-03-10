@@ -345,6 +345,20 @@ const MOCK_FALLBACK: Record<Topic, PodcastItem[]> = {
   ],
 };
 
+// ─── Cache refresh (used by cron job) ────────────────────────────────────────
+
+export async function refreshTopicCache(topic: Topic): Promise<boolean> {
+  const fresh = await fetchFromListenNotes(topic);
+  if (fresh && fresh.length > 0) {
+    writeCache(topic, fresh);
+    return true;
+  }
+  return false;
+}
+
+export { VALID_TOPICS };
+export type { Topic };
+
 // ─── Controller export ────────────────────────────────────────────────────────
 
 export const getPodcasts = async (req: Request, res: Response): Promise<void> => {
