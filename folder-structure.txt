@@ -13,10 +13,19 @@ virtual_study_group/
 |   |                                  AI_PROVIDER, GEMINI_API_KEY, GEMINI_EMBEDDING_MODEL,
 |   |                                  GROK_API_KEY,
 |   |                                  R2_*, AGORA_APP_ID, SMTP_*,
+|   |                                  LISTEN_NOTES_API_KEY,
 |   |                                  + optional rate limit overrides)
 |   |-- .gitignore                   # Git ignore rules for backend
 |   |-- package.json                 # Backend dependencies and scripts
 |   |-- tsconfig.json                # TypeScript configuration for backend
+|   |
+|   |-- cache/                       # JSON file caches (gitignored)
+|   |   |-- podcasts/               # One file per podcast topic
+|   |       |-- trending.json       # { data: PodcastItem[], fetchedAt: ISO }
+|   |       |-- ai.json
+|   |       |-- tech.json
+|   |       |-- business.json
+|   |       |-- productivity.json
 |   |
 |   |-- src/                         # All backend source code
 |       |
@@ -61,6 +70,16 @@ virtual_study_group/
 |       |                              verifyOtp(email, otp, hash, expires) → boolean.
 |       |                              Uses OTP_SECRET + OTP_EXPIRY_MINUTES env vars.
 |       |                              crypto.timingSafeEqual for timing-attack prevention
+|       |
+|       |-- jobs/                    # Scheduled background jobs
+|       |   |-- podcastCacheJob.ts   # node-cron job: refreshes all 5 podcast topic caches
+|       |                              at 02:00 UTC every Tuesday (2) and Saturday (6).
+|       |                              Sequential topic fetching with 1.5s gap between
+|       |                              API calls to avoid burst rate limiting.
+|       |                              Imports refreshTopicCache() + VALID_TOPICS from
+|       |                              PodcastController. Exports startPodcastCacheJob()
+|       |                              called from server.ts on startup. Logs per-topic
+|       |                              success/failure; keeps stale cache on API failure
 |       |
 |       |-- controllers/             # Request handlers (business logic)
 |       |   |-- AuthController.ts    # OTP-based auth + Google OAuth.
@@ -137,7 +156,20 @@ virtual_study_group/
 |       |   |                          markAllRead, deleteNotification. All scoped to
 |       |   |                          authenticated user via verifyToken middleware.
 |       |   |-- NewsController.ts    # Returns 12 mock news articles across
-|       |                              AI, Tech, Productivity categories
+|       |   |                          AI, Tech, Productivity categories
+|       |   |-- PodcastController.ts # Listen Notes API integration with JSON file cache.
+|       |                              Topics: trending, ai, tech, business, productivity.
+|       |                              Cache dir: backend/cache/podcasts/{topic}.json
+|       |                              (auto-created via fs.mkdirSync at module load).
+|       |                              Cache struct: { data: PodcastItem[], fetchedAt: ISO }.
+|       |                              Cache valid if fetchedAt >= last Tue/Sat midnight
+|       |                              (getLastRefreshBoundary() walks back up to 7 days).
+|       |                              Request flow: fresh cache -> Listen Notes API ->
+|       |                              stale cache -> mock fallback (3 items/topic).
+|       |                              Response: { data, fetchedAt, source }.
+|       |                              Exports: getPodcasts (controller), refreshTopicCache
+|       |                              (used by cron job), VALID_TOPICS, Topic type.
+|       |                              Env: LISTEN_NOTES_API_KEY
 |       |
 |       |-- routes/                  # Express route definitions
 |       |   |-- authRoutes.ts        # /auth/send-otp (OTP email+IP rate limited),
@@ -166,6 +198,8 @@ virtual_study_group/
 |       |   |-- notificationRoutes.ts # GET /notifications, PATCH /:id/read,
 |       |   |                          PATCH /read-all, DELETE /:id
 |       |   |-- newsRoutes.ts        # /news
+|       |   |-- podcastRoutes.ts     # GET /podcasts/:topic -> getPodcasts.
+|       |                              No auth required (public content, same as /news)
 |       |
 |       |-- models/                  # Mongoose schemas and models
 |       |   |-- User.ts              # User model: name, email (unique),
