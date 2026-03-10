@@ -39,6 +39,9 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(globalLimiter);
 
+// Health / uptime ping — no auth, exempt from global rate limiter
+app.get("/ping", (_req, res) => res.json({ ok: true, ts: Date.now() }));
+
 // Routes
 app.use("/auth", authRoutes);
 app.use("/room", roomRoutes);
