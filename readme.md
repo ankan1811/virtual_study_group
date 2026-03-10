@@ -139,6 +139,22 @@ A full-stack web application for creating virtual study group spaces with real-t
 - **Toolbar** — top bar with Back to Room, Clear whiteboard, Summary (generates + saves whiteboard summary to R2 + MongoDB), and AI Assist toggle
 - **Smart AI payloads** — sends compact text descriptions (element type, text content, dimensions) rather than raw JSON
 
+### Podcasts
+
+- **Podcast discovery page** at `/podcasts` accessible from the sidebar (Mic2 icon)
+- **5 topic tabs:** Trending, AI, Tech, Business, Productivity & Tools — each lazily fetched on first tab visit
+- **Listen Notes API** integration (`GET /podcasts/:topic`) — uses `best_podcasts` endpoint for genre-based topics and `search` for AI
+- **JSON file cache** in `backend/cache/podcasts/{topic}.json` — persists across server restarts
+  - Cache validity: checks if `fetchedAt >= last Tuesday or Saturday midnight` (no cron needed for correctness)
+  - Refresh chain: fresh cache → Listen Notes API → stale cache → 3 mock fallback podcasts per topic
+  - `source` field in response: `"cache" | "api" | "stale-cache" | "mock"` — frontend shows amber notice on stale/mock
+- **Scheduled refresh** via `node-cron` — runs at 02:00 UTC every Tuesday and Saturday (5 topics × 2 = 10 API calls/week ≈ 40/month, well within the 300/month free tier). Registered in `server.ts` on startup.
+- Sequential topic fetching with 1.5s gap to avoid API burst limits
+- **Podcast cards**: thumbnail, title, publisher, 3-line description, listen score badge, episode count, "Listen Now" external link → Listen Notes
+- **Refresh banner**: pulsing dot + "Fresh drops every Tue & Sat — stay ahead of the curve."
+- **Animated tab bar** with Framer Motion `layoutId` sliding gradient highlight per topic
+- Skeleton loading grid (8 ghost cards) while fetching; error state with retry button
+
 ### Study Radio
 
 - **Full-page radio player** at `/radio` — browse and play curated internet radio channels from SomaFM
@@ -226,7 +242,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 
 - Collapsible sidebar (not a top bar) with framer-motion spring animation
 - Hamburger toggle at top-left
-- Sidebar items: Home, Chats, Summaries, My Room, Study Radio, Streaming, Ask AI, Contact us
+- Sidebar items: Home, Chats, Summaries, My Room, Ask AI, Study Radio, Podcasts, Contact us
 - "My Room" menu item dispatches room entry and navigates to call
 - Profile avatar dropdown (shows emoji avatar when set, initials otherwise) with: My Profile, Settings, My Room, Ask AI, Logout
 - Active route highlighting
@@ -324,6 +340,7 @@ R2_SECRET_ACCESS_KEY=your_r2_secret # R2 API token secret key
 R2_BUCKET_NAME=study-summaries    # R2 bucket name for saved summaries
 R2_MAX_UPLOADS_PER_MONTH=10      # Max summary uploads per user per month (default: 10)
 AGORA_APP_ID=your_agora_app_id   # Agora RTC App ID
+LISTEN_NOTES_API_KEY=your_key   # Listen Notes API key (300 free calls/month) — https://www.listennotes.com/api/
 SMTP_HOST=smtp.gmail.com          # SMTP server for OTP emails
 SMTP_PORT=587                     # SMTP port (587 for TLS)
 SMTP_USER=your-email@gmail.com    # SMTP sender email
@@ -390,6 +407,7 @@ VITE_GOOGLE_CLIENT_ID=your_google_client_id # Google OAuth Client ID (from https
 | `/join/:roomId` | Join Room via Invite Link | No (redirects to login) |
 | `/whiteboard/:roomId` | Collaborative Whiteboard |  Yes  |
 | `/radio`     | Study Radio     |      Yes      |
+| `/podcasts`  | Podcasts        |      No       |
 | `/stream`    | Live Streaming  |      Yes      |
 | `/ask`       | Ask AI (Voice)  |      Yes      |
 
@@ -410,6 +428,7 @@ VITE_GOOGLE_CLIENT_ID=your_google_client_id # Google OAuth Client ID (from https
 | PUT    | `/user/profile`           | Update profile (name, bio, avatar, education, projects, workExperience) — re-issues JWT |
 | GET    | `/user/search?q=`         | Search users by name/email (rate limited: per-user)                  |
 | GET    | `/news`                   | Get news feed articles                                               |
+| GET    | `/podcasts/:topic`        | Get podcasts for topic (`trending\|ai\|tech\|business\|productivity`) — JSON file cache, Tue/Sat refresh |
 | POST   | `/ai/ask`                 | Ask AI a study question (rate limited: per-user)                     |
 | POST   | `/ai/summary`             | Generate AI chat session summary (rate limited: per-user)            |
 | POST   | `/ai/whiteboard-explain`  | AI analysis of whiteboard drawing (rate limited: per-user)           |
