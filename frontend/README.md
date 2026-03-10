@@ -75,7 +75,7 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
 - Empty state when no conversations yet
 
 ### Navbar
-- **Sidebar** (left) — hamburger toggle, slide-in panel with navigation links (Home, Chats, Summaries, My Room, Study Radio, Streaming, Ask AI, Contact us), dark mode toggle, logout
+- **Sidebar** (left) — hamburger toggle, slide-in panel with navigation links (Home, Chats, Summaries, My Room, Ask AI, Study Radio, Podcasts, Contact us), dark mode toggle, logout
 - **Profile Avatar** (top-right) — gradient circle showing emoji avatar (when set) or initials (default). Click opens a dropdown with: My Profile, Settings, My Room, Ask AI, Logout. Avatar gradient and emoji update live from Redux. Logged-out users see a login icon button.
 - **Dark Mode Toggle** — persistent toggle in both the floating top-left button and inside the sidebar
 - **Logout** — properly clears JWT from localStorage, disconnects socket, resets Redux state, redirects to `/login`
@@ -124,6 +124,19 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
 - **Built-in AI Assist sidebar** — collapsible right panel (360px, Framer Motion spring animation) with "Explain This" button and custom question input. Sends compact text descriptions to Gemini/Grok. Q&A history with teal-accented chat bubbles.
 - **Toolbar** — top bar with Back to Room, Clear whiteboard, Summary (generates + saves whiteboard summary), and AI Assist toggle buttons.
 - **Whiteboard data for AI** — elements are simplified before sending to the LLM: text content for text elements, type + dimensions for shapes. No raw JSON sent (too verbose).
+
+### Podcasts (`PodcastsPage`)
+- **Full-page podcast discovery** at `/podcasts` — accessible from sidebar with Mic2 icon
+- **5 topic tabs**: Trending | AI | Tech | Business | Productivity & Tools
+- Lazy-fetches each topic on first tab visit via `GET /podcasts/:topic` — subsequent visits in the same session use component-state cache (no extra API calls)
+- **Animated tab bar** — Framer Motion `layoutId="podcast-tab-bg"` sliding gradient highlight. Each topic has its own gradient + card accent color
+- **Refresh banner** — pulsing indigo dot + "Fresh drops every Tue & Sat — stay ahead of the curve." + "Curated for the curious learner" subtext
+- **Podcast cards** — top accent strip (topic color), thumbnail (fallback to Mic2 icon), title (line-clamp-2), publisher, description (line-clamp-3), listen score badge (Star icon, amber), episode count, "Listen Now" → Listen Notes URL
+- **Source badges** — amber notice shown when backend returns `source: "stale-cache"` or `source: "mock"`
+- **Skeleton loading grid** — 8 ghost cards with `animate-pulse` while fetching
+- **Error state** with AlertCircle icon and "Try again" retry button
+- Page background matches RadioPage pattern (fixed gradient orbs, dark/light mode)
+- No Redux needed — all state is local (`activeTab`, `topicCache`, `loading`, `error`)
 
 ### Study Radio (`RadioPage`)
 - **Full-page radio player** at `/radio` — browse and play curated internet radio channels from SomaFM (ambient, chill, electronic, etc.)

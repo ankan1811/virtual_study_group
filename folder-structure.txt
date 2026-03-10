@@ -22,9 +22,11 @@ virtual_study_group/
 |       |
 |       |-- server.ts                # Main entry point - Express app setup, MongoDB
 |       |                              connection, CORS config, route mounting.
-|       |                              Registers all 9 route groups. Port via .env (PORT).
+|       |                              Registers all 10 route groups. Port via .env (PORT).
 |       |                              Applies global rate limiter (200 req/IP/15min).
-|       |                              Sets trust proxy for correct IP behind proxies
+|       |                              Sets trust proxy for correct IP behind proxies.
+|       |                              Calls startPodcastCacheJob() on listen — registers
+|       |                              node-cron job (Tue & Sat 02:00 UTC)
 |       |
 |       |-- socketServer.ts          # Socket.IO server with JWT auth middleware.
 |       |                              Handles: room chat, invites (companion-gated),
