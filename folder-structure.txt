@@ -419,6 +419,21 @@ virtual_study_group/
         |   |                          play/pause, volume slider, and canvas-based
         |   |                          audio visualizer. Uses RadioContext for
         |   |                          global playback state
+        |   |-- PodcastsPage.tsx     # Podcast discovery page at /podcasts.
+        |   |                          5 topic tabs (Trending, AI, Tech, Business,
+        |   |                          Productivity & Tools). Lazy-fetches per tab
+        |   |                          via GET /podcasts/:topic; component-state cache
+        |   |                          prevents re-fetch on tab revisit. Framer Motion
+        |   |                          AnimatePresence + layoutId sliding tab highlight.
+        |   |                          Refresh banner with pulsing dot: "Fresh drops
+        |   |                          every Tue & Sat — stay ahead of the curve."
+        |   |                          PodcastCard: 3px accent strip, thumbnail (Mic2
+        |   |                          fallback), title (line-clamp-2), publisher,
+        |   |                          description (line-clamp-3), listen score badge
+        |   |                          (Star, amber), episode count, Listen Now link.
+        |   |                          SkeletonGrid (8 ghost cards, animate-pulse).
+        |   |                          Amber notice badge for stale-cache/mock source.
+        |   |                          No Redux — all state local
         |   |-- JoinRoomPage.tsx     # Auth-gated join redirect at /join/:roomId.
         |   |                          If authenticated: dispatches enterRoom and
         |   |                          navigates to /room/call. If not: stores
@@ -440,7 +455,7 @@ virtual_study_group/
         |   |-- Navbar.tsx           # Collapsible sidebar (not top bar) - hamburger
         |   |                          toggle, framer-motion spring animation.
         |   |                          Nav items: Home, Chats, Summaries, My Room,
-        |   |                          Study Radio, Streaming, Ask AI, Contact us.
+        |   |                          Ask AI, Study Radio, Podcasts, Contact us.
         |   |                          Active route highlighting.
         |   |                          Profile avatar (top-right): shows emoji avatar
         |   |                          with matching gradient when set, initials when
@@ -601,6 +616,7 @@ ENV CONFIGURATION
                      AI_PROVIDER, GEMINI_API_KEY, GEMINI_EMBEDDING_MODEL, GROK_API_KEY,
                      R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME,
                      R2_MAX_UPLOADS_PER_MONTH, AGORA_APP_ID,
+                     LISTEN_NOTES_API_KEY,
                      SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS,
                      + Rate limiting env vars (all optional with defaults):
                        AUTH_WINDOW_MIN, AUTH_MAX_PER_EMAIL, AUTH_MAX_PER_IP,
@@ -671,6 +687,13 @@ API ROUTES SUMMARY
 
   News:
     GET    /news                    Get mock news feed articles
+
+  Podcasts:
+    GET    /podcasts/:topic         Get podcasts for topic (trending|ai|tech|business|productivity).
+                                    No auth. JSON file cache per topic in backend/cache/podcasts/.
+                                    Cache valid until last Tue or Sat midnight (lazy refresh).
+                                    node-cron pre-warms cache at 02:00 UTC every Tue & Sat.
+                                    Response: { data: PodcastItem[], fetchedAt, source }
 
 
 SOCKET EVENTS
