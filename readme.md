@@ -106,6 +106,33 @@ Since this project already has its own auth, backend, and API layer — Supabase
 
 This project uses Neon because it's a modern app with spiky traffic, benefits from scale-to-zero (free when idle), and the developer experience (instant branching, fast provisioning) is unmatched for portfolio and SaaS projects.
 
+### Schema Migrations (Drizzle Kit)
+
+When you define tables in `backend/src/db/schema.ts`, those definitions only exist in TypeScript — your actual PostgreSQL database has no tables yet. **Schema migration** bridges that gap: it generates SQL to create/alter tables and then runs it against your database.
+
+Drizzle Kit provides two commands:
+
+```bash
+cd backend
+
+# 1. Generate migration SQL from your schema
+npx drizzle-kit generate
+
+# 2. Apply the migration to your NeonDB instance
+npx drizzle-kit migrate
+```
+
+**`drizzle-kit generate`** — reads `schema.ts` (via `drizzle.config.ts`) and produces a timestamped `.sql` file in `backend/src/db/migrations/`. This file contains `CREATE TABLE`, `CREATE INDEX`, `CREATE TYPE` (for enums), etc. — pure DDL, no data.
+
+**`drizzle-kit migrate`** — connects to your `DATABASE_URL` and executes all pending migration SQL files in order. Drizzle tracks which migrations have already been applied (via a `__drizzle_migrations` table) so it never runs the same migration twice.
+
+**When to run:**
+- **First time setup:** run both commands to create all tables
+- **After changing `schema.ts`:** run `generate` to create a new incremental migration, then `migrate` to apply it
+- **Pulling someone else's changes:** if new migration files appear in `src/db/migrations/`, just run `migrate`
+
+This is **not** data migration — it's DDL (Data Definition Language). Think of it as "deploy your schema to the database."
+
 ---
 
 ## Features
@@ -446,6 +473,13 @@ OTP_EXPIRY_MINUTES=5              # OTP validity duration (default: 5 minutes)
 # SOCKET_INVITE_INTERVAL_MS=3000 # Min ms between room invites
 ```
 
+Run schema migrations (first time or after schema changes):
+
+```bash
+npx drizzle-kit generate   # generates SQL from schema.ts → src/db/migrations/
+npx drizzle-kit migrate    # applies pending migrations to NeonDB
+```
+
 Start the server:
 
 ```bash
@@ -514,7 +548,7 @@ VITE_GOOGLE_CLIENT_ID=your_google_client_id # Google OAuth Client ID (from https
 | POST   | `/ai/summary-qa`          | RAG Q&A: ask questions across saved summaries (rate limited: per-user + daily embedding cap) |
 | GET    | `/ai/summaries`           | List saved summaries (filter by `?type=room\|dm\|whiteboard`)        |
 | DELETE | `/ai/summaries/:id`       | Delete a saved summary (ownership check)                             |
-| POST   | `/chat/bulk-save`         | Bulk-save room chat messages to MongoDB (auth required, max 500)     |
+| POST   | `/chat/bulk-save`         | Bulk-save room chat messages to PostgreSQL (auth required, max 500)  |
 | GET    | `/dm/recent`              | Get recent chats (last message per companion, sorted by time)        |
 | GET    | `/dm/:companionId`        | Get DM history (includes `_id`, `read` state)                        |
 | GET    | `/dm/unread-counts`       | Get unread message count per companion                               |

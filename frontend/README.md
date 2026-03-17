@@ -16,6 +16,15 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
 - **@excalidraw/excalidraw** for collaborative whiteboard (lazy-loaded)
 - **SomaFM** internet radio streams for Study Radio (ambient/chill background music)
 
+## Backend Database Architecture
+
+The backend uses a **dual-database architecture** — the frontend interacts with both through the same REST API and Socket.IO events:
+
+- **PostgreSQL (NeonDB + Drizzle ORM)** — all structured relational data: users, rooms, companions, notifications, DMs, chats, upload/embedding counters. UUID primary keys.
+- **MongoDB (Mongoose)** — unstructured/flexible data: AI summaries (variable-length HTML + 768-dim embedding vectors for RAG) and podcast cache (RSS/API responses that vary per provider, TTL auto-cleanup).
+
+The frontend doesn't need to know which database handles what — all data flows through the same API endpoints. This split is entirely a backend concern.
+
 ## Features
 
 ### Authentication (`AuthPage`)
@@ -116,7 +125,7 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
 
 ### AI Integration
 - **Doubt Solver** — text + voice input (Web Speech API), powered by switchable AI (Gemini/Grok). Full dark mode support for input, Q&A bubbles, loading states, and mic button.
-- **Save Summary** — one-click save to Cloudflare R2 (S3-compatible) as a styled HTML document + MongoDB persistence. Returns a presigned download URL (valid 7 days). After saving, a VSG Bot message is broadcast to the room chat with the download link so all participants can access it.
+- **Save Summary** — one-click save to Cloudflare R2 (S3-compatible) as a styled HTML document + MongoDB persistence (with vector embedding for RAG Q&A). Returns a presigned download URL (valid 7 days). After saving, a VSG Bot message is broadcast to the room chat with the download link so all participants can access it.
 
 ### AI Whiteboard (`WhiteboardPage`)
 - **Full-page collaborative whiteboard** — opens as a dedicated route (`/whiteboard/:roomId`) when the Whiteboard tab is clicked in `RoomCallPage`. Full drawing tools (shapes, text, freehand, arrows) powered by `@excalidraw/excalidraw`, lazy-loaded via `React.lazy()`.
@@ -183,7 +192,7 @@ npm install
 npm run dev    # starts on http://localhost:5175
 ```
 
-Requires the backend running on port 7002 (see `backend/README.md` or `backend/.env`).
+Requires the backend running on port 7002 with both NeonDB (PostgreSQL) and MongoDB connected. See `backend/.env` for `DATABASE_URL` and `MONGODB_URI` configuration. Run `npx drizzle-kit generate && npx drizzle-kit migrate` in `backend/` on first setup to create PostgreSQL tables.
 
 ## Socket Events Used
 
