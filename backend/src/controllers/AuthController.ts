@@ -1,30 +1,25 @@
-// controllers/AuthController.ts
-
-import { Request, Response } from "express";
-import jwt from "jsonwebtoken";
-import User from "../models/User";
-import { sendEmail } from "../utils/sendEmail";
-import { generateOtp, verifyOtp } from "../utils/otp";
-import dotenv from "dotenv";
+import { Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
+import { sendEmail } from '../utils/sendEmail';
+import { generateOtp, verifyOtp } from '../utils/otp';
+import { findByEmail, createUser, updateUser } from '../db/queries/users';
+import dotenv from 'dotenv';
 dotenv.config();
 
-export const sendOtp = async (
-  req: Request,
-  res: Response
-): Promise<void> => {
+export const sendOtp = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email } = req.body;
     if (!email) {
-      res.status(400).json({ error: "Email is required." });
+      res.status(400).json({ error: 'Email is required.' });
       return;
     }
 
     const { otp, hash, expires } = generateOtp(email);
-    const expiryMinutes = process.env.OTP_EXPIRY_MINUTES || "5";
+    const expiryMinutes = process.env.OTP_EXPIRY_MINUTES || '5';
 
     await sendEmail(
       email,
-      "Virtual Study Group — Your OTP",
+      'Virtual Study Group — Your OTP',
       `
       <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px;">
         <div style="text-align: center; margin-bottom: 24px;">
@@ -43,135 +38,121 @@ export const sendOtp = async (
           If you didn't request this, you can safely ignore this email.
         </p>
       </div>
-      `
+      `,
     );
 
     res.status(200).json({ hash, expires });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Failed to send OTP." });
+    res.status(500).json({ error: 'Failed to send OTP.' });
   }
 };
 
-export const registerUser = async (
-  req: Request,
-  res: Response
-): Promise<void> => {
+export const registerUser = async (req: Request, res: Response): Promise<void> => {
   try {
     const { name, email, otp, hash, expires } = req.body;
     if (!name || !email || !otp || !hash || !expires) {
-      res.status(400).json({ error: "All fields are required." });
+      res.status(400).json({ error: 'All fields are required.' });
       return;
     }
 
     if (!verifyOtp(email, otp, hash, expires)) {
-      res.status(401).json({ error: "Invalid or expired OTP." });
+      res.status(401).json({ error: 'Invalid or expired OTP.' });
       return;
     }
 
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
-    if (existingUser) {
-      res.status(400).json({ error: "Email already registered. Please sign in." });
+    const existing = await findByEmail(email);
+    if (existing) {
+      res.status(400).json({ error: 'Email already registered. Please sign in.' });
       return;
     }
 
-    const newUser = new User({ name, email: email.toLowerCase() });
-    await newUser.save();
+    const newUser = await createUser({ name, email });
 
     const token = jwt.sign(
-      { userId: newUser._id, email: newUser.email, name: newUser.name },
-      process.env.JWT_SECRET || ""
+      { userId: newUser.id, email: newUser.email, name: newUser.name },
+      process.env.JWT_SECRET || '',
     );
-    res.status(201).json({ token, name: newUser.name, userId: (newUser._id as any).toString() });
+    res.status(201).json({ token, name: newUser.name, userId: newUser.id });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Failed to register user." });
+    res.status(500).json({ error: 'Failed to register user.' });
   }
 };
 
-export const loginUser = async (
-  req: Request,
-  res: Response
-): Promise<void> => {
+export const loginUser = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, otp, hash, expires } = req.body;
     if (!email || !otp || !hash || !expires) {
-      res.status(400).json({ error: "All fields are required." });
+      res.status(400).json({ error: 'All fields are required.' });
       return;
     }
 
     if (!verifyOtp(email, otp, hash, expires)) {
-      res.status(401).json({ error: "Invalid or expired OTP." });
+      res.status(401).json({ error: 'Invalid or expired OTP.' });
       return;
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const user = await findByEmail(email);
     if (!user) {
-      res.status(404).json({ error: "No account found. Please register first." });
+      res.status(404).json({ error: 'No account found. Please register first.' });
       return;
     }
 
     const token = jwt.sign(
-      { userId: user._id, email: user.email, name: user.name },
-      process.env.JWT_SECRET || ""
+      { userId: user.id, email: user.email, name: user.name },
+      process.env.JWT_SECRET || '',
     );
-    res.status(200).json({ token, name: user.name, userId: (user._id as any).toString() });
+    res.status(200).json({ token, name: user.name, userId: user.id });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Failed to log in." });
+    res.status(500).json({ error: 'Failed to log in.' });
   }
 };
 
-export const googleLogin = async (
-  req: Request,
-  res: Response
-): Promise<void> => {
+export const googleLogin = async (req: Request, res: Response): Promise<void> => {
   try {
     const { access_token } = req.body;
     if (!access_token) {
-      res.status(400).json({ error: "Google access token is required." });
+      res.status(400).json({ error: 'Google access token is required.' });
       return;
     }
 
-    // Verify token and get user info from Google
-    const googleRes = await fetch(
-      "https://www.googleapis.com/oauth2/v3/userinfo",
-      { headers: { Authorization: `Bearer ${access_token}` } }
-    );
+    const googleRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${access_token}` },
+    });
     if (!googleRes.ok) {
-      res.status(401).json({ error: "Invalid Google token." });
+      res.status(401).json({ error: 'Invalid Google token.' });
       return;
     }
     const profile = await googleRes.json();
     if (!profile.email) {
-      res.status(401).json({ error: "Could not retrieve email from Google." });
+      res.status(401).json({ error: 'Could not retrieve email from Google.' });
       return;
     }
 
     const { email, name, sub: googleId } = profile;
 
-    let user = await User.findOne({ email: email.toLowerCase() });
+    let user = await findByEmail(email);
     if (user) {
       if (!user.googleId) {
-        user.googleId = googleId;
-        await user.save();
+        user = await updateUser(user.id, { googleId });
       }
     } else {
-      user = new User({
-        name: name || email.split("@")[0],
-        email: email.toLowerCase(),
+      user = await createUser({
+        name: name || email.split('@')[0],
+        email,
         googleId,
       });
-      await user.save();
     }
 
     const token = jwt.sign(
-      { userId: user._id, email: user.email, name: user.name },
-      process.env.JWT_SECRET || ""
+      { userId: user.id, email: user.email, name: user.name },
+      process.env.JWT_SECRET || '',
     );
-    res.status(200).json({ token, name: user.name, userId: (user._id as any).toString() });
+    res.status(200).json({ token, name: user.name, userId: user.id });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Google authentication failed." });
+    res.status(500).json({ error: 'Google authentication failed.' });
   }
 };

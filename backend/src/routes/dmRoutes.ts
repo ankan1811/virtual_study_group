@@ -1,6 +1,11 @@
 import { Router } from 'express';
 import { verifyToken } from '../middlewares/middleware';
-import { getRecentChats, getDmHistory, getUnreadCounts, markDmRead } from '../controllers/DmController';
+import {
+  getRecentChatsController as getRecentChats,
+  getDmHistoryController as getDmHistory,
+  getUnreadCountsController as getUnreadCounts,
+  markDmReadController as markDmRead,
+} from '../controllers/DmController';
 
 const router = Router();
 

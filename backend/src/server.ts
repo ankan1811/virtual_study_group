@@ -18,6 +18,8 @@ import cors from "cors";
 import { initSocketServer } from "./socketServer";
 import { globalLimiter } from "./middlewares/rateLimiter";
 import { startPodcastCacheJob } from "./jobs/podcastCacheJob";
+import { startNotificationCleanupJob } from "./jobs/notificationCleanupJob";
+import { getNeonDb } from "./db/neon";
 dotenv.config({ path: path.join(__dirname, "../.env") });
 
 const app = express();
@@ -25,7 +27,15 @@ app.set("trust proxy", 1);
 const httpServer = http.createServer(app);
 const PORT = process.env.PORT || 3000;
 
-// MongoDB connection
+// NeonDB (PostgreSQL) — eagerly initialize to catch config errors at startup
+try {
+  getNeonDb();
+} catch (err) {
+  console.error("NeonDB init failed:", err);
+  process.exit(1);
+}
+
+// MongoDB connection (summaries + podcast cache)
 mongoose
   .connect(process.env.MONGODB_URI || "", {})
   .then(() => {
@@ -60,4 +70,5 @@ initSocketServer(httpServer);
 httpServer.listen(PORT, () => {
   console.log(`🔥🧯 Server is running on PORT ${PORT} ⚡`);
   startPodcastCacheJob();
+  startNotificationCleanupJob();
 });

@@ -1,10 +1,10 @@
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/middleware';
 import OpenAI from 'openai';
-import DirectMessage from '../models/DirectMessage';
 import Summary from '../models/Summary';
-import EmbeddingCounter from '../models/EmbeddingCounter';
 import { RATE_LIMIT_CONFIG } from '../middlewares/rateLimiter';
+import { incrementEmbeddingCount } from '../db/queries/embeddingCounters';
+import { getDmTranscript } from '../db/queries/directMessages';
 
 // ── Provider config ──────────────────────────────────────────────
 const providers = {
@@ -180,15 +180,7 @@ export const summarizeDm = async (req: AuthenticatedRequest, res: Response): Pro
       return;
     }
 
-    const messages = await DirectMessage.find({
-      $or: [
-        { from: me, to: companionId },
-        { from: companionId, to: me },
-      ],
-    })
-      .sort({ createdAt: 1 })
-      .limit(100)
-      .populate('from', 'name');
+    const messages = await getDmTranscript(me!, companionId);
 
     if (!messages.length) {
       res.status(400).json({ error: 'No DM messages to summarize' });
@@ -196,7 +188,7 @@ export const summarizeDm = async (req: AuthenticatedRequest, res: Response): Pro
     }
 
     const chatText = messages
-      .map((m) => `${(m.from as any).name}: ${m.content}`)
+      .map((m) => `${m.fromName}: ${m.content}`)
       .join('\n');
 
     const completion = await getClient().chat.completions.create({
@@ -267,12 +259,8 @@ export const summarizeWhiteboard = async (req: AuthenticatedRequest, res: Respon
 
 export async function generateEmbedding(text: string): Promise<number[]> {
   const today = new Date().toISOString().slice(0, 10);
-  const counter = await EmbeddingCounter.findOneAndUpdate(
-    { dateKey: today },
-    { $inc: { count: 1 } },
-    { upsert: true, new: true }
-  );
-  if (counter.count > RATE_LIMIT_CONFIG.EMBEDDING_DAILY_MAX) {
+  const newCount = await incrementEmbeddingCount(today);
+  if (newCount > RATE_LIMIT_CONFIG.EMBEDDING_DAILY_MAX) {
     throw new Error('Daily embedding limit reached. Please try again tomorrow.');
   }
 

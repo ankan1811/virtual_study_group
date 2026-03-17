@@ -1,21 +1,18 @@
 import { Response } from 'express';
 import jwt from 'jsonwebtoken';
-import User from '../models/User';
-import Companion from '../models/Companion';
 import { AuthenticatedRequest } from '../middlewares/middleware';
+import { findById, updateUser, searchUsers } from '../db/queries/users';
+import { countAcceptedCompanions } from '../db/queries/companions';
 
 export const getProfile = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const me = req.user.userId;
-    const user = await User.findById(me).select('name email bio avatar education projects workExperience');
+    const user = await findById(me);
     if (!user) {
       res.status(404).json({ error: 'User not found' });
       return;
     }
-    const companionCount = await Companion.countDocuments({
-      $or: [{ requester: me }, { recipient: me }],
-      status: 'accepted',
-    });
+    const companionCount = await countAcceptedCompanions(me);
     res.json({
       name: user.name,
       email: user.email,
@@ -37,24 +34,23 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response): P
     const me = req.user.userId;
     const { name, bio, avatar, education, projects, workExperience } = req.body;
 
-    const update: Record<string, any> = {};
-    if (name && name.trim()) update.name = name.trim();
-    if (bio !== undefined) update.bio = bio;
-    if (avatar !== undefined) update.avatar = avatar;
-    if (education !== undefined) update.education = education;
-    if (projects !== undefined) update.projects = projects;
-    if (workExperience !== undefined) update.workExperience = workExperience;
+    const patch: Record<string, any> = {};
+    if (name && name.trim()) patch.name = name.trim();
+    if (bio !== undefined) patch.bio = bio;
+    if (avatar !== undefined) patch.avatar = avatar;
+    if (education !== undefined) patch.education = education;
+    if (projects !== undefined) patch.projects = projects;
+    if (workExperience !== undefined) patch.workExperience = workExperience;
 
-    const user = await User.findByIdAndUpdate(me, update, { new: true }).select('name email bio avatar education projects workExperience');
+    const user = await updateUser(me, patch);
     if (!user) {
       res.status(404).json({ error: 'User not found' });
       return;
     }
 
-    // Re-issue JWT if name changed
     const token = jwt.sign(
-      { userId: user._id, email: user.email, name: user.name },
-      process.env.JWT_SECRET || ''
+      { userId: user.id, email: user.email, name: user.name },
+      process.env.JWT_SECRET || '',
     );
 
     res.json({
@@ -73,7 +69,10 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response): P
   }
 };
 
-export const searchUsers = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+export const searchUsersController = async (
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> => {
   try {
     const { q } = req.query as { q: string };
     const me = req.user.userId;
@@ -83,20 +82,9 @@ export const searchUsers = async (req: AuthenticatedRequest, res: Response): Pro
       return;
     }
 
-    const regex = new RegExp(q.trim(), 'i');
-    const users = await User.find({
-      _id: { $ne: me },
-      $or: [{ name: regex }, { email: regex }],
-    })
-      .select('_id name email')
-      .limit(10);
-
+    const found = await searchUsers(q, me);
     res.status(200).json({
-      users: users.map((u) => ({
-        userId: (u._id as any).toString(),
-        name: u.name,
-        email: u.email,
-      })),
+      users: found.map((u) => ({ userId: u.id, name: u.name, email: u.email })),
     });
   } catch (error) {
     console.error(error);

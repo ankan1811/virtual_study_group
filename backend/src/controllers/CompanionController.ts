@@ -1,8 +1,17 @@
 import { Response } from 'express';
-import Companion from '../models/Companion';
-import User from '../models/User';
 import { AuthenticatedRequest } from '../middlewares/middleware';
 import { getSocketIdForUser, getIO } from '../socketServer';
+import {
+  findById,
+} from '../db/queries/users';
+import {
+  findCompanionPair,
+  createCompanion,
+  acceptCompanionRequest as dbAcceptCompanion,
+  deleteCompanion,
+  listAcceptedCompanions,
+  getPendingRequests,
+} from '../db/queries/companions';
 
 export const sendCompanionRequest = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
@@ -14,27 +23,23 @@ export const sendCompanionRequest = async (req: AuthenticatedRequest, res: Respo
       return;
     }
 
-    const target = await User.findById(targetUserId);
+    const target = await findById(targetUserId);
     if (!target) {
       res.status(404).json({ error: 'User not found' });
       return;
     }
 
-    const existing = await Companion.findOne({
-      $or: [
-        { requester: requesterId, recipient: targetUserId },
-        { requester: targetUserId, recipient: requesterId },
-      ],
-    });
+    const existing = await findCompanionPair(requesterId, targetUserId);
     if (existing) {
-      res.status(400).json({ error: existing.status === 'accepted' ? 'Already companions' : 'Request already pending' });
+      res.status(400).json({
+        error: existing.status === 'accepted' ? 'Already companions' : 'Request already pending',
+      });
       return;
     }
 
-    await Companion.create({ requester: requesterId, recipient: targetUserId, status: 'pending' });
+    await createCompanion(requesterId, targetUserId);
 
-    // Notify via socket if online
-    const requester = await User.findById(requesterId).select('name');
+    const requester = await findById(requesterId);
     const io = getIO();
     const targetSocketId = getSocketIdForUser(targetUserId);
     if (io && targetSocketId) {
@@ -56,17 +61,15 @@ export const acceptCompanionRequest = async (req: AuthenticatedRequest, res: Res
     const recipientId = req.user.userId;
     const { requesterId } = req.body;
 
-    const doc = await Companion.findOne({ requester: requesterId, recipient: recipientId, status: 'pending' });
-    if (!doc) {
+    const doc = await findCompanionPair(requesterId, recipientId);
+    if (!doc || doc.requesterId !== requesterId || doc.status !== 'pending') {
       res.status(404).json({ error: 'Companion request not found' });
       return;
     }
 
-    doc.status = 'accepted';
-    await doc.save();
+    await dbAcceptCompanion(requesterId, recipientId);
 
-    // Notify requester via socket
-    const acceptor = await User.findById(recipientId).select('name');
+    const acceptor = await findById(recipientId);
     const io = getIO();
     const requesterSocketId = getSocketIdForUser(requesterId);
     if (io && requesterSocketId) {
@@ -88,7 +91,7 @@ export const declineCompanionRequest = async (req: AuthenticatedRequest, res: Re
     const recipientId = req.user.userId;
     const { requesterId } = req.body;
 
-    await Companion.deleteOne({ requester: requesterId, recipient: recipientId });
+    await deleteCompanion(requesterId, recipientId);
     res.status(200).json({ message: 'Companion request declined' });
   } catch (error) {
     console.error(error);
@@ -99,21 +102,7 @@ export const declineCompanionRequest = async (req: AuthenticatedRequest, res: Re
 export const getCompanionList = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user.userId;
-
-    const docs = await Companion.find({
-      $or: [{ requester: userId }, { recipient: userId }],
-      status: 'accepted',
-    }).populate('requester', 'name email').populate('recipient', 'name email');
-
-    const companions = docs.map((doc) => {
-      const isRequester = doc.requester._id.toString() === userId;
-      const companion = isRequester ? doc.recipient : doc.requester;
-      return {
-        userId: (companion as any)._id.toString(),
-        name: (companion as any).name,
-      };
-    });
-
+    const companions = await listAcceptedCompanions(userId);
     res.status(200).json({ companions });
   } catch (error) {
     console.error(error);
@@ -121,18 +110,17 @@ export const getCompanionList = async (req: AuthenticatedRequest, res: Response)
   }
 };
 
-export const getPendingRequests = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+export const getPendingRequestsController = async (
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> => {
   try {
     const userId = req.user.userId;
-
-    const docs = await Companion.find({ recipient: userId, status: 'pending' })
-      .populate('requester', 'name email');
-
-    const requests = docs.map((doc) => ({
-      requesterId: (doc.requester as any)._id.toString(),
-      requesterName: (doc.requester as any).name,
+    const rows = await getPendingRequests(userId);
+    const requests = rows.map((r) => ({
+      requesterId: r.requesterId,
+      requesterName: r.requesterName,
     }));
-
     res.status(200).json({ requests });
   } catch (error) {
     console.error(error);

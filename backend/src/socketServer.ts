@@ -1,10 +1,13 @@
 import { Server, Socket } from 'socket.io';
 import http from 'http';
 import jwt from 'jsonwebtoken';
-import Companion from './models/Companion';
-import DirectMessage from './models/DirectMessage';
-import Notification, { NotificationType } from './models/Notification';
 import { RATE_LIMIT_CONFIG } from './middlewares/rateLimiter';
+import { getAcceptedCompanionIds, checkCompanionship } from './db/queries/companions';
+import { createDm, markDmRead as dbMarkDmRead } from './db/queries/directMessages';
+import { createNotification } from './db/queries/notifications';
+import type { notificationTypeEnum } from './db/schema';
+
+type NotificationType = (typeof notificationTypeEnum.enumValues)[number];
 
 let io: Server;
 const userSocketMap = new Map<string, string>(); // userId → socketId
@@ -33,35 +36,6 @@ function isSocketThrottled(userId: string, eventName: string, minIntervalMs: num
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-async function getAcceptedCompanionIds(userId: string): Promise<string[]> {
-  try {
-    const docs = await Companion.find({
-      $or: [{ requester: userId }, { recipient: userId }],
-      status: 'accepted',
-    });
-    return docs.map((d) =>
-      d.requester.toString() === userId ? d.recipient.toString() : d.requester.toString()
-    );
-  } catch {
-    return [];
-  }
-}
-
-async function checkCompanionship(userA: string, userB: string): Promise<boolean> {
-  try {
-    const doc = await Companion.findOne({
-      $or: [
-        { requester: userA, recipient: userB },
-        { requester: userB, recipient: userA },
-      ],
-      status: 'accepted',
-    });
-    return !!doc;
-  } catch {
-    return false;
-  }
-}
-
 export function getSocketIdForUser(userId: string): string | undefined {
   return userSocketMap.get(userId);
 }
@@ -79,17 +53,17 @@ async function saveAndEmitNotification(
   data?: Record<string, any>
 ) {
   try {
-    const notif = await Notification.create({
-      recipient: recipientId,
+    const notif = await createNotification({
+      recipientId,
       type,
       fromUserId,
       fromUserName,
-      data,
+      notifData: data,
     });
     const targetSocketId = userSocketMap.get(recipientId);
     if (targetSocketId) {
       io.to(targetSocketId).emit('notification:new', {
-        _id: notif._id,
+        _id: notif.id,
         type: notif.type,
         fromUserId: notif.fromUserId,
         fromUserName: notif.fromUserName,
@@ -274,10 +248,10 @@ export function initSocketServer(httpServer: http.Server): Server {
         }
         try {
           const dmRoom = ['dm', ...[userId, toUserId].sort()].join('_');
-          const msg = await DirectMessage.create({ from: userId, to: toUserId, content });
+          const msg = await createDm(userId, toUserId, content);
           // Broadcast to dm room — sender also receives this as a delivery ack
           io.to(dmRoom).emit('dm:receive', {
-            _id: msg._id.toString(),
+            _id: msg.id,
             from: userId,
             fromName: userName,
             content,
@@ -294,11 +268,8 @@ export function initSocketServer(httpServer: http.Server): Server {
     // Recipient tells server they opened the DM panel — mark sender's messages as read
     socket.on('dm:markRead', async ({ toUserId }: { toUserId: string }) => {
       try {
-        const result = await DirectMessage.updateMany(
-          { from: toUserId, to: userId, read: false },
-          { read: true }
-        );
-        if (result.modifiedCount > 0) {
+        const modifiedCount = await dbMarkDmRead(toUserId, userId);
+        if (modifiedCount > 0) {
           const senderSocketId = userSocketMap.get(toUserId);
           if (senderSocketId) {
             io.to(senderSocketId).emit('dm:readUpdate', { byUserId: userId });

@@ -8,7 +8,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 | -------------------- | ----------------------------------------------------------------- |
 | **Backend**          | Node.js, Express, TypeScript                                      |
 | **Frontend**         | React 18, TypeScript, Vite                                        |
-| **Database**         | MongoDB (Mongoose)                                                |
+| **Database**         | PostgreSQL via NeonDB + Drizzle ORM (structured data) · MongoDB (Mongoose) for unstructured/AI data |
 | **Real-time**        | Socket.IO                                                         |
 | **Video Calls**      | Agora RTC SDK                                                     |
 | **AI**               | Switchable: Google Gemini 2.5 Flash (default) / xAI Grok          |
@@ -17,11 +17,96 @@ A full-stack web application for creating virtual study group spaces with real-t
 | **State Management** | Redux Toolkit                                                     |
 | **Whiteboard**       | @excalidraw/excalidraw (MIT, client-side, lazy-loaded)            |
 | **Study Radio**      | SomaFM internet radio streams (ambient/chill/electronic)          |
-| **Podcasts**         | Listen Notes API (300 free calls/month) — curated across 5 topics, JSON file cache, node-cron bi-weekly refresh |
+| **Podcasts**         | Listen Notes API (300 free calls/month) — curated across 5 topics, MongoDB cache (TTL 4 days), node-cron bi-weekly refresh |
 | **Styling**          | Tailwind CSS, shadcn/ui, Framer Motion                            |
 | **Auth**             | Stateless OTP (HMAC-SHA256) + Google OAuth + JWT + nodemailer     |
 | **Rate Limiting**    | express-rate-limit (per-user + per-IP, all thresholds via env vars) |
 | **News Feed**        | Mock articles (AI / Tech / Productivity categories, 30-min cache) |
+
+## Database Architecture
+
+This project uses a **dual-database architecture** — PostgreSQL for structured relational data and MongoDB for unstructured/flexible data.
+
+### PostgreSQL (NeonDB + Drizzle ORM) — structured data
+
+Structured entities with clear relationships live in **NeonDB** via **Drizzle ORM**:
+
+- Type-safe schema with foreign key constraints and enums
+- UUID primary keys — preserves the existing string-based auth contract (JWTs, socket IDs, DM room keys)
+- `ON CONFLICT DO UPDATE` atomic upserts for counter tables
+- SQL window functions for complex DM aggregations
+
+### MongoDB (Mongoose) — unstructured/flexible data
+
+Two collections stay in MongoDB where the flexible document model is a genuine advantage:
+
+| Collection | Why MongoDB |
+|---|---|
+| `summaries` | Variable-length HTML content (5KB–50KB+), 768-dim embedding arrays stored natively, schema varies by type (room/DM/whiteboard), RAG cosine-similarity queries done in Node.js |
+| `podcasts` | RSS/API response fields vary by provider, nested arrays of variable objects, TTL auto-cleanup on `fetchedAt`, survives server restarts (unlike a file cache) |
+
+### Set up your database
+
+**Option A: Neon (Recommended)**
+Sign up at [neon.tech](https://neon.tech) (free tier: 512 MB), create a project, copy the connection string.
+
+**Option B: Supabase**
+Sign up at [supabase.com](https://supabase.com) (free tier: 500 MB), create a project, go to Settings → Database → Connection string (URI).
+
+### Why Neon over Supabase (for this project)
+
+Both are hosted PostgreSQL — but Neon is the better fit when you only need a database:
+
+| | Neon | Supabase |
+|---|---|---|
+| **Philosophy** | Database-first | Backend platform with DB inside |
+| **What you get** | Pure PostgreSQL, nothing else | DB + Auth + Storage + APIs + RLS policies (unused overhead) |
+| **Connection** | Direct to Postgres, built-in pooling | Often routed through PostgREST/API layers, adds latency |
+| **ORM freedom** | Use Prisma, Drizzle, raw SQL — zero constraints | Encourages its own SDK and patterns (subtle vendor lock-in) |
+| **DB branching** | Git-like branches for testing/preview/experiments | No true DB branching |
+| **Free tier projects** | ~100 projects | 2 projects |
+| **Mental model** | "I have a database" | "I have a backend platform" |
+
+Since this project already has its own auth, backend, and API layer — Supabase's extra features (Auth, Storage, Edge Functions) go completely unused. Using Supabase only for its database is like using Firebase but ignoring everything except Firestore.
+
+**Bottom line:** If you only need PostgreSQL, Neon is cleaner, more flexible, and gives you more room to grow. But if you prefer Supabase, it works too — just swap the connection string.
+
+### Neon vs Aiven — Full Comparison
+
+| Factor | Neon (Serverless) | Aiven (Managed Infra) |
+|---|---|---|
+| **Core Type** | Serverless PostgreSQL | Managed PostgreSQL (RDS-style) |
+| **Architecture** | Separation of compute + storage | Dedicated VM / instance |
+| **Provision Time** | ~200ms | Minutes (VM setup) |
+| **Scaling** | Auto-scale (up & down) | Manual scaling |
+| **Scale to Zero** | Yes (idle = no compute cost) | Free tier may pause, but always-on otherwise |
+| **Cold Start** | ~0.5–1 sec | 2–10 sec (resume VM) |
+| **Connection Handling** | Built-in pooling (~10k connections) | Limited (~20–100) |
+| **Failure Handling** | Auto-recover (stateless compute) | Failover via replicas |
+| **Storage Model** | Distributed (S3 + SSD cache) | Local disk (VM-based) |
+| **Latency (steady)** | Slightly higher (network hops) | Lower (direct disk) |
+| **Latency (cold)** | ~500ms extra | Several seconds |
+| **DB Branching** | Instant (copy-on-write, like Git) | Not available |
+| **Dev Experience** | Extremely fast & modern | Traditional |
+| **DB Tuning Control** | Limited | Full control |
+| **Extensions / Configs** | Some limits | Full flexibility |
+| **Pricing Model** | Usage-based (pay per compute) | Fixed (pay for instance) |
+| **Idle Cost** | $0 | Still paying (always-on infra) |
+| **Cost Predictability** | Variable | Predictable |
+| **Free Tier Storage** | 500 MB | 1 GB |
+| **Free Tier Projects** | ~100 | Typically 1 |
+| **Best for Traffic** | Spiky / unpredictable | Stable / constant |
+| **Ops Responsibility** | Minimal | Moderate |
+| **Multi-AZ / HA** | Built-in via architecture | Configurable replicas |
+| **Use Case Fit** | Modern apps, AI, SaaS, side projects | Enterprise, stable workloads |
+
+**When to pick Neon:** Auto-scaling + scale-to-zero (pay nothing when idle), built-in connection pooling (handles thousands of connections), DB branching for testing and previews, cost efficiency for low/medium usage. Best for: modern apps, side projects, SaaS, AI apps.
+
+**When to pick Aiven:** Predictable performance (no cold starts), full control over database internals, stable under constant heavy load, traditional infrastructure. Best for: production enterprise workloads, long-running systems.
+
+This project uses Neon because it's a modern app with spiky traffic, benefits from scale-to-zero (free when idle), and the developer experience (instant branching, fast provisioning) is unmatched for portfolio and SaaS projects.
+
+---
 
 ## Features
 
@@ -90,7 +175,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 - Slide-in DM panel from companion avatars
 - Real-time messaging powered by Socket.IO
 - Deterministic socket room naming (`dm_{sortedUserIds}`)
-- Message history stored in MongoDB (last 50 loaded on open)
+- Message history stored in PostgreSQL (last 50 loaded on open)
 - **Full message delivery pipeline**: `pending → delivered → read`
   - 🕐 Clock = sending (optimistic, before server ack)
   - ✓ Single tick = delivered (saved to DB)
@@ -112,7 +197,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 ### Persistent Notifications
 
 - Bell icon in navbar with real-time unread badge
-- **Stored in MongoDB** with a 10-day TTL — notifications survive page refreshes and logouts
+- **Stored in PostgreSQL** with a 10-day retention (daily cron cleanup) — notifications survive page refreshes and logouts
 - Three notification types:
   - `companion_request` — someone sent you a companion request
   - `companion_accepted` — your companion request was accepted
@@ -142,7 +227,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 - **Podcast discovery page** at `/podcasts` accessible from the sidebar (Mic2 icon)
 - **5 topic tabs:** Trending, AI, Tech, Business, Productivity & Tools — each lazily fetched on first tab visit
 - **Listen Notes API** integration (`GET /podcasts/:topic`) — uses `best_podcasts` endpoint for genre-based topics and `search` for AI
-- **JSON file cache** in `backend/cache/podcasts/{topic}.json` — persists across server restarts
+- **MongoDB cache** — each topic stored as a document with a 4-day TTL index; survives server restarts and works on ephemeral-filesystem platforms (Railway, Render)
   - Cache validity: checks if `fetchedAt >= last Tuesday or Saturday midnight` (no cron needed for correctness)
   - Refresh chain: fresh cache → Listen Notes API → stale cache → 3 mock fallback podcasts per topic
   - `source` field in response: `"cache" | "api" | "stale-cache" | "mock"` — frontend shows amber notice on stale/mock
@@ -184,7 +269,7 @@ A full-stack web application for creating virtual study group spaces with real-t
   - **"Save your chats?" exit prompt** — animated modal appears when leaving the room with unsaved messages. Options: "Save & Exit" (persists then navigates) or "Exit without saving" (discards). Prompt is **skipped entirely** if the user already saved all messages via the inline button
   - **Browser tab close protection** — native `beforeunload` dialog warns when unsaved messages exist
   - **React Router navigation blocking** — `useBlocker` intercepts sidebar/back button navigation and shows the save prompt
-  - Messages are bulk-saved via `POST /chat/bulk-save` with a `sessionId` (UUID) grouping messages per save operation. Capped at 500 messages per request
+  - Messages are bulk-saved via `POST /chat/bulk-save` with a `sessionId` (UUID) grouping messages per save operation. Capped at 500 messages per request. Stored in PostgreSQL `chats` table
   - Bot messages are excluded from saves and unsaved message counts
 
 ### AI Doubt Solver
@@ -255,8 +340,8 @@ A full-stack web application for creating virtual study group spaces with real-t
   - AI Doubt Solver & Session Summary: `AI_MAX_PER_USER` (default 20) per `AI_WINDOW_MIN` (default 15 min)
   - Summary Q&A: `SUMMARY_QA_MAX_PER_USER` (default 10) per `SUMMARY_QA_WINDOW_MIN` (default 15 min) — tighter limit since each Q&A call makes both an embedding call and a chat completion call
   - User Search: `SEARCH_MAX_PER_USER` (default 30) per `SEARCH_WINDOW_MIN` (default 1 min)
-- **R2 summary upload quota:** `R2_MAX_UPLOADS_PER_MONTH` (default 10) per user per calendar month, tracked via MongoDB `UploadCounter` collection
-- **Embedding daily cap:** `EMBEDDING_DAILY_MAX` (default 400) embedding API calls per day across all users, tracked via MongoDB `EmbeddingCounter` collection. Protects Gemini free tier (~1,500 RPD for embeddings)
+- **R2 summary upload quota:** `R2_MAX_UPLOADS_PER_MONTH` (default 10) per user per calendar month, tracked via `upload_counters` PostgreSQL table
+- **Embedding daily cap:** `EMBEDDING_DAILY_MAX` (default 400) embedding API calls per day across all users, tracked via `embedding_counters` PostgreSQL table. Protects Gemini free tier (~1,500 RPD for embeddings)
 - **Global safety net:** `GLOBAL_MAX_PER_IP` (default 200) per `GLOBAL_WINDOW_MIN` (default 15 min) across all routes
 - **Socket event throttling** (per-user, in-memory, configurable via env):
   - `dm:send`: `SOCKET_DM_INTERVAL_MS` (default 200ms)
@@ -286,7 +371,8 @@ A full-stack web application for creating virtual study group spaces with real-t
 ### Prerequisites
 
 - Node.js (v18+)
-- MongoDB instance (local or Atlas)
+- NeonDB account (free tier: 512 MB) — or any PostgreSQL connection string
+- MongoDB instance (local or Atlas) — for AI summaries and podcast cache
 - Agora account (for video call App ID)
 - Google Cloud Console OAuth Client ID (for Google sign-in — [create one](https://console.cloud.google.com/apis/credentials))
 - Google AI Studio API key (for Gemini AI — [get one free](https://aistudio.google.com)) or xAI API key (for Grok — [get one free](https://console.x.ai))
@@ -317,7 +403,8 @@ npm install
 Create a `.env` file in `backend/` with:
 
 ```
-MONGODB_URI=your_mongodb_connection_string
+DATABASE_URL=your_neon_connection_string   # PostgreSQL (NeonDB) — structured data
+MONGODB_URI=your_mongodb_connection_string # MongoDB — AI summaries + podcast cache
 PORT=7002
 JWT_SECRET=your_jwt_secret
 AI_PROVIDER=gemini                # "gemini" (default) or "grok"
@@ -417,7 +504,7 @@ VITE_GOOGLE_CLIENT_ID=your_google_client_id # Google OAuth Client ID (from https
 | PUT    | `/user/profile`           | Update profile (name, bio, avatar, education, projects, workExperience) — re-issues JWT |
 | GET    | `/user/search?q=`         | Search users by name/email (rate limited: per-user)                  |
 | GET    | `/news`                   | Get news feed articles                                               |
-| GET    | `/podcasts/:topic`        | Get podcasts for topic (`trending\|ai\|tech\|business\|productivity`) — JSON file cache, Tue/Sat refresh |
+| GET    | `/podcasts/:topic`        | Get podcasts for topic (`trending\|ai\|tech\|business\|productivity`) — MongoDB cache, Tue/Sat refresh |
 | POST   | `/ai/ask`                 | Ask AI a study question (rate limited: per-user)                     |
 | POST   | `/ai/summary`             | Generate AI chat session summary (rate limited: per-user)            |
 | POST   | `/ai/whiteboard-explain`  | AI analysis of whiteboard drawing (rate limited: per-user)           |

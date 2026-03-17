@@ -2,8 +2,8 @@ import { Router } from 'express';
 import { verifyToken } from '../middlewares/middleware';
 import {
   getNotifications,
-  markRead,
-  markAllRead,
+  markReadController as markRead,
+  markAllReadController as markAllRead,
   deleteNotification,
 } from '../controllers/NotificationController';
 

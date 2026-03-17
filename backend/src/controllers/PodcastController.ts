@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
-import fs from "fs";
-import path from "path";
+import PodcastModel from "../models/Podcast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -16,11 +15,6 @@ export interface PodcastItem {
   listenNotesUrl: string;
 }
 
-interface TopicCache {
-  data: PodcastItem[];
-  fetchedAt: string;
-}
-
 type Topic = "trending" | "ai" | "tech" | "business" | "productivity";
 
 const VALID_TOPICS: Topic[] = [
@@ -31,31 +25,23 @@ const VALID_TOPICS: Topic[] = [
   "productivity",
 ];
 
-// ─── Cache setup ──────────────────────────────────────────────────────────────
+// ─── MongoDB cache helpers ────────────────────────────────────────────────────
 
-const CACHE_DIR = path.join(__dirname, "../../cache/podcasts");
-fs.mkdirSync(CACHE_DIR, { recursive: true });
-
-function getCachePath(topic: Topic): string {
-  return path.join(CACHE_DIR, `${topic}.json`);
+async function readCache(topic: Topic): Promise<{ data: PodcastItem[]; fetchedAt: string } | null> {
+  const doc = await PodcastModel.findOne({ topic }).lean();
+  if (!doc) return null;
+  return {
+    data: doc.podcasts as PodcastItem[],
+    fetchedAt: doc.fetchedAt.toISOString(),
+  };
 }
 
-function readCache(topic: Topic): TopicCache | null {
-  try {
-    const raw = fs.readFileSync(getCachePath(topic), "utf-8");
-    return JSON.parse(raw) as TopicCache;
-  } catch {
-    return null;
-  }
-}
-
-function writeCache(topic: Topic, data: PodcastItem[]): void {
-  const payload: TopicCache = { data, fetchedAt: new Date().toISOString() };
-  try {
-    fs.writeFileSync(getCachePath(topic), JSON.stringify(payload, null, 2), "utf-8");
-  } catch (err) {
-    console.error(`[PodcastController] Failed to write cache for ${topic}:`, err);
-  }
+async function writeCache(topic: Topic, data: PodcastItem[], source: 'api' | 'mock' = 'api'): Promise<void> {
+  await PodcastModel.findOneAndUpdate(
+    { topic },
+    { podcasts: data, fetchedAt: new Date(), source },
+    { upsert: true, new: true },
+  );
 }
 
 // ─── Cache validity: refresh on Tue (2) and Sat (6) ─────────────────────────
@@ -350,7 +336,7 @@ const MOCK_FALLBACK: Record<Topic, PodcastItem[]> = {
 export async function refreshTopicCache(topic: Topic): Promise<boolean> {
   const fresh = await fetchFromListenNotes(topic);
   if (fresh && fresh.length > 0) {
-    writeCache(topic, fresh);
+    await writeCache(topic, fresh, 'api');
     return true;
   }
   return false;
@@ -370,35 +356,47 @@ export const getPodcasts = async (req: Request, res: Response): Promise<void> =>
   }
 
   const t = topic as Topic;
-  const cached = readCache(t);
 
-  // Serve fresh cache immediately
-  if (cached && isCacheValid(cached.fetchedAt)) {
-    res.status(200).json({ data: cached.data, fetchedAt: cached.fetchedAt, source: "cache" });
-    return;
+  try {
+    const cached = await readCache(t);
+
+    // Serve fresh cache immediately
+    if (cached && isCacheValid(cached.fetchedAt)) {
+      res.status(200).json({ data: cached.data, fetchedAt: cached.fetchedAt, source: "cache" });
+      return;
+    }
+
+    // Try fetching from Listen Notes API
+    const fresh = await fetchFromListenNotes(t);
+
+    if (fresh && fresh.length > 0) {
+      await writeCache(t, fresh, 'api');
+      res.status(200).json({ data: fresh, fetchedAt: new Date().toISOString(), source: "api" });
+      return;
+    }
+
+    // API failed — serve stale cache if available
+    if (cached) {
+      console.warn(`[PodcastController] API failed for "${t}", serving stale cache`);
+      res.status(200).json({ data: cached.data, fetchedAt: cached.fetchedAt, source: "stale-cache" });
+      return;
+    }
+
+    // No cache at all — serve mock fallback and cache it
+    console.warn(`[PodcastController] No cache for "${t}", serving mock fallback`);
+    await writeCache(t, MOCK_FALLBACK[t], 'mock');
+    res.status(200).json({
+      data: MOCK_FALLBACK[t],
+      fetchedAt: new Date().toISOString(),
+      source: "mock",
+    });
+  } catch (err) {
+    console.error(`[PodcastController] Unexpected error for "${t}":`, (err as Error).message);
+    // Emergency fallback — never let the endpoint crash
+    res.status(200).json({
+      data: MOCK_FALLBACK[t],
+      fetchedAt: new Date().toISOString(),
+      source: "mock",
+    });
   }
-
-  // Try fetching from Listen Notes API
-  const fresh = await fetchFromListenNotes(t);
-
-  if (fresh && fresh.length > 0) {
-    writeCache(t, fresh);
-    res.status(200).json({ data: fresh, fetchedAt: new Date().toISOString(), source: "api" });
-    return;
-  }
-
-  // API failed — serve stale cache if available
-  if (cached) {
-    console.warn(`[PodcastController] API failed for "${t}", serving stale cache`);
-    res.status(200).json({ data: cached.data, fetchedAt: cached.fetchedAt, source: "stale-cache" });
-    return;
-  }
-
-  // No cache at all — serve mock fallback
-  console.warn(`[PodcastController] No cache for "${t}", serving mock fallback`);
-  res.status(200).json({
-    data: MOCK_FALLBACK[t],
-    fetchedAt: new Date().toISOString(),
-    source: "mock",
-  });
 };

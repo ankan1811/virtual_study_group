@@ -1,37 +1,38 @@
 import { Response } from 'express';
-import Notification from '../models/Notification';
 import { AuthenticatedRequest } from '../middlewares/middleware';
+import {
+  listByRecipient,
+  markRead,
+  markAllRead,
+  deleteById,
+} from '../db/queries/notifications';
 
 export const getNotifications = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user.userId;
-    const notifications = await Notification.find({ recipient: userId })
-      .sort({ createdAt: -1 })
-      .limit(50)
-      .lean();
+    const rows = await listByRecipient(userId);
+    // Map id → _id for frontend compatibility
+    const notifications = rows.map((n) => ({ ...n, _id: n.id }));
     res.json({ notifications });
   } catch {
     res.status(500).json({ message: 'Failed to fetch notifications' });
   }
 };
 
-export const markRead = async (req: AuthenticatedRequest, res: Response) => {
+export const markReadController = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user.userId;
-    await Notification.findOneAndUpdate(
-      { _id: req.params.id, recipient: userId },
-      { read: true }
-    );
+    await markRead(req.params.id, userId);
     res.json({ success: true });
   } catch {
     res.status(500).json({ message: 'Failed to mark as read' });
   }
 };
 
-export const markAllRead = async (req: AuthenticatedRequest, res: Response) => {
+export const markAllReadController = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user.userId;
-    await Notification.updateMany({ recipient: userId, read: false }, { read: true });
+    await markAllRead(userId);
     res.json({ success: true });
   } catch {
     res.status(500).json({ message: 'Failed to mark all as read' });
@@ -41,7 +42,7 @@ export const markAllRead = async (req: AuthenticatedRequest, res: Response) => {
 export const deleteNotification = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user.userId;
-    await Notification.findOneAndDelete({ _id: req.params.id, recipient: userId });
+    await deleteById(req.params.id, userId);
     res.json({ success: true });
   } catch {
     res.status(500).json({ message: 'Failed to delete notification' });

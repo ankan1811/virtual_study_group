@@ -5,7 +5,7 @@ import {
   acceptCompanionRequest,
   declineCompanionRequest,
   getCompanionList,
-  getPendingRequests,
+  getPendingRequestsController as getPendingRequests,
 } from '../controllers/CompanionController';
 
 const router = Router();
