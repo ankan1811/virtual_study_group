@@ -154,8 +154,9 @@ This is **not** data migration — it's DDL (Data Definition Language). Think of
 - **Two sign-in methods:** passwordless OTP and single-click Google OAuth
 - **Google OAuth** — "Continue with Google" button on the auth page. Uses `@react-oauth/google` on frontend to get an access token, backend verifies it against Google's userinfo API (`POST /auth/google`). Works for both new registrations and existing logins. Stores `googleId` on the User model for account linking. Google Client ID via `VITE_GOOGLE_CLIENT_ID` env var.
 - **Passwordless OTP auth** — no passwords stored. Users verify email ownership via a 6-digit OTP on every login/register
-- **Stateless OTP** — HMAC-SHA256 signed hash (no OTP stored in DB). Server generates OTP + hash, emails OTP to user, client sends back OTP + hash for verification
-- **Configurable expiry** via `OTP_EXPIRY_MINUTES` env var (default: 5 minutes)
+- **Redis-backed OTP** — HMAC-SHA256 signed hash stored in Upstash Redis at key `otp:{email}` with automatic TTL expiry. Server generates OTP + hash, stores hash in Redis, emails OTP to user. On verification, backend retrieves hash from Redis and deletes key (one-time use). Frontend only sends `{ email, otp }` — no hash or expiry data leaves the server
+- **OTP emails via Resend** — professional email delivery service (replaced Gmail SMTP). Better deliverability, no 2FA/app-password management needed. Uses `RESEND_API_KEY` and `RESEND_FROM_EMAIL` env vars
+- **Configurable expiry** via `OTP_EXPIRY_MINUTES` env var (default: 5 minutes) — maps to Redis TTL in seconds
 - **Two-step frontend flow:** enter email → receive OTP → enter OTP → authenticated
 - Resend OTP with 30-second cooldown, "Change email" back button
 - JWT token-based session after successful OTP verification
@@ -266,7 +267,7 @@ This is **not** data migration — it's DDL (Data Definition Language). Think of
 - **Podcast discovery page** at `/podcasts` accessible from the sidebar (Mic2 icon)
 - **5 topic tabs:** Trending, AI, Tech, Business, Productivity & Tools — each lazily fetched on first tab visit
 - **Listen Notes API** integration (`GET /podcasts/:topic`) — uses `best_podcasts` endpoint for genre-based topics and `search` for AI
-- **MongoDB cache** — each topic stored as a document with a 4-day TTL index; survives server restarts and works on ephemeral-filesystem platforms (Railway, Render)
+- **Upstash Redis cache** — each topic stored at key `podcast:{topic}` with 4-day TTL (345,600s); auto-expires, no cleanup jobs needed. Replaced former MongoDB `Podcast` model
   - Cache validity: checks if `fetchedAt >= last Tuesday or Saturday midnight` (no cron needed for correctness)
   - Refresh chain: fresh cache → Listen Notes API → stale cache → 3 mock fallback podcasts per topic
   - `source` field in response: `"cache" | "api" | "stale-cache" | "mock"` — frontend shows amber notice on stale/mock
