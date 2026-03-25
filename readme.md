@@ -8,7 +8,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 | -------------------- | ----------------------------------------------------------------- |
 | **Backend**          | Node.js, Express, TypeScript                                      |
 | **Frontend**         | React 18, TypeScript, Vite                                        |
-| **Database**         | PostgreSQL via NeonDB + Drizzle ORM (structured data) · MongoDB (Mongoose) for unstructured/AI data |
+| **Database**         | PostgreSQL via NeonDB + Drizzle ORM (structured data) · MongoDB (Mongoose) for unstructured/AI data · Upstash Redis (TTL cache + rate limiting) |
 | **Real-time**        | Socket.IO                                                         |
 | **Video Calls**      | Agora RTC SDK                                                     |
 | **AI**               | Switchable: Google Gemini 2.5 Flash (default) / xAI Grok          |
@@ -17,15 +17,16 @@ A full-stack web application for creating virtual study group spaces with real-t
 | **State Management** | Redux Toolkit                                                     |
 | **Whiteboard**       | @excalidraw/excalidraw (MIT, client-side, lazy-loaded)            |
 | **Study Radio**      | SomaFM internet radio streams (ambient/chill/electronic)          |
-| **Podcasts**         | Listen Notes API (300 free calls/month) — curated across 5 topics, MongoDB cache (TTL 4 days), node-cron bi-weekly refresh |
+| **Podcasts**         | Listen Notes API (300 free calls/month) — curated across 5 topics, Upstash Redis cache (TTL 4 days), node-cron bi-weekly refresh |
 | **Styling**          | Tailwind CSS, shadcn/ui, Framer Motion                            |
-| **Auth**             | Stateless OTP (HMAC-SHA256) + Google OAuth + JWT + nodemailer     |
-| **Rate Limiting**    | express-rate-limit (per-user + per-IP, all thresholds via env vars) |
+| **Auth**             | Redis-backed OTP (HMAC-SHA256 + Upstash Redis TTL) + Google OAuth + JWT + Resend (email delivery) |
+| **Rate Limiting**    | @upstash/ratelimit (sliding window, Redis-backed, per-user + per-IP, all thresholds via env vars) |
+| **Caching**          | Upstash Redis (OTP hashes with TTL auto-expiry, podcast cache with 4-day TTL, distributed rate limit counters) |
 | **News Feed**        | Mock articles (AI / Tech / Productivity categories, 30-min cache) |
 
 ## Database Architecture
 
-This project uses a **dual-database architecture** — PostgreSQL for structured relational data and MongoDB for unstructured/flexible data.
+This project uses a **triple-layer data architecture** — PostgreSQL for structured relational data, MongoDB for unstructured/flexible data, and Upstash Redis for TTL-based caching and transient data.
 
 ### PostgreSQL (NeonDB + Drizzle ORM) — structured data
 
@@ -38,12 +39,23 @@ Structured entities with clear relationships live in **NeonDB** via **Drizzle OR
 
 ### MongoDB (Mongoose) — unstructured/flexible data
 
-Two collections stay in MongoDB where the flexible document model is a genuine advantage:
+One collection stays in MongoDB where the flexible document model is a genuine advantage:
 
 | Collection | Why MongoDB |
 |---|---|
 | `summaries` | Variable-length HTML content (5KB–50KB+), 768-dim embedding arrays stored natively, schema varies by type (room/DM/whiteboard), RAG cosine-similarity queries done in Node.js |
-| `podcasts` | RSS/API response fields vary by provider, nested arrays of variable objects, TTL auto-cleanup on `fetchedAt`, survives server restarts (unlike a file cache) |
+
+### Upstash Redis — TTL cache + transient data
+
+Redis handles all data that benefits from automatic expiration or needs to be fast and ephemeral:
+
+| Use Case | Key Pattern | TTL | Why Redis |
+|---|---|---|---|
+| **OTP hashes** | `otp:{email}` | 5 min (configurable via `OTP_EXPIRY_MINUTES`) | Auto-expire eliminates stale OTPs, one active OTP per email enforced by key overwrite, server-side only (no hash/expires sent to frontend) |
+| **Podcast cache** | `podcast:{topic}` | 4 days (345,600s) | Fast key-value reads, automatic TTL cleanup (replaced MongoDB `Podcast` model), cache validity checked against last Tue/Sat boundary |
+| **Rate limit counters** | `rl:{limiter}:{key}` | Per-window (varies) | Distributed sliding window via `@upstash/ratelimit`, works across multiple server instances, fail-open on Redis downtime |
+
+REST-based Upstash client — no TCP connection pools, fully serverless-friendly. Single `getRedis()` singleton initialized at startup (`backend/src/db/redis.ts`).
 
 ### Set up your database
 

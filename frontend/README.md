@@ -16,12 +16,13 @@ Real-time collaborative study platform built with React, TypeScript, and Vite.
 - **@excalidraw/excalidraw** for collaborative whiteboard (lazy-loaded)
 - **SomaFM** internet radio streams for Study Radio (ambient/chill background music)
 
-## Backend Database Architecture
+## Backend Database & Caching Architecture
 
-The backend uses a **dual-database architecture** — the frontend interacts with both through the same REST API and Socket.IO events:
+The backend uses a **triple-layer data architecture** — the frontend interacts with all through the same REST API and Socket.IO events:
 
 - **PostgreSQL (NeonDB + Drizzle ORM)** — all structured relational data: users, rooms, companions, notifications, DMs, chats, upload/embedding counters. UUID primary keys.
-- **MongoDB (Mongoose)** — unstructured/flexible data: AI summaries (variable-length HTML + 768-dim embedding vectors for RAG) and podcast cache (RSS/API responses that vary per provider, TTL auto-cleanup).
+- **MongoDB (Mongoose)** — unstructured/flexible data: AI summaries (variable-length HTML + 768-dim embedding vectors for RAG).
+- **Upstash Redis** — TTL-based caching and transient data: OTP hashes (auto-expire after 5 min), podcast cache (4-day TTL, replaces former MongoDB cache), and distributed rate limiting (sliding window algorithm via `@upstash/ratelimit`). REST-based client (no TCP connection pools, serverless-friendly).
 
 The frontend doesn't need to know which database handles what — all data flows through the same API endpoints. This split is entirely a backend concern.
 
@@ -30,7 +31,8 @@ The frontend doesn't need to know which database handles what — all data flows
 ### Authentication (`AuthPage`)
 - **Two auth methods:** OTP-based email verification and single-click Google OAuth
 - **Google OAuth** — "Continue with Google" button using `@react-oauth/google`. Uses `useGoogleLogin` hook to get an access token, sends it to `POST /auth/google` for backend verification. Works for both new registrations and existing logins. Google Client ID via `VITE_GOOGLE_CLIENT_ID` env var.
-- **OTP flow** — two-step: enter email → receive OTP → enter OTP → authenticated. Resend OTP with 30-second cooldown, "Change email" back button.
+- **OTP flow** — two-step: enter email → receive OTP → enter OTP → authenticated. Resend OTP with 30-second cooldown, "Change email" back button. OTP is validated entirely server-side via Upstash Redis (TTL auto-expiry) — frontend only sends `{ email, otp }` (no hash/expires needed).
+- **OTP emails sent via Resend** — professional email delivery service (replaced Gmail SMTP). Uses `RESEND_API_KEY` and `RESEND_FROM_EMAIL` env vars on backend.
 - On success: dispatches Redux login, stores JWT in localStorage, connects socket, navigates to `/home` (or to a pending invite room if the user arrived via a `/join/:roomId` link)
 
 ### Home Dashboard (`RoomPage`)
@@ -137,7 +139,7 @@ The frontend doesn't need to know which database handles what — all data flows
 ### Podcasts (`PodcastsPage`)
 - **Full-page podcast discovery** at `/podcasts` — accessible from sidebar with Mic2 icon
 - **5 topic tabs**: Trending | AI | Tech | Business | Productivity & Tools
-- Lazy-fetches each topic on first tab visit via `GET /podcasts/:topic` — subsequent visits in the same session use component-state cache (no extra API calls)
+- Lazy-fetches each topic on first tab visit via `GET /podcasts/:topic` — backend caches in Upstash Redis (4-day TTL, replaces former MongoDB cache). Subsequent visits in the same session use component-state cache (no extra API calls)
 - **Animated tab bar** — Framer Motion `layoutId="podcast-tab-bg"` sliding gradient highlight. Each topic has its own gradient + card accent color
 - **Refresh banner** — pulsing indigo dot + "Fresh drops every Tue & Sat — stay ahead of the curve." + "Curated for the curious learner" subtext
 - **Podcast cards** — top accent strip (topic color), thumbnail (fallback to Mic2 icon), title (line-clamp-2), publisher, description (line-clamp-3), listen score badge (Star icon, amber), episode count, "Listen Now" → Listen Notes URL
