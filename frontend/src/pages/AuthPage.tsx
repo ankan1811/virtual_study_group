@@ -25,7 +25,7 @@ export default function AuthPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
-  const [otpData, setOtpData] = useState<{ hash: string; expires: number } | null>(null);
+  const [otpSent, setOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [otpSending, setOtpSending] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -76,7 +76,7 @@ export default function AuthPage() {
     setName("");
     setEmail("");
     setOtp("");
-    setOtpData(null);
+    setOtpSent(false);
     setError("");
     setStep("email");
     setCountdown(0);
@@ -99,7 +99,7 @@ export default function AuthPage() {
         `${import.meta.env.VITE_API_URL}/auth/send-otp`,
         { email }
       );
-      setOtpData({ hash: res.data.hash, expires: res.data.expires });
+      setOtpSent(true);
       setStep("otp");
       setCountdown(30);
     } catch (err: any) {

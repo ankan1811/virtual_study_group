@@ -50,13 +50,13 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
 
 export const registerUser = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, email, otp, hash, expires } = req.body;
-    if (!name || !email || !otp || !hash || !expires) {
+    const { name, email, otp } = req.body;
+    if (!name || !email || !otp) {
       res.status(400).json({ error: 'All fields are required.' });
       return;
     }
 
-    if (!verifyOtp(email, otp, hash, expires)) {
+    if (!(await verifyOtp(email, otp))) {
       res.status(401).json({ error: 'Invalid or expired OTP.' });
       return;
     }
@@ -82,13 +82,13 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
 
 export const loginUser = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, otp, hash, expires } = req.body;
-    if (!email || !otp || !hash || !expires) {
+    const { email, otp } = req.body;
+    if (!email || !otp) {
       res.status(400).json({ error: 'All fields are required.' });
       return;
     }
 
-    if (!verifyOtp(email, otp, hash, expires)) {
+    if (!(await verifyOtp(email, otp))) {
       res.status(401).json({ error: 'Invalid or expired OTP.' });
       return;
     }
