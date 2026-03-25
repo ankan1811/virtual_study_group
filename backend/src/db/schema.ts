@@ -145,18 +145,6 @@ export const uploadCounters = pgTable(
   ],
 );
 
-// ── embedding_counters ───────────────────────────────────────────────────────
-
-export const embeddingCounters = pgTable(
-  'embedding_counters',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    dateKey: varchar('date_key', { length: 10 }).notNull(), // "2026-03-08"
-    count: integer('count').default(0).notNull(),
-  },
-  (table) => [uniqueIndex('embedding_counters_date_key_unique_idx').on(table.dateKey)],
-);
-
 // ── direct_messages ──────────────────────────────────────────────────────────
 
 export const directMessages = pgTable(
@@ -267,4 +255,3 @@ export type Notification = typeof notifications.$inferSelect;
 export type DirectMessage = typeof directMessages.$inferSelect;
 export type Chat = typeof chats.$inferSelect;
 export type UploadCounter = typeof uploadCounters.$inferSelect;
-export type EmbeddingCounter = typeof embeddingCounters.$inferSelect;
