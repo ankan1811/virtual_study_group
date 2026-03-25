@@ -140,7 +140,6 @@ export default function SettingsPage() {
   const isAuthenticated = useSelector(
     (s: AuthState) => s.auth.isAuthenticated
   );
-  const user = useSelector((s: AuthState) => s.auth.user);
   const { isDark, toggle: toggleDark } = useDarkMode();
 
   const [notifications, setNotifications] = useState(true);
