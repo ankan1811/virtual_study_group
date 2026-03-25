@@ -32,6 +32,16 @@ This project uses a **triple-layer data architecture** — PostgreSQL for struct
 
 Structured entities with clear relationships live in **NeonDB** via **Drizzle ORM**:
 
+| Table | Purpose | Why PostgreSQL |
+|---|---|---|
+| `users` | User profiles (name, email, avatar, education, projects, work experience) | Relational core — referenced by every other table via FK |
+| `rooms` / `room_members` | Study rooms and membership | Many-to-many join with FK cascades |
+| `companions` | Friend/companion relationships with status | Unique constraint on (requester, recipient), status enum, bidirectional queries |
+| `notifications` | Persistent notifications (10-day retention) | Must survive page refreshes and logouts, queryable by recipient + read state |
+| `direct_messages` | DM history between users | Relational (from/to FKs), complex aggregations (unread counts, recent conversations) |
+| `chats` | Room chat messages | Indexed by (roomId, createdAt) for session replay |
+| `upload_counters` | Monthly R2 upload quota per user | **Deliberately kept in Postgres over Redis** — protects a real cost boundary (Cloudflare R2 storage). Must survive for 31 days without risk of eviction. A Redis flush would reset counters to zero, giving users free uploads beyond quota. Low frequency (~2-5 writes/session) means Postgres speed is fine. Enables historical audit queries ("which users hit the limit?") |
+
 - Type-safe schema with foreign key constraints and enums
 - UUID primary keys — preserves the existing string-based auth contract (JWTs, socket IDs, DM room keys)
 - `ON CONFLICT DO UPDATE` atomic upserts for counter tables
