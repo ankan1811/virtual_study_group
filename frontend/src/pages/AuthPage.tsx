@@ -25,7 +25,6 @@ export default function AuthPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [otpSending, setOtpSending] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -76,7 +75,6 @@ export default function AuthPage() {
     setName("");
     setEmail("");
     setOtp("");
-    setOtpSent(false);
     setError("");
     setStep("email");
     setCountdown(0);
@@ -95,11 +93,10 @@ export default function AuthPage() {
     setOtpSending(true);
     setError("");
     try {
-      const res = await axios.post(
+      await axios.post(
         `${import.meta.env.VITE_API_URL}/auth/send-otp`,
         { email }
       );
-      setOtpSent(true);
       setStep("otp");
       setCountdown(30);
     } catch (err: any) {
@@ -153,11 +150,10 @@ export default function AuthPage() {
     setError("");
     setOtpSending(true);
     try {
-      const res = await axios.post(
+      await axios.post(
         `${import.meta.env.VITE_API_URL}/auth/send-otp`,
         { email }
       );
-      setOtpSent(true);
       setCountdown(30);
     } catch (err: any) {
       setError(err.response?.data?.error || "Failed to resend OTP.");

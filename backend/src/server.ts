@@ -35,7 +35,16 @@ try {
   process.exit(1);
 }
 
-// MongoDB connection (summaries + podcast cache)
+// Upstash Redis — eagerly initialize to catch config errors at startup
+import { getRedis } from "./db/redis";
+try {
+  getRedis();
+} catch (err) {
+  console.error("Redis init failed:", err);
+  process.exit(1);
+}
+
+// MongoDB connection (summaries)
 mongoose
   .connect(process.env.MONGODB_URI || "", {})
   .then(() => {
