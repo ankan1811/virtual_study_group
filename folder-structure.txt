@@ -9,10 +9,12 @@ virtual_study_group/
 |
 |-- backend/                         # Node.js + Express + TypeScript backend
 |   |-- .env                         # Environment variables (DATABASE_URL, MONGODB_URI,
+|   |                                  UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN,
 |   |                                  JWT_SECRET, PORT, OTP_SECRET, OTP_EXPIRY_MINUTES,
 |   |                                  AI_PROVIDER, GEMINI_API_KEY, GEMINI_EMBEDDING_MODEL,
 |   |                                  GROK_API_KEY,
-|   |                                  R2_*, AGORA_APP_ID, SMTP_*,
+|   |                                  R2_*, AGORA_APP_ID,
+|   |                                  RESEND_API_KEY, RESEND_FROM_EMAIL,
 |   |                                  LISTEN_NOTES_API_KEY,
 |   |                                  + optional rate limit overrides)
 |   |-- .gitignore                   # Git ignore rules for backend
@@ -25,14 +27,16 @@ virtual_study_group/
 |   |
 |   |-- src/                         # All backend source code
 |       |
-|       |-- server.ts                # Main entry point - Express app setup, dual-database
-|       |                              init (NeonDB PostgreSQL + MongoDB), CORS config,
-|       |                              route mounting. Eagerly initializes getNeonDb() at
-|       |                              startup (exits on failure). MongoDB for summaries +
-|       |                              podcast cache. Registers all 10 route groups.
-|       |                              Port via .env (PORT). Applies global rate limiter
-|       |                              (200 req/IP/15min). Sets trust proxy for correct
-|       |                              IP behind proxies. On listen: starts
+|       |-- server.ts                # Main entry point - Express app setup, triple-layer
+|       |                              data init (NeonDB PostgreSQL + MongoDB + Upstash
+|       |                              Redis), CORS config, route mounting. Eagerly
+|       |                              initializes getNeonDb() and getRedis() at startup
+|       |                              (exits on failure). MongoDB for summaries. Redis
+|       |                              for OTP cache, podcast cache, rate limiting.
+|       |                              Registers all 10 route groups. Port via .env (PORT).
+|       |                              Applies global rate limiter (200 req/IP/15min,
+|       |                              Redis-backed). Sets trust proxy for correct IP
+|       |                              behind proxies. On listen: starts
 |       |                              startPodcastCacheJob() (Tue & Sat 02:00 UTC) and
 |       |                              startNotificationCleanupJob() (daily 03:00 UTC)
 |       |
@@ -65,14 +69,20 @@ virtual_study_group/
 |       |                              Handles binary stream data from frontend.
 |       |
 |       |-- utils/                   # Backend utility modules
-|       |   |-- sendEmail.ts         # Nodemailer transporter — sends emails via SMTP.
-|       |   |                          Uses SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS
-|       |   |                          env vars. Exports sendEmail(to, subject, html)
-|       |   |-- otp.ts              # Stateless OTP utility — HMAC-SHA256 based.
-|       |                              generateOtp(email) → { otp, hash, expires }.
-|       |                              verifyOtp(email, otp, hash, expires) → boolean.
-|       |                              Uses OTP_SECRET + OTP_EXPIRY_MINUTES env vars.
-|       |                              crypto.timingSafeEqual for timing-attack prevention
+|       |   |-- sendEmail.ts         # Resend email service — sends emails via Resend
+|       |   |                          REST API (replaced Nodemailer + Gmail SMTP).
+|       |   |                          Singleton pattern: getResend() initializes once.
+|       |   |                          Uses RESEND_API_KEY, RESEND_FROM_EMAIL env vars.
+|       |   |                          Exports sendEmail(to, subject, html)
+|       |   |-- otp.ts              # Redis-backed OTP utility — HMAC-SHA256 based.
+|       |                              generateOtp(email) → { otp } (async, stores
+|       |                              hash in Redis at otp:{email} with TTL).
+|       |                              verifyOtp(email, otp) → boolean (async,
+|       |                              retrieves hash from Redis, deletes on success
+|       |                              for one-time use). Uses OTP_SECRET +
+|       |                              OTP_EXPIRY_MINUTES env vars. Redis TTL handles
+|       |                              auto-expiry. crypto.timingSafeEqual for
+|       |                              timing-attack prevention
 |       |
 |       |-- jobs/                    # Scheduled background jobs
 |       |   |-- podcastCacheJob.ts   # node-cron job: refreshes all 5 podcast topic caches
@@ -93,10 +103,12 @@ virtual_study_group/
 |       |-- controllers/             # Request handlers (business logic)
 |       |   |-- AuthController.ts    # OTP-based auth + Google OAuth. Uses Drizzle
 |       |   |                          queries (findByEmail, createUser, updateUser).
-|       |   |                          sendOtp (generates OTP, emails it, returns
-|       |   |                          HMAC hash + expiry), Register (verify OTP,
-|       |   |                          create user, JWT sign), Login (verify OTP,
-|       |   |                          find user, JWT sign).
+|       |   |                          sendOtp (generates OTP via Redis-backed hash,
+|       |   |                          emails it via Resend, returns { success: true }).
+|       |   |                          Register (verify OTP from Redis, create user,
+|       |   |                          JWT sign), Login (verify OTP from Redis, find
+|       |   |                          user, JWT sign). Frontend sends only { email,
+|       |   |                          otp } — no hash/expires needed.
 |       |   |                          googleLogin: validates Google access_token
 |       |   |                          via googleapis userinfo endpoint, creates or
 |       |   |                          finds user by email, stores googleId, issues JWT.
@@ -177,18 +189,18 @@ virtual_study_group/
 |       |   |                          All queries via Drizzle (db/queries/notifications)
 |       |   |-- NewsController.ts    # Returns 12 mock news articles across
 |       |   |                          AI, Tech, Productivity categories
-|       |   |-- PodcastController.ts # Listen Notes API integration with MongoDB cache.
-|       |                              Topics: trending, ai, tech, business, productivity.
-|       |                              Cache: MongoDB Podcast model (one doc per topic,
-|       |                              unique index on topic, TTL index on fetchedAt).
-|       |                              Cache valid if fetchedAt >= last Tue/Sat midnight
-|       |                              (getLastRefreshBoundary() walks back up to 7 days).
-|       |                              Request flow: fresh cache -> Listen Notes API ->
-|       |                              stale cache -> mock fallback (3 items/topic).
-|       |                              Response: { data, fetchedAt, source }.
-|       |                              Exports: getPodcasts (controller), refreshTopicCache
-|       |                              (used by cron job), VALID_TOPICS, Topic type.
-|       |                              Env: LISTEN_NOTES_API_KEY
+|       |   |-- PodcastController.ts # Listen Notes API integration with Upstash Redis
+|       |                              cache. Topics: trending, ai, tech, business,
+|       |                              productivity. Cache: Redis key podcast:{topic}
+|       |                              with 4-day TTL (345,600s). Replaced former MongoDB
+|       |                              Podcast model. Cache valid if fetchedAt >= last
+|       |                              Tue/Sat midnight (getLastRefreshBoundary() walks
+|       |                              back up to 7 days). Request flow: fresh cache ->
+|       |                              Listen Notes API -> stale cache -> mock fallback
+|       |                              (3 items/topic). Response: { data, fetchedAt,
+|       |                              source }. Exports: getPodcasts (controller),
+|       |                              refreshTopicCache (used by cron job), VALID_TOPICS,
+|       |                              Topic type. Env: LISTEN_NOTES_API_KEY
 |       |
 |       |-- routes/                  # Express route definitions
 |       |   |-- authRoutes.ts        # /auth/send-otp (OTP email+IP rate limited),
