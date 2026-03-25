@@ -372,6 +372,7 @@ This is **not** data migration — it's DDL (Data Definition Language). Think of
 
 ### Rate Limiting & Security
 
+- **Distributed rate limiting via Upstash Redis** — all rate limiters backed by `@upstash/ratelimit` with sliding window algorithm. Works across multiple server instances. Fail-open design: if Redis is temporarily down, requests are allowed through (logged error). Standard `RateLimit-*` headers on all responses
 - **All rate limit thresholds configurable via env vars** — every value in `RATE_LIMIT_CONFIG` reads from a corresponding env var with sensible defaults. No code changes needed to tune limits
 - **Dual-layer protection on auth endpoints** — both per-email and per-IP limits applied simultaneously:
   - Login & Register: `AUTH_MAX_PER_EMAIL` (default 7) / `AUTH_MAX_PER_IP` (default 15) per `AUTH_WINDOW_MIN` (default 15 min)
@@ -412,7 +413,8 @@ This is **not** data migration — it's DDL (Data Definition Language). Think of
 
 - Node.js (v18+)
 - NeonDB account (free tier: 512 MB) — or any PostgreSQL connection string
-- MongoDB instance (local or Atlas) — for AI summaries and podcast cache
+- MongoDB instance (local or Atlas) — for AI summaries
+- Upstash Redis account (free tier: 256 MB, 10K commands/day) — for OTP TTL caching, podcast cache, and distributed rate limiting. Sign up at [upstash.com](https://upstash.com)
 - Agora account (for video call App ID)
 - Google Cloud Console OAuth Client ID (for Google sign-in — [create one](https://console.cloud.google.com/apis/credentials))
 - Google AI Studio API key (for Gemini AI — [get one free](https://aistudio.google.com)) or xAI API key (for Grok — [get one free](https://console.x.ai))
@@ -444,7 +446,9 @@ Create a `.env` file in `backend/` with:
 
 ```
 DATABASE_URL=your_neon_connection_string   # PostgreSQL (NeonDB) — structured data
-MONGODB_URI=your_mongodb_connection_string # MongoDB — AI summaries + podcast cache
+MONGODB_URI=your_mongodb_connection_string # MongoDB — AI summaries
+UPSTASH_REDIS_REST_URL=https://xxxx.upstash.io  # Upstash Redis REST URL (from console.upstash.com)
+UPSTASH_REDIS_REST_TOKEN=AXxxxxxxxxxxxx          # Upstash Redis REST token
 PORT=7002
 JWT_SECRET=your_jwt_secret
 AI_PROVIDER=gemini                # "gemini" (default) or "grok"
@@ -458,12 +462,10 @@ R2_BUCKET_NAME=study-summaries    # R2 bucket name for saved summaries
 R2_MAX_UPLOADS_PER_MONTH=10      # Max summary uploads per user per month (default: 10)
 AGORA_APP_ID=your_agora_app_id   # Agora RTC App ID
 LISTEN_NOTES_API_KEY=your_key   # Listen Notes API key (300 free calls/month) — https://www.listennotes.com/api/
-SMTP_HOST=smtp.gmail.com          # SMTP server for OTP emails
-SMTP_PORT=587                     # SMTP port (587 for TLS)
-SMTP_USER=your-email@gmail.com    # SMTP sender email
-SMTP_PASS=your-app-password       # SMTP password (Gmail: use App Password)
-OTP_SECRET=your-random-hex-string # HMAC signing key for stateless OTP
-OTP_EXPIRY_MINUTES=5              # OTP validity duration (default: 5 minutes)
+RESEND_API_KEY=re_xxxxxxxxxxxx                          # Resend API key (from https://resend.com) — replaced Gmail SMTP
+RESEND_FROM_EMAIL=Virtual Study Group <noreply@yourdomain.com>  # Sender email for OTP emails (requires verified domain on Resend)
+OTP_SECRET=your-random-hex-string # HMAC signing key for OTP hash (stored in Redis)
+OTP_EXPIRY_MINUTES=5              # OTP validity duration (default: 5 minutes) — maps to Redis TTL
 
 # Rate Limiting (all optional — defaults shown, only override what you need)
 # AUTH_WINDOW_MIN=15              # Auth window in minutes
