@@ -1,6 +1,7 @@
-import rateLimit from 'express-rate-limit';
-import { Request } from 'express';
+import { Ratelimit } from '@upstash/ratelimit';
+import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { getRedis } from '../db/redis';
 
 // ── Helper: parse env as int with fallback ──────────────────────────────────
 const envInt = (key: string, fallback: number): number =>
@@ -61,93 +62,124 @@ function extractUserIdFromToken(req: Request): string {
   }
 }
 
-// ── Tier 1a: Auth per-email limiter ──────────────────────────────────────────
-// Disable IPv6 keyGenerator validation — we handle fallback with || 'unknown'
-const noIpValidation = { validate: false as const };
+// ── Upstash rate-limit middleware factory ────────────────────────────────────
 
-export const authEmailLimiter = rateLimit({
-  windowMs: RATE_LIMIT_CONFIG.AUTH_WINDOW_MS,
-  max: RATE_LIMIT_CONFIG.AUTH_MAX_PER_EMAIL,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req: Request) => (req.body?.email as string)?.toLowerCase?.() || req.ip || 'unknown',
-  message: { error: 'Too many attempts for this account. Please try again later.' },
-  ...noIpValidation,
-});
+function createLimiter(
+  prefix: string,
+  windowMs: number,
+  maxRequests: number,
+  keyFn: (req: Request) => string,
+  errorMessage: string,
+): (req: Request, res: Response, next: NextFunction) => Promise<void> {
+  let _rl: Ratelimit | null = null;
+
+  function getRl(): Ratelimit {
+    if (!_rl) {
+      _rl = new Ratelimit({
+        redis: getRedis(),
+        limiter: Ratelimit.slidingWindow(maxRequests, `${windowMs} ms`),
+        prefix: `rl:${prefix}`,
+      });
+    }
+    return _rl;
+  }
+
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const key = keyFn(req);
+      const { success, remaining, reset } = await getRl().limit(key);
+      res.setHeader('RateLimit-Limit', maxRequests);
+      res.setHeader('RateLimit-Remaining', remaining);
+      res.setHeader('RateLimit-Reset', Math.ceil(reset / 1000));
+      if (!success) {
+        res.status(429).json({ error: errorMessage });
+        return;
+      }
+      next();
+    } catch (err) {
+      // Fail open — if Redis is down, don't block requests
+      console.error(`[RateLimiter:${prefix}] Redis error, failing open:`, err);
+      next();
+    }
+  };
+}
+
+// ── Tier 1a: Auth per-email limiter ──────────────────────────────────────────
+
+export const authEmailLimiter = createLimiter(
+  'auth-email',
+  RATE_LIMIT_CONFIG.AUTH_WINDOW_MS,
+  RATE_LIMIT_CONFIG.AUTH_MAX_PER_EMAIL,
+  (req) => (req.body?.email as string)?.toLowerCase?.() || req.ip || 'unknown',
+  'Too many attempts for this account. Please try again later.',
+);
 
 // ── Tier 1b: Auth per-IP limiter ─────────────────────────────────────────────
-export const authIpLimiter = rateLimit({
-  windowMs: RATE_LIMIT_CONFIG.AUTH_WINDOW_MS,
-  max: RATE_LIMIT_CONFIG.AUTH_MAX_PER_IP,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req: Request) => req.ip || 'unknown',
-  message: { error: 'Too many requests from this IP. Please try again later.' },
-  ...noIpValidation,
-});
+
+export const authIpLimiter = createLimiter(
+  'auth-ip',
+  RATE_LIMIT_CONFIG.AUTH_WINDOW_MS,
+  RATE_LIMIT_CONFIG.AUTH_MAX_PER_IP,
+  (req) => req.ip || 'unknown',
+  'Too many requests from this IP. Please try again later.',
+);
 
 // ── Tier 2a: OTP send per-email limiter ──────────────────────────────────────
-export const otpEmailLimiter = rateLimit({
-  windowMs: RATE_LIMIT_CONFIG.OTP_WINDOW_MS,
-  max: RATE_LIMIT_CONFIG.OTP_MAX_PER_EMAIL,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req: Request) => (req.body?.email as string)?.toLowerCase?.() || req.ip || 'unknown',
-  message: { error: 'Too many OTP requests for this email. Please try again later.' },
-  ...noIpValidation,
-});
+
+export const otpEmailLimiter = createLimiter(
+  'otp-email',
+  RATE_LIMIT_CONFIG.OTP_WINDOW_MS,
+  RATE_LIMIT_CONFIG.OTP_MAX_PER_EMAIL,
+  (req) => (req.body?.email as string)?.toLowerCase?.() || req.ip || 'unknown',
+  'Too many OTP requests for this email. Please try again later.',
+);
 
 // ── Tier 2b: OTP send per-IP limiter ─────────────────────────────────────────
-export const otpIpLimiter = rateLimit({
-  windowMs: RATE_LIMIT_CONFIG.OTP_WINDOW_MS,
-  max: RATE_LIMIT_CONFIG.OTP_MAX_PER_IP,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req: Request) => req.ip || 'unknown',
-  message: { error: 'Too many OTP requests from this IP. Please try again later.' },
-  ...noIpValidation,
-});
+
+export const otpIpLimiter = createLimiter(
+  'otp-ip',
+  RATE_LIMIT_CONFIG.OTP_WINDOW_MS,
+  RATE_LIMIT_CONFIG.OTP_MAX_PER_IP,
+  (req) => req.ip || 'unknown',
+  'Too many OTP requests from this IP. Please try again later.',
+);
 
 // ── Tier 3: AI endpoints per-user limiter ────────────────────────────────────
-export const aiLimiter = rateLimit({
-  windowMs: RATE_LIMIT_CONFIG.AI_WINDOW_MS,
-  max: RATE_LIMIT_CONFIG.AI_MAX_PER_USER,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req: Request) => extractUserIdFromToken(req),
-  message: { error: 'AI rate limit reached. Please wait before asking another question.' },
-  ...noIpValidation,
-});
+
+export const aiLimiter = createLimiter(
+  'ai',
+  RATE_LIMIT_CONFIG.AI_WINDOW_MS,
+  RATE_LIMIT_CONFIG.AI_MAX_PER_USER,
+  (req) => extractUserIdFromToken(req),
+  'AI rate limit reached. Please wait before asking another question.',
+);
 
 // ── Tier 3b: Summary Q&A per-user limiter ───────────────────────────────
-export const summaryQaLimiter = rateLimit({
-  windowMs: RATE_LIMIT_CONFIG.SUMMARY_QA_WINDOW_MS,
-  max: RATE_LIMIT_CONFIG.SUMMARY_QA_MAX_PER_USER,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req: Request) => extractUserIdFromToken(req),
-  message: { error: 'Q&A rate limit reached. Please wait before asking another question.' },
-  ...noIpValidation,
-});
+
+export const summaryQaLimiter = createLimiter(
+  'summary-qa',
+  RATE_LIMIT_CONFIG.SUMMARY_QA_WINDOW_MS,
+  RATE_LIMIT_CONFIG.SUMMARY_QA_MAX_PER_USER,
+  (req) => extractUserIdFromToken(req),
+  'Q&A rate limit reached. Please wait before asking another question.',
+);
 
 // ── Tier 4: User search per-user limiter ─────────────────────────────────────
-export const searchLimiter = rateLimit({
-  windowMs: RATE_LIMIT_CONFIG.SEARCH_WINDOW_MS,
-  max: RATE_LIMIT_CONFIG.SEARCH_MAX_PER_USER,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req: Request) => extractUserIdFromToken(req),
-  message: { error: 'Too many searches. Please slow down.' },
-  ...noIpValidation,
-});
+
+export const searchLimiter = createLimiter(
+  'search',
+  RATE_LIMIT_CONFIG.SEARCH_WINDOW_MS,
+  RATE_LIMIT_CONFIG.SEARCH_MAX_PER_USER,
+  (req) => extractUserIdFromToken(req),
+  'Too many searches. Please slow down.',
+);
 
 // ── Tier 5: Global safety net per-IP limiter ─────────────────────────────────
-export const globalLimiter = rateLimit({
-  windowMs: RATE_LIMIT_CONFIG.GLOBAL_WINDOW_MS,
-  max: RATE_LIMIT_CONFIG.GLOBAL_MAX_PER_IP,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req: Request) => req.ip || 'unknown',
-  message: { error: 'Too many requests. Please try again later.' },
-  ...noIpValidation,
-});
+
+export const globalLimiter = createLimiter(
+  'global',
+  RATE_LIMIT_CONFIG.GLOBAL_WINDOW_MS,
+  RATE_LIMIT_CONFIG.GLOBAL_MAX_PER_IP,
+  (req) => req.ip || 'unknown',
+  'Too many requests. Please try again later.',
+);

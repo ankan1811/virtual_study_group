@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import PodcastModel from "../models/Podcast";
+import { getRedis } from "../db/redis";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -25,23 +25,27 @@ const VALID_TOPICS: Topic[] = [
   "productivity",
 ];
 
-// ─── MongoDB cache helpers ────────────────────────────────────────────────────
+// ─── Redis cache helpers ──────────────────────────────────────────────────────
+
+interface PodcastCacheEntry {
+  data: PodcastItem[];
+  fetchedAt: string;
+  source: 'api' | 'mock';
+}
+
+const PODCAST_TTL_SECONDS = 345600; // 4 days
 
 async function readCache(topic: Topic): Promise<{ data: PodcastItem[]; fetchedAt: string } | null> {
-  const doc = await PodcastModel.findOne({ topic }).lean();
-  if (!doc) return null;
-  return {
-    data: doc.podcasts as PodcastItem[],
-    fetchedAt: doc.fetchedAt.toISOString(),
-  };
+  const redis = getRedis();
+  const entry = await redis.get<PodcastCacheEntry>(`podcast:${topic}`);
+  if (!entry) return null;
+  return { data: entry.data, fetchedAt: entry.fetchedAt };
 }
 
 async function writeCache(topic: Topic, data: PodcastItem[], source: 'api' | 'mock' = 'api'): Promise<void> {
-  await PodcastModel.findOneAndUpdate(
-    { topic },
-    { podcasts: data, fetchedAt: new Date(), source },
-    { upsert: true, new: true },
-  );
+  const redis = getRedis();
+  const entry: PodcastCacheEntry = { data, fetchedAt: new Date().toISOString(), source };
+  await redis.set(`podcast:${topic}`, entry, { ex: PODCAST_TTL_SECONDS });
 }
 
 // ─── Cache validity: refresh on Tue (2) and Sat (6) ─────────────────────────
