@@ -86,11 +86,11 @@ virtual_study_group/
 |       |
 |       |-- jobs/                    # Scheduled background jobs
 |       |   |-- podcastCacheJob.ts   # node-cron job: refreshes all 5 podcast topic caches
-|       |   |                          at 02:00 UTC every Tuesday (2) and Saturday (6).
-|       |   |                          Sequential topic fetching with 1.5s gap between
-|       |   |                          API calls to avoid burst rate limiting.
-|       |   |                          Imports refreshTopicCache() + VALID_TOPICS from
-|       |   |                          PodcastController. Exports startPodcastCacheJob()
+|       |   |                          in Upstash Redis at 02:00 UTC every Tuesday (2)
+|       |   |                          and Saturday (6). Sequential topic fetching with
+|       |   |                          1.5s gap between API calls to avoid burst rate
+|       |   |                          limiting. Imports refreshTopicCache() + VALID_TOPICS
+|       |   |                          from PodcastController. Exports startPodcastCacheJob()
 |       |   |                          called from server.ts on startup. Logs per-topic
 |       |   |                          success/failure; keeps stale cache on API failure
 |       |   |-- notificationCleanupJob.ts  # node-cron job: deletes expired notifications
@@ -324,7 +324,14 @@ virtual_study_group/
 |       |-- middlewares/             # Express middleware
 |           |-- middleware.ts        # JWT token verification - extracts userId from
 |           |                          Authorization header. Exports AuthenticatedRequest
-|           |-- rateLimiter.ts       # Rate limiting middleware (express-rate-limit).
+|           |-- rateLimiter.ts       # Rate limiting middleware (@upstash/ratelimit,
+|                                      Redis-backed, replaced express-rate-limit).
+|                                      Sliding window algorithm via Ratelimit.
+|                                      slidingWindow(). createLimiter() factory
+|                                      builds middleware with prefix, window, max,
+|                                      key function. Fail-open: allows requests if
+|                                      Redis is down (logged error). Sets standard
+|                                      RateLimit-* headers on all responses.
 |                                      RATE_LIMIT_CONFIG: every threshold reads from
 |                                      env vars via envInt() helper with defaults.
 |                                      Exports 8 limiters + config object:
@@ -398,7 +405,9 @@ virtual_study_group/
         |   |                          Google" button via useGoogleLogin hook).
         |   |                          OTP flow: Step 1 (email + name for register)
         |   |                          → Step 2 (6-digit OTP input). Resend OTP
-        |   |                          with 30s countdown, back button.
+        |   |                          with 30s countdown, back button. Sends
+        |   |                          only { email, otp } to backend (no hash/
+        |   |                          expires — Redis handles OTP state server-side).
         |   |                          Google flow: gets access_token → POST
         |   |                          /auth/google → JWT + login. Calls
         |   |                          /auth/send-otp then /auth/login or
@@ -684,13 +693,15 @@ virtual_study_group/
 ENV CONFIGURATION
 =================
   backend/.env   ->  DATABASE_URL (NeonDB PostgreSQL connection string),
-                     MONGODB_URI (MongoDB — summaries + podcast cache),
+                     MONGODB_URI (MongoDB — summaries only),
+                     UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN
+                       (Upstash Redis — OTP cache, podcast cache, rate limiting),
                      PORT, JWT_SECRET, OTP_SECRET, OTP_EXPIRY_MINUTES,
                      AI_PROVIDER, GEMINI_API_KEY, GEMINI_EMBEDDING_MODEL, GROK_API_KEY,
                      R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME,
                      R2_MAX_UPLOADS_PER_MONTH, AGORA_APP_ID,
                      LISTEN_NOTES_API_KEY,
-                     SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS,
+                     RESEND_API_KEY, RESEND_FROM_EMAIL (Resend — replaced SMTP_*),
                      + Rate limiting env vars (all optional with defaults):
                        AUTH_WINDOW_MIN, AUTH_MAX_PER_EMAIL, AUTH_MAX_PER_IP,
                        OTP_WINDOW_MIN, OTP_MAX_PER_EMAIL, OTP_MAX_PER_IP,
@@ -763,10 +774,11 @@ API ROUTES SUMMARY
 
   Podcasts:
     GET    /podcasts/:topic         Get podcasts for topic (trending|ai|tech|business|productivity).
-                                    No auth. MongoDB cache per topic (Podcast model, TTL 4 days).
-                                    Cache valid until last Tue or Sat midnight (lazy refresh).
-                                    node-cron pre-warms cache at 02:00 UTC every Tue & Sat.
-                                    Response: { data: PodcastItem[], fetchedAt, source }
+                                    No auth. Upstash Redis cache per topic (key podcast:{topic},
+                                    4-day TTL). Cache valid until last Tue or Sat midnight
+                                    (lazy refresh). node-cron pre-warms cache at 02:00 UTC
+                                    every Tue & Sat. Response: { data: PodcastItem[], fetchedAt,
+                                    source }
 
 
 SOCKET EVENTS
