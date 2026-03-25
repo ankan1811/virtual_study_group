@@ -120,8 +120,8 @@ export default function AuthPage() {
       const endpoint = mode === "login" ? "/auth/login" : "/auth/register";
       const body =
         mode === "login"
-          ? { email, otp, hash: otpData!.hash, expires: otpData!.expires }
-          : { name, email, otp, hash: otpData!.hash, expires: otpData!.expires };
+          ? { email, otp }
+          : { name, email, otp };
 
       const res = await axios.post(
         `${import.meta.env.VITE_API_URL}${endpoint}`,
@@ -157,7 +157,7 @@ export default function AuthPage() {
         `${import.meta.env.VITE_API_URL}/auth/send-otp`,
         { email }
       );
-      setOtpData({ hash: res.data.hash, expires: res.data.expires });
+      setOtpSent(true);
       setCountdown(30);
     } catch (err: any) {
       setError(err.response?.data?.error || "Failed to resend OTP.");
