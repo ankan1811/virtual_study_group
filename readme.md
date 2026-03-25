@@ -54,8 +54,89 @@ Redis handles all data that benefits from automatic expiration or needs to be fa
 | **OTP hashes** | `otp:{email}` | 5 min (configurable via `OTP_EXPIRY_MINUTES`) | Auto-expire eliminates stale OTPs, one active OTP per email enforced by key overwrite, server-side only (no hash/expires sent to frontend) |
 | **Podcast cache** | `podcast:{topic}` | 4 days (345,600s) | Fast key-value reads, automatic TTL cleanup (replaced MongoDB `Podcast` model), cache validity checked against last Tue/Sat boundary |
 | **Rate limit counters** | `rl:{limiter}:{key}` | Per-window (varies) | Distributed sliding window via `@upstash/ratelimit`, works across multiple server instances, fail-open on Redis downtime |
+| **Embedding daily cap** | `embeddings:{YYYY-MM-DD}` | 24 hours | Global counter across all users, high-frequency (every summary save + every RAG query), auto-expires at end of day |
 
 REST-based Upstash client — no TCP connection pools, fully serverless-friendly. Single `getRedis()` singleton initialized at startup (`backend/src/db/redis.ts`).
+
+### Storage Decision Matrix — PostgreSQL vs Redis
+
+This project stores counters, caches, and transient data across two stores. The decision of *where* each piece of data lives is deliberate, not arbitrary. Here's the framework:
+
+#### The Core Question
+
+> **"What happens if this data disappears?"**
+
+If the answer is "a user gets free extra access" or "a security boundary weakens" — it belongs in **PostgreSQL**. If the answer is "we make one extra API call" or "a counter resets early" — **Redis** is fine.
+
+#### Decision Framework
+
+| Factor | PostgreSQL (NeonDB) | Redis (Upstash) |
+|---|---|---|
+| **Durability guarantee** | ACID transactions, WAL, replicated | Best-effort — eviction policies, no WAL, data can be lost on flush/restart |
+| **Query complexity** | JOINs, aggregations, window functions, `GROUP BY` | Key-value only — `GET`, `SET`, `INCR`, no relational queries |
+| **Access pattern** | Moderate frequency (dozens/sec) | High frequency (hundreds–thousands/sec) |
+| **Data lifespan** | Permanent or long-lived (weeks–months–forever) | Short-lived (minutes–hours–days) |
+| **Auto-expiration needed?** | No native TTL — requires cron jobs | Built-in TTL per key — set-and-forget |
+| **Auditability** | Full SQL queries, historical analysis, `GROUP BY` over time | No history — once a key expires, the data is gone |
+| **Cost of data loss** | High — users exceed limits, security boundaries break | Low — at worst, a counter resets early or a cache refetches |
+| **Atomic operations** | `INSERT ... ON CONFLICT DO UPDATE` (upsert) | `INCR`, `SETNX`, `EXPIRE` — all atomic, all O(1) |
+| **Multi-instance safe?** | Yes (single database) | Yes (centralized Redis, not in-memory per-process) |
+
+#### What Lives Where — and Why
+
+##### PostgreSQL: `upload_counters` (monthly R2 upload quota)
+
+```
+Key:     (userId, monthKey)     e.g. ("abc-123", "2026-03")
+Resets:  Monthly (calendar month boundary)
+Limit:   R2_MAX_UPLOADS_PER_MONTH (default: 10)
+```
+
+**Why Postgres, not Redis?**
+
+- **Durability matters.** Each upload costs real money (Cloudflare R2 storage + egress). If Redis evicts the key or flushes, the user's counter resets to zero and they get free uploads beyond their quota. With Postgres, the counter survives server restarts, Redis outages, and accidental flushes.
+- **Long lifespan.** The counter must persist for an entire calendar month (up to 31 days). Redis TTLs work best for hours-to-days — a 31-day TTL is fragile because any Redis maintenance window could wipe it.
+- **Low frequency.** This counter is only incremented when a user saves a summary to R2 — maybe 2-5 times per study session. Postgres handles this trivially; there's no performance reason to use Redis.
+- **Auditability.** With Postgres, you can query historical upload patterns: "Which users are hitting the limit?", "Should we increase the quota?", "What's the average uploads/month?" With Redis, once the key expires, the data is gone forever.
+
+**The risk of Redis here:** A user with 9/10 uploads used has their Redis key evicted. They now appear to have 0/10 used, getting 10 more free uploads. Over a month, this could mean 2-3x the intended R2 storage costs with no audit trail.
+
+##### Redis: `embeddings:{dateKey}` (daily Gemini API cap)
+
+```
+Key:     embeddings:2026-03-25
+Resets:  Daily (24-hour TTL)
+Limit:   EMBEDDING_DAILY_MAX (default: 400)
+```
+
+**Why Redis, not Postgres?**
+
+- **High frequency.** Every summary save *and* every RAG Q&A query calls `generateEmbedding()`, which increments this counter. During active study sessions with multiple users, this can fire dozens of times per minute. Redis `INCR` is O(1) with sub-millisecond latency; a Postgres upsert adds ~5-15ms of network round-trip to NeonDB per call.
+- **Short lifespan.** The counter resets every 24 hours. Redis TTL handles this perfectly — `EXPIRE key 86400` and the key auto-deletes at end of day. No cron job needed.
+- **Low cost of loss.** If the Redis key disappears mid-day, the counter resets to zero. Worst case: users get an extra ~400 embedding calls that day. Since Gemini's free tier allows ~1,500 RPD for embeddings, this temporary overshoot won't cause billing charges or API blocks — it's a soft budget, not a hard security boundary.
+- **No audit value.** "How many embeddings did we use on March 12th?" is not a useful business question. The daily cap exists purely to prevent accidental free-tier exhaustion, not to track usage patterns.
+
+**The tradeoff accepted:** If Redis flushes mid-day, users get extra embedding calls. This is acceptable because (a) Gemini's actual limit is higher than our self-imposed cap, and (b) the financial cost of extra embedding calls on the free tier is literally $0.
+
+##### Redis: OTP hashes, podcast cache, rate limit counters
+
+These are textbook Redis use cases and don't need a PostgreSQL alternative:
+
+| Data | Why Redis is the only sensible choice |
+|---|---|
+| **OTP hashes** (`otp:{email}`, 5-min TTL) | Must auto-expire for security. Storing in Postgres would require a cron job to clean up expired OTPs — and if the cron fails, stale OTPs remain valid. Redis TTL guarantees expiry. |
+| **Podcast cache** (`podcast:{topic}`, 4-day TTL) | Pure cache. If lost, we re-fetch from Listen Notes API. No data is generated or user-specific — it's just a faster read path. |
+| **Rate limit counters** (`rl:{limiter}:{key}`) | Managed by `@upstash/ratelimit` library. Sliding window algorithm requires atomic increment + expire in a single round-trip — Redis is purpose-built for this. Postgres would require row-level locking and be 10-100x slower. |
+
+##### PostgreSQL: everything else (users, rooms, companions, DMs, chats, notifications)
+
+These are **relational, permanent, and queryable** — the core of the application. They have foreign keys, need JOINs, support complex aggregations (unread counts, recent conversations, companion status), and must never be lost. This is what PostgreSQL was built for.
+
+#### Summary: The Decision in One Sentence
+
+> **Postgres for data you can't afford to lose; Redis for data you can't afford to be slow.**
+
+Upload counters protect a real cost boundary (R2 storage) and must survive for a month — Postgres. Embedding counters protect a soft daily budget and fire on every AI call — Redis. Everything else follows from asking: "Is this relational and permanent, or transient and fast?"
 
 ### Set up your database
 
@@ -348,7 +429,7 @@ This is **not** data migration — it's DDL (Data Definition Language). Think of
   - **Collapsible Q&A panel** on the Summaries page with suggestion chips, loading states, and source citation badges
   - **Three-layer rate limiting** to protect the free tier:
     - Per-user: `SUMMARY_QA_MAX_PER_USER` (default 10) per `SUMMARY_QA_WINDOW_MIN` (default 15 min)
-    - Global daily: `EMBEDDING_DAILY_MAX` (default 400) embedding API calls/day across all users, tracked via `EmbeddingCounter` collection
+    - Global daily: `EMBEDDING_DAILY_MAX` (default 400) embedding API calls/day across all users, tracked via Redis key `embeddings:{YYYY-MM-DD}` (24h TTL)
     - Save-time embeddings naturally limited by existing R2 upload quota
   - **Backfill script** (`backend/src/scripts/backfillEmbeddings.ts`) for generating embeddings on existing summaries
   - **[Full technical documentation with flowcharts](SEMANTIC_QA_DOCUMENTATION.md)** — detailed step-by-step breakdown of the entire RAG pipeline, summary generation flows, embedding mechanics, cosine similarity, and rate limiting architecture
@@ -382,7 +463,7 @@ This is **not** data migration — it's DDL (Data Definition Language). Think of
   - Summary Q&A: `SUMMARY_QA_MAX_PER_USER` (default 10) per `SUMMARY_QA_WINDOW_MIN` (default 15 min) — tighter limit since each Q&A call makes both an embedding call and a chat completion call
   - User Search: `SEARCH_MAX_PER_USER` (default 30) per `SEARCH_WINDOW_MIN` (default 1 min)
 - **R2 summary upload quota:** `R2_MAX_UPLOADS_PER_MONTH` (default 10) per user per calendar month, tracked via `upload_counters` PostgreSQL table
-- **Embedding daily cap:** `EMBEDDING_DAILY_MAX` (default 400) embedding API calls per day across all users, tracked via `embedding_counters` PostgreSQL table. Protects Gemini free tier (~1,500 RPD for embeddings)
+- **Embedding daily cap:** `EMBEDDING_DAILY_MAX` (default 400) embedding API calls per day across all users, tracked via Redis key `embeddings:{YYYY-MM-DD}` with 24h TTL. Protects Gemini free tier (~1,500 RPD for embeddings)
 - **Global safety net:** `GLOBAL_MAX_PER_IP` (default 200) per `GLOBAL_WINDOW_MIN` (default 15 min) across all routes
 - **Socket event throttling** (per-user, in-memory, configurable via env):
   - `dm:send`: `SOCKET_DM_INTERVAL_MS` (default 200ms)
