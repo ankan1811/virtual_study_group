@@ -14,7 +14,7 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const { otp, hash, expires } = generateOtp(email);
+    const { otp } = await generateOtp(email);
     const expiryMinutes = process.env.OTP_EXPIRY_MINUTES || '5';
 
     await sendEmail(
@@ -41,7 +41,7 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
       `,
     );
 
-    res.status(200).json({ hash, expires });
+    res.status(200).json({ success: true });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to send OTP.' });
