@@ -352,10 +352,12 @@ export default function AuthPage() {
                     </div>
                   </div>
 
-                  <button
+                  <motion.button
                     type="button"
                     onClick={handleSendOtp}
                     disabled={otpSending}
+                    whileHover={{ y: -2, scale: 1.02 }}
+                    whileTap={{ scale: 0.97 }}
                     className="w-full py-3 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-xl text-sm font-semibold poppins-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-md disabled:opacity-60 mt-2"
                   >
                     {otpSending ? (
@@ -369,7 +371,7 @@ export default function AuthPage() {
                         <ArrowRight size={16} />
                       </>
                     )}
-                  </button>
+                  </motion.button>
 
                   {/* Divider */}
                   <div className="flex items-center gap-3 my-1">
@@ -381,10 +383,12 @@ export default function AuthPage() {
                   </div>
 
                   {/* Google Sign-In */}
-                  <button
+                  <motion.button
                     type="button"
                     onClick={() => googleLogin()}
                     disabled={googleLoading}
+                    whileHover={{ y: -2, scale: 1.02 }}
+                    whileTap={{ scale: 0.97 }}
                     className="w-full py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-semibold poppins-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-750 hover:shadow-md transition-all flex items-center justify-center gap-3 disabled:opacity-60"
                   >
                     {googleLoading ? (
@@ -398,7 +402,7 @@ export default function AuthPage() {
                       </svg>
                     )}
                     Continue with Google
-                  </button>
+                  </motion.button>
                 </motion.div>
               ) : (
                 <motion.div
@@ -461,10 +465,12 @@ export default function AuthPage() {
                     </button>
                   </div>
 
-                  <button
+                  <motion.button
                     type="button"
                     onClick={handleVerifyOtp}
                     disabled={loading}
+                    whileHover={{ y: -2, scale: 1.02 }}
+                    whileTap={{ scale: 0.97 }}
                     className="w-full py-3 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-xl text-sm font-semibold poppins-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-md disabled:opacity-60 mt-2"
                   >
                     {loading ? (
@@ -478,7 +484,7 @@ export default function AuthPage() {
                         <ArrowRight size={16} />
                       </>
                     )}
-                  </button>
+                  </motion.button>
                 </motion.div>
               )}
             </AnimatePresence>
