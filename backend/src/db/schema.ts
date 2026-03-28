@@ -104,6 +104,24 @@ export const companions = pgTable(
   ],
 );
 
+// ── room_sessions ───────────────────────────────────────────────────────────
+// Each "Enter My Room" creates or resumes a session (12h TTL).
+// The session's roomId (e.g. user_{uuid}_{sessionUuid}) isolates chat history.
+
+export const roomSessions = pgTable(
+  'room_sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ownerId: uuid('owner_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    roomId: varchar('room_id', { length: 255 }).notNull(),
+    expiresAt: timestamp('expires_at').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [index('room_sessions_owner_idx').on(table.ownerId)],
+);
+
 // ── notifications ────────────────────────────────────────────────────────────
 // No native PostgreSQL TTL — daily cron job deletes rows older than 10 days.
 // `data` is jsonb for the mixed `data` field (e.g. { roomId } for room_invite).
