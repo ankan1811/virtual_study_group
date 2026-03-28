@@ -415,7 +415,8 @@ virtual_study_group/
         |                              VITE_GOOGLE_CLIENT_ID env var
         |-- App.tsx                  # Root component - split into AppInner + App.
         |                              JWT rehydration on refresh, mounts overlays,
-        |                              Redux Provider + Router wrapping
+        |                              Redux Provider + Router wrapping.
+        |                              Routes include /sessions (SessionsPage, auth-guarded)
         |-- App.css                  # Global app styles
         |-- index.css                # Tailwind directives and base styles
         |-- vite-env.d.ts            # Vite TypeScript type declarations
@@ -459,8 +460,6 @@ virtual_study_group/
         |   |                          - "Ready to study?" CTA card: enterMyRoom is
         |   |                            async, calls POST /room/session to create
         |   |                            or resume a 12h session
-        |   |                          - Session history section with collapsible
-        |   |                            chat view per session
         |   |                          - News feed with category filters, controlled
         |   |                            by VITE_NEWS_IMAGES_ONLY env var
         |   |                          - Add Companion modal with user search
@@ -507,9 +506,9 @@ virtual_study_group/
         |   |                          with Invite + Summary buttons (Summary
         |   |                          only on Chat tab, disabled when no user
         |   |                          messages). RoomId from Redux. Agora App
-        |   |                          ID from env var. Chat persistence:
-        |   |                          beforeunload, SaveChatPrompt overlay,
-        |   |                          inline save callback, lastSavedCountRef.
+        |   |                          ID from env var. Chats are persisted in
+        |   |                          real-time via insertChat in the socket
+        |   |                          handler (no manual save needed).
         |   |                          Safari fix: absolute positioning for
         |   |                          tab content + bottom bar
         |   |-- WhiteboardPage.tsx   # Full-page collaborative whiteboard at
@@ -534,6 +533,11 @@ virtual_study_group/
         |   |                          and tab switch. Summary cards with type
         |   |                          badge, title, date, expandable content,
         |   |                          delete button. Follows ChatsPage layout
+        |   |-- SessionsPage.tsx     # Dedicated session history page at /sessions.
+        |   |                          Lists all past room sessions with collapsible
+        |   |                          chat history. Fetches GET /room/sessions and
+        |   |                          GET /room/sessions/:sessionRoomId/chats.
+        |   |                          Owner-only access. Auth-guarded
         |   |-- RadioPage.tsx        # Study Radio — full-page radio player.
         |   |                          Displays 8 SomaFM channel cards with
         |   |                          play/pause, volume slider, and canvas-based
@@ -575,8 +579,9 @@ virtual_study_group/
         |   |                          OTP-based registration directly)
         |   |-- Navbar.tsx           # Collapsible sidebar (not top bar) - hamburger
         |   |                          toggle, framer-motion spring animation.
-        |   |                          Nav items: Home, Chats, Summaries, My Room,
-        |   |                          Ask AI, Study Radio, Podcasts, Contact us.
+        |   |                          Nav items: Home, Chats, Summaries, Sessions
+        |   |                          (Clock icon, /sessions), My Room, Ask AI,
+        |   |                          Study Radio, Podcasts, Contact us.
         |   |                          Active route highlighting.
         |   |                          Profile avatar (top-right): shows emoji avatar
         |   |                          with matching gradient when set, initials when
@@ -586,14 +591,11 @@ virtual_study_group/
         |   |                          Logout: clears localStorage token, disconnects
         |   |                          socket, resets Redux, redirects to /login
         |   |-- NavbarCall.tsx       # Minimal navbar for in-call view. Exit button
-        |   |                          uses onExitClick callback (no <Link>) so
-        |   |                          navigation can be intercepted for save prompt
-        |   |-- SaveChatPrompt.tsx # Animated modal overlay for "Save your chats?"
-        |   |                          prompt. Framer Motion AnimatePresence, backdrop
-        |   |                          blur, indigo gradient accent. "Save & Exit"
-        |   |                          (with loading spinner) and "Exit without saving"
-        |   |                          buttons. Shown when leaving room with unsaved
-        |   |                          messages. Follows InviteNotificationOverlay pattern
+        |   |                          uses onExitClick callback (no <Link>)
+        |   |-- SaveChatPrompt.tsx # [No longer used — import removed from RoomCallPage]
+        |   |                          Previously: animated modal overlay for "Save your
+        |   |                          chats?" prompt. Chats are now always persisted in
+        |   |                          real-time via insertChat in the socket handler
         |   |-- ChatComponent.tsx    # Real-time chat widget - uses getSocket()
         |   |                          singleton, room-based messaging, lifts messages
         |   |                          to parent via onMessagesChange prop.

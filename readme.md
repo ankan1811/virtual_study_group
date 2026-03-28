@@ -276,7 +276,7 @@ This is **not** data migration — it's DDL (Data Definition Language). Think of
 
 ### Personal Rooms & Invite System
 
-- **Session-based rooms** — each user gets a unique room per session (`user_{userId}_{sessionUUID}`) with a 12h TTL. Entering "My Room" creates or resumes an active session via `POST /room/session`. Past sessions and their chat history are browsable
+- **Session-based rooms** — each user gets a unique room per session (`user_{userId}_{sessionUUID}`) with a 12h TTL. Entering "My Room" creates or resumes an active session via `POST /room/session`. Past sessions and their chat history are browsable on the dedicated `/sessions` page (SessionsPage)
 - **Shareable invite link** — "Invite" button in the room call page copies the session link (`/join/{roomId}`) to clipboard with animated feedback. Anyone with the link can join (logged-in users only; unauthenticated users are redirected to login and auto-joined after auth)
 - Only study companions can invite each other directly via real-time socket invites
 - Real-time invite notifications with accept/decline overlay
@@ -413,13 +413,7 @@ This is **not** data migration — it's DDL (Data Definition Language). Think of
 - Bot welcome message on room join
 - **Linkify helper** — URLs in bot messages render as clickable links (e.g., summary download links)
 - Summary bot messages get special styling (violet background, rounded border) distinct from regular bot messages
-- **Opt-in chat persistence** — chat messages are ephemeral by default (fresh every session). Users can save them to MongoDB on demand:
-  - **Inline "Save" button** in the chat input bar — saves all messages to the database. Disabled when no unsaved messages exist; re-enables when new messages arrive after a save. Shows a brief "Saved" confirmation with checkmark
-  - **"Save your chats?" exit prompt** — animated modal appears when leaving the room with unsaved messages. Options: "Save & Exit" (persists then navigates) or "Exit without saving" (discards). Prompt is **skipped entirely** if the user already saved all messages via the inline button
-  - **Browser tab close protection** — native `beforeunload` dialog warns when unsaved messages exist
-  - **React Router navigation blocking** — `useBlocker` intercepts sidebar/back button navigation and shows the save prompt
-  - Messages are bulk-saved via `POST /chat/bulk-save` with a `sessionId` (UUID) grouping messages per save operation. Room ID uses session-based format `user_{userId}_{sessionUUID}`. Capped at 500 messages per request. Stored in PostgreSQL `chats` table
-  - Bot messages are excluded from saves and unsaved message counts
+- **Real-time chat persistence** — room chat messages are always persisted in real-time via `insertChat` in the socket handler (no manual save needed). Each message is written to the PostgreSQL `chats` table as it is sent. Room ID uses session-based format `user_{userId}_{sessionUUID}`. Bot messages are excluded from persistence
 
 ### AI Doubt Solver
 
@@ -638,6 +632,7 @@ VITE_GOOGLE_CLIENT_ID=your_google_client_id # Google OAuth Client ID (from https
 | `/settings`  | Settings        |      Yes      |
 | `/chats`     | Recent Chats    |      Yes      |
 | `/summaries` | Summaries       |      Yes      |
+| `/sessions`  | Session History |      Yes      |
 | `/room/call` | Video Call Room |      Yes      |
 | `/join/:roomId` | Join Room via Invite Link | No (redirects to login) |
 | `/whiteboard/:roomId` | Collaborative Whiteboard |  Yes  |
