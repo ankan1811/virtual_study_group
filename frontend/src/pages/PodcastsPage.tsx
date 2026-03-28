@@ -32,7 +32,7 @@ interface PodcastItem {
 interface PodcastsResponse {
   data: PodcastItem[];
   fetchedAt: string;
-  source: "cache" | "api" | "stale-cache" | "mock";
+  source: "cache" | "api" | "stale-cache";
 }
 
 type TopicKey = "trending" | "ai" | "tech" | "business" | "productivity";
@@ -427,9 +427,8 @@ export default function PodcastsPage() {
 
             {!loading && !error && currentData && (
               <>
-                {/* Source badge for stale/mock data */}
-                {(currentData.source === "stale-cache" ||
-                  currentData.source === "mock") && (
+                {/* Source badge for stale cache */}
+                {currentData.source === "stale-cache" && (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -438,9 +437,7 @@ export default function PodcastsPage() {
                                text-amber-600 dark:text-amber-400 border border-amber-200/50 dark:border-amber-800/30"
                   >
                     <AlertCircle size={11} />
-                    {currentData.source === "mock"
-                      ? "Showing sample data — add LISTEN_NOTES_API_KEY to fetch live podcasts"
-                      : "Showing cached data — live refresh coming next Tue or Sat"}
+                    Showing cached data — live refresh coming next Tue or Sat
                   </motion.div>
                 )}
 

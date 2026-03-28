@@ -3,7 +3,7 @@ import { useSelector, useDispatch } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
 import Navbar from "../components/Navbar";
-import { Users, LogOut, MessageSquare, Bot, PenTool, Share2, Check, Video, Sparkles, Loader2, Clock } from "lucide-react";
+import { Users, LogOut, MessageSquare, Bot, PenTool, Share2, Check, Video, Sparkles, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Stream from "../components/Stream";
 import type {
@@ -78,8 +78,6 @@ export default function RoomCallPage() {
   const [lobbySummaryDone, setLobbySummaryDone] = useState(false);
 
   // ---- Call usage rate limit state ----
-  const [remainingSeconds, setRemainingSeconds] = useState(3600);
-  const [callLimitToast, setCallLimitToast] = useState<string | null>(null);
   const callStartTimeRef = useRef(0);
   const lastSyncedRef = useRef(0);
 

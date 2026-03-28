@@ -14,32 +14,34 @@ import { useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { login } from "../store/authStore/authSlice";
 import { connectSocket } from "../utils/socketInstance";
+import { Loader2 } from "lucide-react";
 export default function Register() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [signingUp, setSigningUp] = useState(false);
 
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
   const handleSubmit: MouseEventHandler<HTMLButtonElement> = async (e) => {
     e.preventDefault();
-    console.log(`{email:${email}} {name:${name}}`);
-    await axios
-      .post(`${import.meta.env.VITE_API_URL}/auth/register`, {
-        name,
-        email,
-        password,
-      })
-      .then((res) => {
-        dispatch(login({ name: res.data.name, userId: res.data.userId }));
-        localStorage.setItem("token", res.data.token);
-        connectSocket(res.data.token);
-        navigate("/home");
-      })
-      .catch((err) => {
-        console.log(err);
-      });
+    if (signingUp) return;
+    setSigningUp(true);
+    try {
+      const res = await axios.post(
+        `${import.meta.env.VITE_API_URL}/auth/register`,
+        { name, email, password }
+      );
+      dispatch(login({ name: res.data.name, userId: res.data.userId }));
+      localStorage.setItem("token", res.data.token);
+      connectSocket(res.data.token);
+      navigate("/home");
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSigningUp(false);
+    }
   };
 
   return (
@@ -89,11 +91,19 @@ export default function Register() {
         </CardContent>
         <CardFooter className="flex justify-center">
           <Button
-            className="bg-slate-500 hover:bg-slate-800 hover:text-white hover:border-0 text-md"
+            className="bg-slate-500 hover:bg-slate-800 hover:text-white hover:border-0 text-md disabled:opacity-60"
             onClick={handleSubmit}
             type="submit"
+            disabled={signingUp}
           >
-            SIGN UP
+            {signingUp ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                Signing Up...
+              </>
+            ) : (
+              "SIGN UP"
+            )}
           </Button>
         </CardFooter>
       </form>

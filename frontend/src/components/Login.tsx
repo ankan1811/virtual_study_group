@@ -14,28 +14,31 @@ import { useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { login } from "../store/authStore/authSlice";
 import { connectSocket } from "../utils/socketInstance";
+import { Loader2 } from "lucide-react";
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [signingIn, setSigningIn] = useState(false);
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  // const isAuthenticated = useSelector(
-  //   (state: AuthState) => state.auth.isAuthenticated
-  // );
-  // const user = useSelector((state: AuthState) => state.auth.user);
   const handleSubmit: MouseEventHandler<HTMLButtonElement> = async (e) => {
     e.preventDefault();
-    await axios
-      .post(`${import.meta.env.VITE_API_URL}/auth/login`, {
-        email,
-        password,
-      })
-      .then((res) => {
-        dispatch(login({ name: res.data.name, userId: res.data.userId }));
-        localStorage.setItem("token", res.data.token);
-        connectSocket(res.data.token);
-        navigate("/home");
-      });
+    if (signingIn) return;
+    setSigningIn(true);
+    try {
+      const res = await axios.post(
+        `${import.meta.env.VITE_API_URL}/auth/login`,
+        { email, password }
+      );
+      dispatch(login({ name: res.data.name, userId: res.data.userId }));
+      localStorage.setItem("token", res.data.token);
+      connectSocket(res.data.token);
+      navigate("/home");
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSigningIn(false);
+    }
   };
   return (
     <Card className="w-[350px] shadow-2xl border-2 border-cyan-900">
@@ -72,10 +75,18 @@ export default function Login() {
         </CardContent>
         <CardFooter className="flex justify-center">
           <Button
-            className="bg-slate-500 hover:bg-slate-800 hover:text-white hover:border-0 text-md"
+            className="bg-slate-500 hover:bg-slate-800 hover:text-white hover:border-0 text-md disabled:opacity-60"
             onClick={handleSubmit}
+            disabled={signingIn}
           >
-            SIGN IN
+            {signingIn ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                Signing In...
+              </>
+            ) : (
+              "SIGN IN"
+            )}
           </Button>
         </CardFooter>
       </form>

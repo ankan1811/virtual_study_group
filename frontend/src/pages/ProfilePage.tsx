@@ -101,6 +101,7 @@ export default function ProfilePage() {
   const [saved, setSaved] = useState(false);
   const [editing, setEditing] = useState(false);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const [avatarSaving, setAvatarSaving] = useState(false);
 
   const [education, setEducation] = useState<Education>({
     degree: "",
@@ -168,7 +169,8 @@ export default function ProfilePage() {
 
   const handleAvatarSelect = async (avatarId: string) => {
     const token = localStorage.getItem("token");
-    if (!token) return;
+    if (!token || avatarSaving) return;
+    setAvatarSaving(true);
     setAvatar(avatarId);
     setShowAvatarPicker(false);
     try {
@@ -180,6 +182,8 @@ export default function ProfilePage() {
       dispatch(updateAvatar(avatarId));
     } catch (err) {
       console.error(err);
+    } finally {
+      setAvatarSaving(false);
     }
   };
 
@@ -313,7 +317,8 @@ export default function ProfilePage() {
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.95 }}
                         onClick={() => handleAvatarSelect(av.id)}
-                        className={`relative flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all ${
+                        disabled={avatarSaving}
+                        className={`relative flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all disabled:opacity-60 ${
                           avatar === av.id
                             ? "bg-indigo-50 dark:bg-indigo-950/40 ring-2 ring-indigo-500"
                             : "hover:bg-gray-50 dark:hover:bg-gray-800"
