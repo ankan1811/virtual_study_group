@@ -21,7 +21,11 @@ const companionSlice = createSlice({
   initialState,
   reducers: {
     setCompanions(state, action: PayloadAction<{ userId: string; name: string }[]>) {
-      state.companions = action.payload.map((c) => ({ ...c, isOnline: false }));
+      const oldMap = new Map(state.companions.map((c) => [c.userId, c.isOnline]));
+      state.companions = action.payload.map((c) => ({
+        ...c,
+        isOnline: oldMap.get(c.userId) ?? false,
+      }));
     },
     setOnline(state, action: PayloadAction<string>) {
       const c = state.companions.find((c) => c.userId === action.payload);

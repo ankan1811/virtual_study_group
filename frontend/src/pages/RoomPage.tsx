@@ -306,6 +306,10 @@ export default function RoomPage() {
       onlineIds.forEach((id) => dispatch(setOnline(id)));
     };
 
+    const onReconnect = () => {
+      socket.emit("companion:getOnlineCompanions");
+    };
+
     socket.on("companion:online", onOnline);
     socket.on("companion:offline", onOffline);
     socket.on("companion:onlineList", onOnlineList);
@@ -313,6 +317,7 @@ export default function RoomPage() {
     socket.on("companion:requestReceived", onRequestReceived);
     socket.on("companion:accepted", onCompanionAccepted);
     socket.on("dm:receive", onDmReceive);
+    socket.on("connect", onReconnect);
 
     return () => {
       socket.off("companion:online", onOnline);
@@ -322,6 +327,7 @@ export default function RoomPage() {
       socket.off("companion:requestReceived", onRequestReceived);
       socket.off("companion:accepted", onCompanionAccepted);
       socket.off("dm:receive", onDmReceive);
+      socket.off("connect", onReconnect);
     };
   }, [dispatch, isAuthenticated]);
 
@@ -434,6 +440,7 @@ export default function RoomPage() {
         headers: { Authorization: token || "" },
       });
       dispatch(setCompanions(res.data.companions || res.data));
+      getSocket()?.emit("companion:getOnlineCompanions");
       dispatch(removePendingRequest(requesterId));
       playSuccessSound();
       setInviteStatus({ msg: "Companion request accepted!", type: "success" });

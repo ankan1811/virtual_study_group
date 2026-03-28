@@ -110,6 +110,14 @@ export const acceptCompanionRequest = async (req: AuthenticatedRequest, res: Res
         acceptorId: recipientId,
         acceptorName: acceptor?.name || 'Someone',
       });
+      // Tell requester that acceptor is online
+      io.to(requesterSocketId).emit('companion:online', { userId: recipientId });
+    }
+
+    // Tell acceptor that requester is online (if they are)
+    const acceptorSocketId = getSocketIdForUser(recipientId);
+    if (io && acceptorSocketId && requesterSocketId) {
+      io.to(acceptorSocketId).emit('companion:online', { userId: requesterId });
     }
 
     // Save notification and push to bell in real-time
