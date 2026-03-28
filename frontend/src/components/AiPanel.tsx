@@ -11,6 +11,7 @@ import {
   Save,
   Check,
   ExternalLink,
+  AlertTriangle,
 } from "lucide-react";
 
 interface Message {
@@ -56,6 +57,7 @@ export default function AiPanel({ tab, chatMessages, roomId, whiteboardElements 
   const [wbSummaryLoading, setWbSummaryLoading] = useState(false);
   const [wbSaving, setWbSaving] = useState(false);
   const [wbSavedUrl, setWbSavedUrl] = useState<string | null>(null);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
   const recognitionRef = useRef<SpeechRecognitionAny>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -153,7 +155,8 @@ export default function AiPanel({ tab, chatMessages, roomId, whiteboardElements 
       setSavedUrl(res.data.url);
     } catch {
       setSavedUrl(null);
-      alert("Failed to save summary. Please check R2 configuration.");
+      setToastMsg("Failed to save summary. Please check R2 configuration.");
+      setTimeout(() => setToastMsg(null), 3500);
     } finally {
       setSaving(false);
     }
@@ -195,7 +198,8 @@ export default function AiPanel({ tab, chatMessages, roomId, whiteboardElements 
       setWbSavedUrl(res.data.url);
     } catch {
       setWbSavedUrl(null);
-      alert("Failed to save whiteboard summary. Please check R2 configuration.");
+      setToastMsg("Failed to save whiteboard summary. Please check R2 configuration.");
+      setTimeout(() => setToastMsg(null), 3500);
     } finally {
       setWbSaving(false);
     }
@@ -207,6 +211,28 @@ export default function AiPanel({ tab, chatMessages, roomId, whiteboardElements 
       askQuestion();
     }
   };
+
+  // Themed error toast (matches RoomPage inviteStatus pattern)
+  const errorToast = (
+    <AnimatePresence>
+      {toastMsg && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.85 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.85 }}
+          transition={{ type: "spring", damping: 20, stiffness: 300 }}
+          className="fixed inset-0 z-[200] flex items-center justify-center backdrop-blur-sm bg-black/20"
+        >
+          <div className="px-6 py-4 rounded-2xl text-white text-sm poppins-semibold shadow-2xl flex items-center gap-3 bg-gradient-to-r from-red-600 to-rose-600 ring-1 ring-white/10">
+            <span className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+              <AlertTriangle size={18} />
+            </span>
+            {toastMsg}
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
 
   if (tab === "summary") {
     // Shared summary card renderer
@@ -303,6 +329,8 @@ export default function AiPanel({ tab, chatMessages, roomId, whiteboardElements 
     );
 
     return (
+      <>
+      {errorToast}
       <div className="flex flex-col flex-1 overflow-hidden bg-gray-50 dark:bg-gray-900">
         {/* Sub-tab bar */}
         <div className="flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex-shrink-0">
@@ -350,6 +378,7 @@ export default function AiPanel({ tab, chatMessages, roomId, whiteboardElements 
               "to-emerald-600",
             )}
       </div>
+      </>
     );
   }
 
