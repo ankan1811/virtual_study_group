@@ -186,6 +186,7 @@ export default function RoomPage() {
   const [decliningId, setDecliningId] = useState<string | null>(null);
 
   // Invite / status toast
+  const [enteringRoom, setEnteringRoom] = useState(false);
   const [inviteStatus, setInviteStatus] = useState<{
     msg: string;
     type: "success" | "error";
@@ -335,7 +336,8 @@ export default function RoomPage() {
 
   // ── Actions ─────────────────────────────────────────────────────────────────
   const enterMyRoom = async () => {
-    if (!user?.roomId) return;
+    if (!user?.roomId || enteringRoom) return;
+    setEnteringRoom(true);
     const token = localStorage.getItem("token");
     try {
       const res = await axios.post(
@@ -347,6 +349,8 @@ export default function RoomPage() {
       navigate("/room/call");
     } catch (err) {
       console.error("Failed to create session:", err);
+    } finally {
+      setEnteringRoom(false);
     }
   };
 
@@ -925,12 +929,22 @@ export default function RoomPage() {
           {isAuthenticated ? (
             <motion.button
               onClick={enterMyRoom}
+              disabled={enteringRoom}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.97 }}
-              className="flex items-center gap-2 bg-white text-indigo-700 px-5 py-2.5 rounded-xl text-sm font-bold poppins-bold shadow-md hover:bg-indigo-50 transition-colors"
+              className="flex items-center gap-2 bg-white text-indigo-700 px-5 py-2.5 rounded-xl text-sm font-bold poppins-bold shadow-md hover:bg-indigo-50 transition-colors disabled:opacity-60"
             >
-              Enter My Room
-              <DoorOpen size={16} />
+              {enteringRoom ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Entering...
+                </>
+              ) : (
+                <>
+                  Enter My Room
+                  <DoorOpen size={16} />
+                </>
+              )}
             </motion.button>
           ) : (
             <motion.button

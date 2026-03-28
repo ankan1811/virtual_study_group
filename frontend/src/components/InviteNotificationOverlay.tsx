@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
@@ -6,12 +6,13 @@ import { AuthState } from "../store/authStore/store";
 import { receiveInvite, clearInvite } from "../store/inviteStore/inviteSlice";
 import { enterRoom } from "../store/RoomStore/roomSlice";
 import { getSocket } from "../utils/socketInstance";
-import { DoorOpen, X } from "lucide-react";
+import { DoorOpen, X, Loader2 } from "lucide-react";
 
 export default function InviteNotificationOverlay() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const pendingInvite = useSelector((state: AuthState) => state.invite.pendingInvite);
+  const [joining, setJoining] = useState(false);
 
   useEffect(() => {
     const socket = getSocket();
@@ -32,7 +33,8 @@ export default function InviteNotificationOverlay() {
   }, [dispatch]);
 
   const handleAccept = () => {
-    if (!pendingInvite) return;
+    if (!pendingInvite || joining) return;
+    setJoining(true);
     const socket = getSocket();
     socket?.emit("acceptInvite", {
       roomId: pendingInvite.roomId,
@@ -88,9 +90,17 @@ export default function InviteNotificationOverlay() {
               <div className="flex gap-2 mt-3">
                 <button
                   onClick={handleAccept}
-                  className="flex-1 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-semibold poppins-semibold hover:opacity-90 transition-opacity"
+                  disabled={joining}
+                  className="flex-1 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-semibold poppins-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
                 >
-                  Join Room
+                  {joining ? (
+                    <span className="flex items-center justify-center gap-1.5">
+                      <Loader2 size={14} className="animate-spin" />
+                      Joining...
+                    </span>
+                  ) : (
+                    "Join Room"
+                  )}
                 </button>
                 <button
                   onClick={handleDecline}

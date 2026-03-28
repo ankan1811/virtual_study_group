@@ -347,9 +347,17 @@ export default function ProfilePage() {
 
                   <button
                     onClick={() => handleAvatarSelect("")}
-                    className="w-full py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors poppins-regular"
+                    disabled={avatarSaving}
+                    className="w-full py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors poppins-regular disabled:opacity-60"
                   >
-                    Use Initials Instead
+                    {avatarSaving ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <Loader2 size={14} className="animate-spin" />
+                        Saving...
+                      </span>
+                    ) : (
+                      "Use Initials Instead"
+                    )}
                   </button>
                 </motion.div>
               </motion.div>
