@@ -112,6 +112,29 @@ export const acceptCompanionRequest = async (req: AuthenticatedRequest, res: Res
       });
     }
 
+    // Save notification and push to bell in real-time
+    try {
+      const notif = await createNotification({
+        recipientId: requesterId,
+        type: 'companion_accepted',
+        fromUserId: recipientId,
+        fromUserName: acceptor?.name || 'Someone',
+      });
+      if (io && requesterSocketId) {
+        io.to(requesterSocketId).emit('notification:new', {
+          _id: notif.id,
+          type: notif.type,
+          fromUserId: notif.fromUserId,
+          fromUserName: notif.fromUserName,
+          data: notif.data,
+          read: false,
+          createdAt: notif.createdAt,
+        });
+      }
+    } catch (notifErr) {
+      console.error('Notification save error:', notifErr);
+    }
+
     res.status(200).json({ message: 'Companion request accepted' });
   } catch (error) {
     console.error(error);

@@ -180,11 +180,32 @@ export default function RoomPage() {
   const globalSearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [globalSentRequests, setGlobalSentRequests] = useState<Set<string>>(new Set());
 
+  const [sendingId, setSendingId] = useState<string | null>(null);
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
+
   // Invite / status toast
   const [inviteStatus, setInviteStatus] = useState<{
     msg: string;
     type: "success" | "error";
   } | null>(null);
+
+  const playSuccessSound = () => {
+    try {
+      const ctx = new AudioContext();
+      const notes = [523.25, 659.25, 783.99]; // C5, E5, G5 — major chord arpeggio
+      notes.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.15, ctx.currentTime + i * 0.1);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.1 + 0.4);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(ctx.currentTime + i * 0.1);
+        osc.stop(ctx.currentTime + i * 0.1 + 0.4);
+      });
+    } catch {}
+  };
 
   // ── Fetch on mount ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -196,7 +217,11 @@ export default function RoomPage() {
         .get(`${import.meta.env.VITE_API_URL}/companion/list`, {
           headers: { Authorization: token || "" },
         })
-        .then((res) => dispatch(setCompanions(res.data.companions || res.data)))
+        .then((res) => {
+          dispatch(setCompanions(res.data.companions || res.data));
+          // Ask server which companions are currently online AFTER list is loaded
+          getSocket()?.emit("companion:getOnlineCompanions");
+        })
         .catch(console.error);
 
       // Pending companion requests
@@ -268,11 +293,6 @@ export default function RoomPage() {
       acceptorName: string;
     }) => {
       dispatch(addCompanion({ userId: acceptorId, name: acceptorName }));
-      setInviteStatus({
-        msg: `${acceptorName} accepted your companion request!`,
-        type: "success",
-      });
-      setTimeout(() => setInviteStatus(null), 4000);
     };
 
     // Mark companion as having unread DMs when panel isn't open for them
@@ -293,9 +313,6 @@ export default function RoomPage() {
     socket.on("companion:requestReceived", onRequestReceived);
     socket.on("companion:accepted", onCompanionAccepted);
     socket.on("dm:receive", onDmReceive);
-
-    // Ask server which companions are currently online
-    socket.emit("companion:getOnlineCompanions");
 
     return () => {
       socket.off("companion:online", onOnline);
@@ -379,8 +396,7 @@ export default function RoomPage() {
   };
 
   const sendCompanionRequest = async (targetUserId: string, fromModal = false) => {
-    if (fromModal) setSentRequests((prev) => new Set(prev).add(targetUserId));
-    else setGlobalSentRequests((prev) => new Set(prev).add(targetUserId));
+    setSendingId(targetUserId);
     const token = localStorage.getItem("token");
     try {
       await axios.post(
@@ -388,19 +404,24 @@ export default function RoomPage() {
         { targetUserId },
         { headers: { Authorization: token || "" } }
       );
-      getSocket()?.emit("companion:sendRequest", { targetUserId });
-      if (fromModal) setShowAddModal(false);
+      if (fromModal) {
+        setSentRequests((prev) => new Set(prev).add(targetUserId));
+        setShowAddModal(false);
+      } else {
+        setGlobalSentRequests((prev) => new Set(prev).add(targetUserId));
+      }
+      playSuccessSound();
       setInviteStatus({ msg: "Companion request sent!", type: "success" });
       setTimeout(() => setInviteStatus(null), 3000);
     } catch (err: any) {
       console.error(err.response?.data?.message || err.message);
-      if (fromModal) setSentRequests((prev) => { const next = new Set(prev); next.delete(targetUserId); return next; });
-      else setGlobalSentRequests((prev) => { const next = new Set(prev); next.delete(targetUserId); return next; });
+    } finally {
+      setSendingId(null);
     }
   };
 
   const handleAcceptRequest = async (requesterId: string) => {
-    dispatch(removePendingRequest(requesterId));
+    setAcceptingId(requesterId);
     const token = localStorage.getItem("token");
     try {
       await axios.post(
@@ -413,11 +434,14 @@ export default function RoomPage() {
         headers: { Authorization: token || "" },
       });
       dispatch(setCompanions(res.data.companions || res.data));
+      dispatch(removePendingRequest(requesterId));
+      playSuccessSound();
       setInviteStatus({ msg: "Companion request accepted!", type: "success" });
       setTimeout(() => setInviteStatus(null), 3000);
     } catch (err: any) {
       console.error(err);
-      dispatch(addPendingRequest({ requesterId, requesterName: "" }));
+    } finally {
+      setAcceptingId(null);
     }
   };
 
@@ -468,14 +492,30 @@ export default function RoomPage() {
       <AnimatePresence>
         {inviteStatus && (
           <motion.div
-            initial={{ opacity: 0, y: -60, x: "50%" }}
-            animate={{ opacity: 1, y: 0, x: "50%" }}
-            exit={{ opacity: 0, y: -60, x: "50%" }}
-            className={`fixed top-4 right-1/2 z-[200] px-4 py-2.5 rounded-xl text-white text-sm poppins-semibold shadow-lg ${
-              inviteStatus.type === "success" ? "bg-emerald-500" : "bg-red-500"
-            }`}
+            initial={{ opacity: 0, scale: 0.85 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.85 }}
+            transition={{ type: "spring", damping: 20, stiffness: 300 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center backdrop-blur-sm bg-black/20"
           >
-            {inviteStatus.msg}
+            <div
+              className={`pointer-events-auto px-6 py-4 rounded-2xl text-white text-sm poppins-semibold shadow-2xl flex items-center gap-3 ${
+                inviteStatus.type === "success"
+                  ? "bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 ring-1 ring-white/10"
+                  : "bg-gradient-to-r from-red-600 to-rose-600 ring-1 ring-white/10"
+              }`}
+            >
+              {inviteStatus.type === "success" ? (
+                <span className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                  <CheckCircle size={18} />
+                </span>
+              ) : (
+                <span className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                  <X size={18} />
+                </span>
+              )}
+              {inviteStatus.msg}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -553,9 +593,14 @@ export default function RoomPage() {
                           ) : (
                             <button
                               onClick={() => sendCompanionRequest(u.userId, false)}
-                              className="flex items-center gap-1.5 text-xs poppins-semibold text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-lg transition-colors"
+                              disabled={sendingId === u.userId}
+                              className="flex items-center gap-1.5 text-xs poppins-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-70 disabled:cursor-not-allowed px-3 py-1.5 rounded-lg transition-colors"
                             >
-                              <UserPlus size={11} /> Add
+                              {sendingId === u.userId ? (
+                                <><Loader2 size={11} className="animate-spin" /> Sending...</>
+                              ) : (
+                                <><UserPlus size={11} /> Add</>
+                              )}
                             </button>
                           )}
                         </div>
@@ -643,9 +688,14 @@ export default function RoomPage() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleAcceptRequest(req.requesterId)}
-                        className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs poppins-semibold transition-colors"
+                        disabled={acceptingId === req.requesterId}
+                        className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-70 disabled:cursor-not-allowed text-white text-xs poppins-semibold transition-colors flex items-center gap-1.5"
                       >
-                        Accept
+                        {acceptingId === req.requesterId ? (
+                          <><Loader2 size={12} className="animate-spin" /> Accepting...</>
+                        ) : (
+                          "Accept"
+                        )}
                       </button>
                       <button
                         onClick={() => handleDeclineRequest(req.requesterId)}
@@ -1096,9 +1146,14 @@ export default function RoomPage() {
                           ) : (
                             <button
                               onClick={() => sendCompanionRequest(u.userId, true)}
-                              className="flex items-center gap-1.5 text-xs poppins-semibold text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-lg transition-colors"
+                              disabled={sendingId === u.userId}
+                              className="flex items-center gap-1.5 text-xs poppins-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-70 disabled:cursor-not-allowed px-3 py-1.5 rounded-lg transition-colors"
                             >
-                              <UserPlus size={11} /> Add
+                              {sendingId === u.userId ? (
+                                <><Loader2 size={11} className="animate-spin" /> Sending...</>
+                              ) : (
+                                <><UserPlus size={11} /> Add</>
+                              )}
                             </button>
                           )}
                         </div>

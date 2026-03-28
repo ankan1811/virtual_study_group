@@ -75,12 +75,13 @@ export default function NotificationBell() {
 
   // Real-time new notification via socket
   useEffect(() => {
+    if (!isAuthenticated) return;
     const socket = getSocket();
     if (!socket) return;
     const handler = (notif: AppNotification) => dispatch(addNotification(notif));
     socket.on("notification:new", handler);
     return () => { socket.off("notification:new", handler); };
-  }, []);
+  }, [isAuthenticated, dispatch]);
 
   // Close on outside click
   useEffect(() => {
