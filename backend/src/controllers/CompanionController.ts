@@ -37,7 +37,15 @@ export const sendCompanionRequest = async (req: AuthenticatedRequest, res: Respo
       return;
     }
 
-    await createCompanion(requesterId, targetUserId);
+    try {
+      await createCompanion(requesterId, targetUserId);
+    } catch (dbErr: any) {
+      if (dbErr?.code === '23505') {
+        res.status(400).json({ error: 'Request already pending' });
+        return;
+      }
+      throw dbErr;
+    }
 
     const requester = await findById(requesterId);
     const io = getIO();

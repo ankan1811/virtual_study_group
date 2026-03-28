@@ -343,7 +343,7 @@ export default function RoomPage() {
           `${import.meta.env.VITE_API_URL}/user/search?q=${encodeURIComponent(q)}`,
           { headers: { Authorization: token || "" } }
         );
-        setSearchResults(res.data);
+        setSearchResults(res.data.users || []);
       } catch { setSearchResults([]); }
       finally { setSearchLoading(false); }
     }, 400);
@@ -363,13 +363,15 @@ export default function RoomPage() {
           `${import.meta.env.VITE_API_URL}/user/search?q=${encodeURIComponent(q)}`,
           { headers: { Authorization: token || "" } }
         );
-        setGlobalSearchResults(res.data);
+        setGlobalSearchResults(res.data.users || []);
       } catch { setGlobalSearchResults([]); }
       finally { setGlobalSearchLoading(false); }
     }, 400);
   };
 
   const sendCompanionRequest = async (targetUserId: string, fromModal = false) => {
+    if (fromModal) setSentRequests((prev) => new Set(prev).add(targetUserId));
+    else setGlobalSentRequests((prev) => new Set(prev).add(targetUserId));
     const token = localStorage.getItem("token");
     try {
       await axios.post(
@@ -377,11 +379,13 @@ export default function RoomPage() {
         { targetUserId },
         { headers: { Authorization: token || "" } }
       );
-      if (fromModal) setSentRequests((prev) => new Set(prev).add(targetUserId));
-      else setGlobalSentRequests((prev) => new Set(prev).add(targetUserId));
       getSocket()?.emit("companion:sendRequest", { targetUserId });
+      setInviteStatus({ msg: "Companion request sent!", type: "success" });
+      setTimeout(() => setInviteStatus(null), 3000);
     } catch (err: any) {
       console.error(err.response?.data?.message || err.message);
+      if (fromModal) setSentRequests((prev) => { const next = new Set(prev); next.delete(targetUserId); return next; });
+      else setGlobalSentRequests((prev) => { const next = new Set(prev); next.delete(targetUserId); return next; });
     }
   };
 
@@ -587,11 +591,11 @@ export default function RoomPage() {
         {isAuthenticated && pendingRequests.length > 0 && (
           <section>
             <div className="flex items-center gap-2 mb-3">
-              <Bell size={14} className="text-amber-500" />
+              <Bell size={14} className="text-indigo-500" />
               <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest poppins-semibold">
                 Companion Requests
               </h2>
-              <span className="bg-amber-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center poppins-bold leading-none">
+              <span className="bg-indigo-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center poppins-bold leading-none">
                 {pendingRequests.length}
               </span>
             </div>
@@ -604,7 +608,7 @@ export default function RoomPage() {
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 16, height: 0, marginBottom: 0 }}
                     transition={{ type: "spring", damping: 24, stiffness: 280 }}
-                    className="flex items-center justify-between bg-white dark:bg-gray-900 rounded-2xl border border-amber-100 dark:border-amber-900/30 shadow-sm px-4 py-3"
+                    className="flex items-center justify-between bg-white dark:bg-gray-900 rounded-2xl border border-indigo-100 dark:border-indigo-900/30 shadow-sm px-4 py-3"
                   >
                     <div className="flex items-center gap-3">
                       <div
@@ -624,7 +628,7 @@ export default function RoomPage() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleAcceptRequest(req.requesterId)}
-                        className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs poppins-semibold transition-colors"
+                        className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs poppins-semibold transition-colors"
                       >
                         Accept
                       </button>
