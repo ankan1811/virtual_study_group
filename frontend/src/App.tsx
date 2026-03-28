@@ -17,6 +17,7 @@ import PodcastsPage from "./pages/PodcastsPage";
 import WhiteboardPage from "./pages/WhiteboardPage";
 import JoinRoomPage from "./pages/JoinRoomPage";
 import SettingsPage from "./pages/SettingsPage";
+import SessionsPage from "./pages/SessionsPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import { login, updateAvatar } from "./store/authStore/authSlice";
 import { connectSocket } from "./utils/socketInstance";
@@ -70,6 +71,7 @@ function AppInner() {
           <Route element={<SettingsPage />} path="/settings" />
           <Route element={<ChatsPage />} path="/chats" />
           <Route element={<SummariesPage />} path="/summaries" />
+          <Route element={<SessionsPage />} path="/sessions" />
           <Route element={<RoomCallPage />} path="/room/call" />
           <Route element={<RadioPage />} path="/radio" />
           <Route element={<PodcastsPage />} path="/podcasts" />

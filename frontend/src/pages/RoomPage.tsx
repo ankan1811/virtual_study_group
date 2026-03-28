@@ -16,9 +16,6 @@ import {
   CheckCircle,
   Sparkles,
   Bell,
-  Clock,
-  ChevronDown,
-  ChevronRight,
 } from "lucide-react";
 import Navbar from "../components/Navbar";
 import DmPanel from "../components/DmPanel";
@@ -187,12 +184,6 @@ export default function RoomPage() {
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
 
-  // Session history
-  const [sessions, setSessions] = useState<{ id: string; roomId: string; createdAt: string; expiresAt: string }[]>([]);
-  const [expandedSession, setExpandedSession] = useState<string | null>(null);
-  const [sessionChats, setSessionChats] = useState<Record<string, { message: string; senderName: string; sendById: string; createdAt: string }[]>>({});
-  const [sessionChatsLoading, setSessionChatsLoading] = useState<string | null>(null);
-
   // Invite / status toast
   const [inviteStatus, setInviteStatus] = useState<{
     msg: string;
@@ -258,17 +249,6 @@ export default function RoomPage() {
           const withUnread = Object.keys(counts).filter((id) => counts[id] > 0);
           if (withUnread.length > 0) setUnreadDmFrom(new Set(withUnread));
         })
-        .catch(() => {});
-    }
-
-    // Session history
-    if (isAuthenticated) {
-      const token = localStorage.getItem("token");
-      axios
-        .get(`${import.meta.env.VITE_API_URL}/room/sessions`, {
-          headers: { Authorization: token || "" },
-        })
-        .then((res) => setSessions(res.data.sessions || []))
         .catch(() => {});
     }
 
@@ -370,28 +350,6 @@ export default function RoomPage() {
   };
 
   const currentRoomId = useSelector((s: AuthState) => s.room.currentRoomId);
-
-  const toggleSessionChats = async (sessionRoomId: string) => {
-    if (expandedSession === sessionRoomId) {
-      setExpandedSession(null);
-      return;
-    }
-    setExpandedSession(sessionRoomId);
-    if (sessionChats[sessionRoomId]) return;
-    setSessionChatsLoading(sessionRoomId);
-    const token = localStorage.getItem("token");
-    try {
-      const res = await axios.get(
-        `${import.meta.env.VITE_API_URL}/room/sessions/${encodeURIComponent(sessionRoomId)}/chats`,
-        { headers: { Authorization: token || "" } }
-      );
-      setSessionChats((prev) => ({ ...prev, [sessionRoomId]: res.data.chats || [] }));
-    } catch {
-      setSessionChats((prev) => ({ ...prev, [sessionRoomId]: [] }));
-    } finally {
-      setSessionChatsLoading(null);
-    }
-  };
 
   const inviteCompanion = (companionId: string) => {
     const socket = getSocket();
@@ -978,100 +936,6 @@ export default function RoomPage() {
             </motion.button>
           )}
         </motion.section>
-
-        {/* ── Session History (owner only) ─────────────────────────────────── */}
-        {isAuthenticated && sessions.length > 0 && (
-          <section>
-            <div className="flex items-center gap-2 mb-3">
-              <Clock size={14} className="text-indigo-500" />
-              <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest poppins-semibold">
-                Session History
-              </h2>
-            </div>
-            <div className="space-y-2">
-              {sessions.map((s) => {
-                const isExpanded = expandedSession === s.roomId;
-                const chats = sessionChats[s.roomId];
-                const isLoading = sessionChatsLoading === s.roomId;
-                const isExpired = new Date(s.expiresAt) < new Date();
-                return (
-                  <div key={s.id} className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
-                    <button
-                      onClick={() => toggleSessionChats(s.roomId)}
-                      className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        {isExpanded ? (
-                          <ChevronDown size={14} className="text-gray-400" />
-                        ) : (
-                          <ChevronRight size={14} className="text-gray-400" />
-                        )}
-                        <div className="text-left">
-                          <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 poppins-semibold">
-                            {new Date(s.createdAt).toLocaleDateString("en-US", {
-                              weekday: "short",
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric",
-                            })}
-                            {" — "}
-                            {new Date(s.createdAt).toLocaleTimeString("en-US", {
-                              hour: "numeric",
-                              minute: "2-digit",
-                            })}
-                          </p>
-                          <p className="text-[11px] text-gray-400 dark:text-gray-500 poppins-regular">
-                            {isExpired ? "Expired" : "Active"}
-                          </p>
-                        </div>
-                      </div>
-                    </button>
-                    {isExpanded && (
-                      <div className="border-t border-gray-100 dark:border-gray-800 px-4 py-3 max-h-64 overflow-y-auto">
-                        {isLoading ? (
-                          <div className="flex justify-center py-4">
-                            <Loader2 size={18} className="animate-spin text-indigo-400" />
-                          </div>
-                        ) : !chats || chats.length === 0 ? (
-                          <p className="text-xs text-gray-400 text-center py-4 poppins-regular">
-                            No messages in this session
-                          </p>
-                        ) : (
-                          <div className="space-y-2">
-                            {chats.map((c, i) => {
-                              const isMine = c.sendById === user?.userId;
-                              return (
-                                <div key={i} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
-                                  <div
-                                    className={`max-w-[75%] px-3 py-2 rounded-2xl text-[13px] poppins-regular ${
-                                      isMine
-                                        ? "bg-indigo-600 text-white rounded-br-sm"
-                                        : "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-bl-sm"
-                                    }`}
-                                  >
-                                    {!isMine && (
-                                      <p className="text-[10px] font-semibold poppins-semibold text-indigo-500 dark:text-indigo-400 mb-0.5">
-                                        {c.senderName}
-                                      </p>
-                                    )}
-                                    <p className="leading-snug">{c.message}</p>
-                                    <p className={`text-[9px] mt-0.5 ${isMine ? "text-indigo-200" : "text-gray-400"}`}>
-                                      {new Date(c.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
-                                    </p>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
 
         {/* ── News Feed ────────────────────────────────────────────────────── */}
         <section>

@@ -20,6 +20,7 @@ import {
   Headphones,
   FileText,
   Mic2,
+  Clock,
 } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { AuthState } from "../store/authStore/store";
@@ -35,6 +36,7 @@ const navItems = [
   { title: "Home", path: "/home", icon: Home },
   { title: "Chats", path: "/chats", icon: MessageCircle },
   { title: "Summaries", path: "/summaries", icon: FileText },
+  { title: "Sessions", path: "/sessions", icon: Clock },
   { title: "My Room", path: "/room/call", icon: DoorOpen },
   { title: "Ask AI", path: "/ask", icon: Bot },
   { title: "Study Radio", path: "/radio", icon: Headphones },
