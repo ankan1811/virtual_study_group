@@ -36,16 +36,17 @@ The frontend doesn't need to know which database handles what — all data flows
 - On success: dispatches Redux login, stores JWT in localStorage, connects socket, navigates to `/home` (or to a pending invite room if the user arrived via a `/join/:roomId` link)
 
 ### Home Dashboard (`RoomPage`)
-- **Global People Search** — inline search bar at the top of the page. Debounced live search when logged in. Logged-out users see blurred dummy cards with a "Login to search" prompt.
-- **Companion Requests Section** — fetches pending requests from `GET /companion/pending` on mount. Each request card shows the requester's avatar/name with Accept and Decline buttons. Real-time updates via `companion:requestReceived` socket event. Cards animate in/out with Framer Motion springs.
+- **Global People Search** — inline search bar at the top of the page. Debounced live search when logged in. Search correctly extracts `res.data.users` (backend returns `{ users: [...] }`). Logged-out users see blurred dummy cards with a "Login to search" prompt.
+- **Companion Requests Section** — fetches pending requests from `GET /companion/pending` on mount. Each request card shows the requester's avatar/name with Accept and Decline buttons (indigo-themed border). Real-time updates via `companion:requestReceived` socket event. Cards animate in/out with Framer Motion springs. Accept button shows "Accepting..." loader during API call with double-click prevention. Success toast with sound (Web Audio API C-E-G major chord arpeggio) on accept. Notification flow: controller saves `companion_accepted` notification to DB and emits `notification:new` (no duplicate creation on client).
 - **Study Companions Bar** — horizontal scrollable row of companion avatars with:
-  - **Online/offline dot** (bottom-right, green = online, grey = offline)
+  - **Online/offline dot** (bottom-right, green = online, grey = offline). `setCompanions` reducer preserves existing `isOnline` state instead of resetting to false. Online status re-synced after companion list refresh (e.g., after accepting) via `companion:getOnlineCompanions` socket event. Socket `connect` handler re-syncs online status on reconnect. Backend emits mutual `companion:online` to both parties on companion accept.
   - **Unread DM green ring** — avatar ring turns emerald when a companion sends a DM while the DM panel is closed. Clears when you open the conversation. Tracked via `dm:receive` socket listener with a ref-based stale-closure guard.
   - **Popover** on click — shows online status, Message button (with unread dot), and Invite to Room button
   - Logged-out state shows dummy companions (some with green rings as preview)
-- **CTA Section** — gradient card with "Enter My Room" (logged in) or "Get Started" (logged out)
+- **CTA Section** — gradient card with "Enter My Room" (logged in, creates/resumes a 12h session) or "Get Started" (logged out)
 - **News Feed** — category-filtered (All / AI / Tech / Productivity) article cards. Controlled by `VITE_NEWS_IMAGES_ONLY` env var to show only articles with images.
-- **Add Companion Modal** — search users by name/email, send companion requests
+- **Add Companion Modal** — search users by name/email, send companion requests. "Add" button shows "Sending..." loader then "Sent" on success with double-click prevention. Success toast with sound (Web Audio API C-E-G major chord arpeggio). Toast redesigned: centered, violet gradient, spring animation, backdrop blur. Modal auto-closes after sending request.
+- **Notification Bell** — `NotificationBell` socket listener fixed with `isAuthenticated` dependency so it re-runs after socket connects. Bell icon and badge styled in indigo.
 - **DM Panel** — slide-in panel for real-time direct messaging with a companion
 
 ### User Profile (`ProfilePage`)
@@ -92,13 +93,18 @@ The frontend doesn't need to know which database handles what — all data flows
 - **Logout** — properly clears JWT from localStorage, disconnects socket, resets Redux state, redirects to `/login`
 
 ### Room Call (`RoomCallPage`)
+- **Session-based rooms** — each "Enter My Room" creates or resumes a 12h session via `POST /room/session`. Room ID format: `user_{userId}_{sessionUUID}` — isolates chat per session. New `room_sessions` PostgreSQL table (ownerId, roomId, expiresAt, createdAt).
+- **Session history** — owner can browse past sessions on RoomPage via a collapsible list showing date/time. Click a session to expand and view its chat history. APIs: `GET /room/sessions` (list), `GET /room/sessions/:sessionRoomId/chats` (owner-only chat history).
 - **Agora opt-in** — video call only starts when the user clicks "Start Video Call" in the lobby. Chat, AI, and whiteboard tools are available immediately without consuming Agora hours. End call via red PhoneOff button in the video grid.
 - Tab panel: Chat / AI Doubt / Whiteboard (Whiteboard tab navigates to full-page `/whiteboard/:roomId`)
 - Room ID from Redux state (not URL or localStorage)
-- **Bottom action bar** — below the tab content with Invite and Summary buttons. Summary button only appears on the Chat tab, disabled when no user messages exist, shows loading/saved states.
-- **Shareable invite link** — "Invite" button copies a permanent link (`/join/{roomId}`) to clipboard. Animated swap to a green "Copied!" checkmark for 2 seconds (Framer Motion). The link is permanent since room IDs (`user_{userId}`) never change
+- **Bottom action bar** — below the tab content (inside absolute-positioned container for Safari compatibility) with Invite and Summary buttons. Summary button only appears on the Chat tab, disabled when no user messages exist, shows loading/saved states.
+- **Shareable invite link** — "Invite" button copies a session-based link (`/join/{roomId}`) to clipboard. Animated swap to a green "Copied!" checkmark for 2 seconds (Framer Motion). Links are tied to the current session (no longer permanent).
+- **Real-time chat persistence** — messages are saved to DB in real-time via `insertChat` in the `serverMessage` socket handler. Chat history loaded from DB on mount via `GET /chat/view/:roomId`. `isMe` check uses `sentById` (userId) instead of name, fixing sender/receiver styling for same-name accounts.
 - Bot messages in chat support clickable URLs (Linkify helper) with special styling for summary notifications
-- **Opt-in chat persistence:**
+- **`ChatComponent` socket robustness** — retry interval if socket is null on mount, re-joins room on socket reconnect event.
+- **Safari layout fix** — replaced `h-full` with `flex-1 min-h-0` throughout ChatTabPanel and ChatComponent. Used `position: absolute; inset: 0` pattern in RoomCallPage to bypass Safari nested flex bugs.
+- **Opt-in chat persistence (legacy save flow):**
   - Inline "Save" button in chat panel — disabled when nothing to save, re-enables on new messages, shows "Saved" checkmark on success
   - `SaveChatPrompt` modal on exit — "Save & Exit" or "Exit without saving". Skipped if all messages already saved
   - `useBlocker` intercepts React Router navigation; `beforeunload` guards browser tab close
@@ -158,10 +164,10 @@ The frontend doesn't need to know which database handles what — all data flows
 - **Accessible from sidebar** — "Study Radio" nav item with headphones icon.
 
 ### Join Room via Link (`JoinRoomPage`)
-- Auth-gated redirect page at `/join/:roomId` — handles shareable invite links
-- If logged in: dispatches `enterRoom({ roomId, isOwner: false })` and redirects to `/room/call`
+- Auth-gated redirect page at `/join/:roomId` — handles shareable session-based invite links
+- If logged in: dispatches `enterRoom({ roomId, isOwner: false })` and redirects to `/room/call`. Passes `roomId` in navigation state.
 - If not logged in: stores roomId in `sessionStorage("pendingJoinRoom")`, redirects to `/login`. After successful auth, automatically redirects back to the room
-- Link is **permanent** — room IDs (`user_{userId}`) never change, so the same link always works
+- Links are **session-based** — room IDs (`user_{userId}_{sessionUUID}`) are unique per session, so links expire when the session ends (12h)
 
 ### Live Streaming (`Streampage`)
 - Camera preview, YouTube RTMP stream key input, start/stop controls
@@ -172,7 +178,7 @@ The frontend doesn't need to know which database handles what — all data flows
 | Slice | State | Key Actions |
 |-------|-------|-------------|
 | `auth` | `isAuthenticated`, `user` | `login`, `logout` (+ token/socket cleanup), `updateName`, `updateAvatar` |
-| `room` | `currentRoomId`, `isOwner` | `enterRoom`, `leaveRoom` |
+| `room` | `currentRoomId`, `isOwner` | `enterRoom` (session-based roomId), `leaveRoom` |
 | `invite` | `pendingInvite` | `receiveInvite`, `clearInvite` |
 | `companion` | `companions[]`, `pendingRequests[]` | `setCompanions`, `setOnline`, `setOffline`, `setPendingRequests`, `addPendingRequest`, `removePendingRequest`, `addCompanion` |
 
@@ -200,18 +206,21 @@ Requires the backend running on port 7002 with both NeonDB (PostgreSQL) and Mong
 
 | Event | Direction | Purpose |
 |-------|-----------|---------|
-| `companion:online` | Server → Client | Companion came online |
+| `companion:online` | Server → Client | Companion came online (also emitted mutually on companion accept) |
 | `companion:offline` | Server → Client | Companion went offline |
+| `companion:getOnlineCompanions` | Client → Server | Request list of online companion IDs (used after refresh/reconnect) |
+| `companion:onlineList` | Server → Client | Response with array of online companion IDs |
 | `companion:requestReceived` | Server → Client | Incoming companion request |
 | `companion:accepted` | Server → Client | Someone accepted your request |
+| `notification:new` | Server → Client | New notification pushed from server (e.g., companion accepted) |
 | `dm:receive` | Server → Client | Incoming DM (also used for unread tracking) |
 | `dm:join` | Client → Server | Join a DM room |
 | `dm:send` | Client → Server | Send a DM message (throttled: 200ms) |
 | `sendInvite` | Client → Server | Invite companion to room (throttled: 3s) |
 | `receiveInvite` | Server → Client | Incoming room invite |
 | `inviteError` | Server → Client | Invite failed or throttled |
-| `joinRoom` | Client → Server | Join a chat room |
-| `serverMessage` | Client → Server | Send chat message |
+| `joinRoom` | Client → Server | Join a chat room (with retry interval if socket null, re-join on reconnect) |
+| `serverMessage` | Client → Server | Send chat message (saved to DB in real-time via `insertChat`) |
 | `dm:error` | Server → Client | DM send throttled (too frequent) |
 | `companion:error` | Server → Client | Companion request throttled (too frequent) |
 | `whiteboard:update` | Client → Server | Broadcast whiteboard element changes to room (debounced 150ms) |

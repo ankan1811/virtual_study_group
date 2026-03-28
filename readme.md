@@ -39,13 +39,15 @@ Structured entities with clear relationships live in **NeonDB** via **Drizzle OR
 | `companions` | Friend/companion relationships with status | Unique constraint on (requester, recipient), status enum, bidirectional queries |
 | `notifications` | Persistent notifications (10-day retention) | Must survive page refreshes and logouts, queryable by recipient + read state |
 | `direct_messages` | DM history between users | Relational (from/to FKs), complex aggregations (unread counts, recent conversations) |
-| `chats` | Room chat messages | Indexed by (roomId, createdAt) for session replay |
+| `chats` | Room chat messages (roomId uses session-based format `user_{userId}_{sessionUUID}`) | Indexed by (roomId, createdAt) for session replay |
+| `room_sessions` | Study room session tracking (12h TTL) | Time-bounded sessions with owner FK, expiry queries |
 | `upload_counters` | Monthly R2 upload quota per user | **Deliberately kept in Postgres over Redis** — protects a real cost boundary (Cloudflare R2 storage). Must survive for 31 days without risk of eviction. A Redis flush would reset counters to zero, giving users free uploads beyond quota. Low frequency (~2-5 writes/session) means Postgres speed is fine. Enables historical audit queries ("which users hit the limit?") |
 
 - Type-safe schema with foreign key constraints and enums
 - UUID primary keys — preserves the existing string-based auth contract (JWTs, socket IDs, DM room keys)
 - `ON CONFLICT DO UPDATE` atomic upserts for counter tables
 - SQL window functions for complex DM aggregations
+- `room_sessions` → `{ id: UUID PK, owner_id -> users, room_id: varchar (e.g. "user_{uuid}_{sessionUuid}"), expires_at: timestamp, created_at }` — index on `owner_id`. 12h TTL enforced at application level
 
 ### MongoDB (Mongoose) — unstructured/flexible data
 
@@ -140,7 +142,7 @@ These are textbook Redis use cases and don't need a PostgreSQL alternative:
 | **News cache** (`news:articles`, 24h TTL) | Pure cache. NewsAPI free tier allows 100 calls/day — 24h TTL ensures max 1 call/day. If lost, we re-fetch or fall back to mock articles. Survives server restarts (unlike the previous in-memory cache). |
 | **Rate limit counters** (`rl:{limiter}:{key}`) | Managed by `@upstash/ratelimit` library. Sliding window algorithm requires atomic increment + expire in a single round-trip — Redis is purpose-built for this. Postgres would require row-level locking and be 10-100x slower. |
 
-##### PostgreSQL: everything else (users, rooms, companions, DMs, chats, notifications)
+##### PostgreSQL: everything else (users, rooms, room_sessions, companions, DMs, chats, notifications)
 
 These are **relational, permanent, and queryable** — the core of the application. They have foreign keys, need JOINs, support complex aggregations (unread counts, recent conversations, companion status), and must never be lost. This is what PostgreSQL was built for.
 
@@ -274,8 +276,8 @@ This is **not** data migration — it's DDL (Data Definition Language). Think of
 
 ### Personal Rooms & Invite System
 
-- Every user has a personal room (`user_{userId}`) — no room IDs to remember
-- **Shareable invite link** — "Invite" button in the room call page copies a permanent link (`/join/{roomId}`) to clipboard with animated feedback. Anyone with the link can join (logged-in users only; unauthenticated users are redirected to login and auto-joined after auth)
+- **Session-based rooms** — each user gets a unique room per session (`user_{userId}_{sessionUUID}`) with a 12h TTL. Entering "My Room" creates or resumes an active session via `POST /room/session`. Past sessions and their chat history are browsable
+- **Shareable invite link** — "Invite" button in the room call page copies the session link (`/join/{roomId}`) to clipboard with animated feedback. Anyone with the link can join (logged-in users only; unauthenticated users are redirected to login and auto-joined after auth)
 - Only study companions can invite each other directly via real-time socket invites
 - Real-time invite notifications with accept/decline overlay
 - "Enter My Room" one-click access from the home page and sidebar
@@ -416,7 +418,7 @@ This is **not** data migration — it's DDL (Data Definition Language). Think of
   - **"Save your chats?" exit prompt** — animated modal appears when leaving the room with unsaved messages. Options: "Save & Exit" (persists then navigates) or "Exit without saving" (discards). Prompt is **skipped entirely** if the user already saved all messages via the inline button
   - **Browser tab close protection** — native `beforeunload` dialog warns when unsaved messages exist
   - **React Router navigation blocking** — `useBlocker` intercepts sidebar/back button navigation and shows the save prompt
-  - Messages are bulk-saved via `POST /chat/bulk-save` with a `sessionId` (UUID) grouping messages per save operation. Capped at 500 messages per request. Stored in PostgreSQL `chats` table
+  - Messages are bulk-saved via `POST /chat/bulk-save` with a `sessionId` (UUID) grouping messages per save operation. Room ID uses session-based format `user_{userId}_{sessionUUID}`. Capped at 500 messages per request. Stored in PostgreSQL `chats` table
   - Bot messages are excluded from saves and unsaved message counts
 
 ### AI Doubt Solver
@@ -670,6 +672,9 @@ VITE_GOOGLE_CLIENT_ID=your_google_client_id # Google OAuth Client ID (from https
 | POST   | `/ai/summary-qa`          | RAG Q&A: ask questions across saved summaries (rate limited: per-user + daily embedding cap) |
 | GET    | `/ai/summaries`           | List saved summaries (filter by `?type=room\|dm\|whiteboard`)        |
 | DELETE | `/ai/summaries/:id`       | Delete a saved summary (ownership check)                             |
+| POST   | `/room/session`           | Get or create active room session (12h TTL, returns roomId + expiresAt) |
+| GET    | `/room/sessions`          | List all past sessions for authenticated user                        |
+| GET    | `/room/sessions/:id/chats`| Get chat history for a session (owner only)                          |
 | POST   | `/chat/bulk-save`         | Bulk-save room chat messages to PostgreSQL (auth required, max 500)  |
 | GET    | `/dm/recent`              | Get recent chats (last message per companion, sorted by time)        |
 | GET    | `/dm/:companionId`        | Get DM history (includes `_id`, `read` state)                        |

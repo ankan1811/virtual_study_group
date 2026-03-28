@@ -22,7 +22,6 @@ import {
 } from "agora-rtc-sdk-ng/esm";
 import ChatTabPanel from "../components/ChatTabPanel";
 import AiPanel from "../components/AiPanel";
-import SaveChatPrompt from "../components/SaveChatPrompt";
 import { AuthState } from "../store/authStore/store";
 import { leaveRoom } from "../store/RoomStore/roomSlice";
 import { generateAndSaveSummary } from "../utils/summaryApi";
@@ -84,14 +83,9 @@ export default function RoomCallPage() {
   const callStartTimeRef = useRef(0);
   const lastSyncedRef = useRef(0);
 
-  // ---- Chat persistence state ----
-  const [showSavePrompt, setShowSavePrompt] = useState(false);
-  const [pendingNavigationPath, setPendingNavigationPath] = useState<string | null>(null);
-  const lastSavedCountRef = useRef(0);
-
   const hasUnsavedMessages = () => {
     const userMsgs = chatMessages.filter((m) => m.sentby !== "bot");
-    return userMsgs.length > 0 && userMsgs.length > lastSavedCountRef.current;
+    return userMsgs.length > 0;
   };
 
   // ---- Agora helpers ----
@@ -223,58 +217,11 @@ export default function RoomCallPage() {
     };
   }, []);
 
-  // ---- Chat persistence: save to server ----
-  const saveChatsToServer = async () => {
-    const authToken = localStorage.getItem("token");
-    const userMsgs = chatMessages.filter((m) => m.sentby !== "bot");
-    await axios.post(
-      `${import.meta.env.VITE_API_URL}/chat/bulk-save`,
-      { roomId, messages: userMsgs },
-      { headers: { Authorization: authToken || "" } }
-    );
-    lastSavedCountRef.current = userMsgs.length;
-  };
-
-  // Inline save button callback (passed to ChatComponent)
-  const handleInlineSaveChats = async () => {
-    await saveChatsToServer();
-  };
-
-  // Exit prompt: Save & Exit
-  const handleSaveAndExit = async () => {
-    try {
-      await saveChatsToServer();
-    } catch (err) {
-      console.error("Failed to save chats:", err);
-    }
-    completeExit();
-  };
-
-  // Exit prompt: Exit without saving
-  const handleDiscardAndExit = () => {
-    completeExit();
-  };
-
-  const completeExit = () => {
-    setShowSavePrompt(false);
-    if (pendingNavigationPath) {
-      if (isInCall) leaveChannel();
-      else dispatch(leaveRoom());
-      navigate(pendingNavigationPath);
-      setPendingNavigationPath(null);
-    }
-  };
-
   // NavbarCall exit click
   const handleExitClick = () => {
-    if (hasUnsavedMessages()) {
-      setShowSavePrompt(true);
-      setPendingNavigationPath("/home");
-    } else {
-      if (isInCall) leaveChannel();
-      else dispatch(leaveRoom());
-      navigate("/home");
-    }
+    if (isInCall) leaveChannel();
+    else dispatch(leaveRoom());
+    navigate("/home");
   };
 
   // ---- Browser tab/window close ----
@@ -416,7 +363,6 @@ export default function RoomCallPage() {
                   <ChatTabPanel
                     roomId={roomId}
                     onMessagesChange={setChatMessages}
-                    onSaveChats={handleInlineSaveChats}
                   />
                 ) : (
                   <AiPanel
@@ -512,13 +458,6 @@ export default function RoomCallPage() {
         </div>
       </div>
 
-      {/* Save chat prompt overlay */}
-      <SaveChatPrompt
-        isOpen={showSavePrompt}
-        messageCount={chatMessages.filter((m) => m.sentby !== "bot").length}
-        onSave={handleSaveAndExit}
-        onDiscard={handleDiscardAndExit}
-      />
     </div>
   );
 }
