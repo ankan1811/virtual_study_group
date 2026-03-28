@@ -21,8 +21,8 @@ A full-stack web application for creating virtual study group spaces with real-t
 | **Styling**          | Tailwind CSS, shadcn/ui, Framer Motion                            |
 | **Auth**             | Redis-backed OTP (HMAC-SHA256 + Upstash Redis TTL) + Google OAuth + JWT + Resend (email delivery) |
 | **Rate Limiting**    | @upstash/ratelimit (sliding window, Redis-backed, per-user + per-IP, all thresholds via env vars) |
-| **Caching**          | Upstash Redis (OTP hashes with TTL auto-expiry, podcast cache with 4-day TTL, distributed rate limit counters) |
-| **News Feed**        | Mock articles (AI / Tech / Productivity categories, 30-min cache) |
+| **Caching**          | Upstash Redis (OTP hashes with TTL auto-expiry, podcast cache with 4-day TTL, news cache with 24h TTL, distributed rate limit counters) |
+| **News Feed**        | NewsAPI (100 free calls/day) — AI / Tech / Productivity categories, Upstash Redis cache (TTL 24h, max 1 API call/day), mock fallback articles |
 
 ## Database Architecture
 
@@ -65,6 +65,7 @@ Redis handles all data that benefits from automatic expiration or needs to be fa
 | **Podcast cache** | `podcast:{topic}` | 4 days (345,600s) | Fast key-value reads, automatic TTL cleanup (replaced MongoDB `Podcast` model), cache validity checked against last Tue/Sat boundary |
 | **Rate limit counters** | `rl:{limiter}:{key}` | Per-window (varies) | Distributed sliding window via `@upstash/ratelimit`, works across multiple server instances, fail-open on Redis downtime |
 | **Embedding daily cap** | `embeddings:{YYYY-MM-DD}` | 24 hours | Global counter across all users, high-frequency (every summary save + every RAG query), auto-expires at end of day |
+| **News cache** | `news:articles` | 24 hours | Caches NewsAPI response (free tier: 100 calls/day). Max 1 API call/day, survives server restarts. Falls back to mock articles if API fails |
 
 REST-based Upstash client — no TCP connection pools, fully serverless-friendly. Single `getRedis()` singleton initialized at startup (`backend/src/db/redis.ts`).
 
@@ -128,7 +129,7 @@ Limit:   EMBEDDING_DAILY_MAX (default: 400)
 
 **The tradeoff accepted:** If Redis flushes mid-day, users get extra embedding calls. This is acceptable because (a) Gemini's actual limit is higher than our self-imposed cap, and (b) the financial cost of extra embedding calls on the free tier is literally $0.
 
-##### Redis: OTP hashes, podcast cache, rate limit counters
+##### Redis: OTP hashes, podcast cache, news cache, rate limit counters
 
 These are textbook Redis use cases and don't need a PostgreSQL alternative:
 
@@ -136,6 +137,7 @@ These are textbook Redis use cases and don't need a PostgreSQL alternative:
 |---|---|
 | **OTP hashes** (`otp:{email}`, 5-min TTL) | Must auto-expire for security. Storing in Postgres would require a cron job to clean up expired OTPs — and if the cron fails, stale OTPs remain valid. Redis TTL guarantees expiry. |
 | **Podcast cache** (`podcast:{topic}`, 4-day TTL) | Pure cache. If lost, we re-fetch from Listen Notes API. No data is generated or user-specific — it's just a faster read path. |
+| **News cache** (`news:articles`, 24h TTL) | Pure cache. NewsAPI free tier allows 100 calls/day — 24h TTL ensures max 1 call/day. If lost, we re-fetch or fall back to mock articles. Survives server restarts (unlike the previous in-memory cache). |
 | **Rate limit counters** (`rl:{limiter}:{key}`) | Managed by `@upstash/ratelimit` library. Sliding window algorithm requires atomic increment + expire in a single round-trip — Redis is purpose-built for this. Postgres would require row-level locking and be 10-100x slower. |
 
 ##### PostgreSQL: everything else (users, rooms, companions, DMs, chats, notifications)
@@ -448,7 +450,7 @@ This is **not** data migration — it's DDL (Data Definition Language). Think of
 
 - Instagram-style companion presence bar with online/offline indicators
 - "Let's Study Together" gradient CTA card
-- Inshorts-style news feed with mock AI/Tech/Productivity articles
+- Inshorts-style news feed with AI/Tech/Productivity articles (NewsAPI with 24h Redis cache, mock fallback)
 - Category filter chips (All / AI / Tech / Productivity)
 - Animated card layout with accent color badges
 
