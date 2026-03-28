@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, asc } from 'drizzle-orm';
 import { getNeonDb } from '../neon';
 import { chats } from '../schema';
 
@@ -23,5 +23,5 @@ export async function bulkInsertChats(docs: ChatDoc[]) {
 
 export async function getChatsByRoom(roomId: string) {
   const db = getNeonDb();
-  return db.select().from(chats).where(eq(chats.roomId, roomId));
+  return db.select().from(chats).where(eq(chats.roomId, roomId)).orderBy(asc(chats.createdAt));
 }

@@ -4,7 +4,7 @@ import { useDispatch } from "react-redux";
 import { getSocket } from "../utils/socketInstance";
 import { addCompanion, removePendingRequest } from "../store/companionStore/companionSlice";
 import axios from "axios";
-import { UserPlus, X } from "lucide-react";
+import { UserPlus, X, Loader2 } from "lucide-react";
 
 interface CompanionRequest {
   requesterId: string;

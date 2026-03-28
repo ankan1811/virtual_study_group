@@ -72,7 +72,7 @@ export default function ChatsPage() {
         const companionName =
           msg.from === user?.userId
             ? dmTargetRef.current?.name || "Unknown"
-            : msg.fromName;
+            : msg.fromName || "Unknown";
         const isMine = msg.from === user?.userId;
 
         const existing = prev.find((c) => c.companionId === companionId);
