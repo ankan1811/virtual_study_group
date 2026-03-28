@@ -58,6 +58,19 @@ export async function deleteById(id: string, recipientId: string) {
     .where(and(eq(notifications.id, id), eq(notifications.recipientId, recipientId)));
 }
 
+export async function deleteByTypeAndSender(recipientId: string, type: NotificationType, fromUserId: string) {
+  const db = getNeonDb();
+  await db
+    .delete(notifications)
+    .where(
+      and(
+        eq(notifications.recipientId, recipientId),
+        eq(notifications.type, type),
+        eq(notifications.fromUserId, fromUserId),
+      ),
+    );
+}
+
 /** Delete notifications older than 10 days — replaces MongoDB TTL index */
 export async function deleteExpiredNotifications(): Promise<number> {
   const db = getNeonDb();

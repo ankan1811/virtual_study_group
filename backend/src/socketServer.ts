@@ -1,9 +1,11 @@
 import { Server, Socket } from 'socket.io';
 import http from 'http';
 import jwt from 'jsonwebtoken';
+import { randomUUID } from 'crypto';
 import { RATE_LIMIT_CONFIG } from './middlewares/rateLimiter';
 import { getAcceptedCompanionIds, checkCompanionship } from './db/queries/companions';
 import { createDm, markDmRead as dbMarkDmRead } from './db/queries/directMessages';
+import { insertChat } from './db/queries/chats';
 import { createNotification } from './db/queries/notifications';
 import type { notificationTypeEnum } from './db/schema';
 
@@ -145,8 +147,19 @@ export function initSocketServer(httpServer: http.Server): Server {
 
     socket.on(
       'serverMessage',
-      ({ message, roomId, sentby }: { message: string; roomId: string; sentby: string }) => {
+      async ({ message, roomId, sentby, sessionId }: { message: string; roomId: string; sentby: string; sessionId?: string }) => {
         io.to(roomId).emit(`message:${roomId}`, { msg: message, sentby });
+        try {
+          await insertChat({
+            sendById: userId,
+            senderName: sentby,
+            message,
+            roomId,
+            sessionId: sessionId || randomUUID(),
+          });
+        } catch (err) {
+          console.error('Chat save error:', err);
+        }
       }
     );
 

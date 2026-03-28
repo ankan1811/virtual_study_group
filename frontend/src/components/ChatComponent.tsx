@@ -47,6 +47,7 @@ export default function ChatComponent({ roomId, onMessagesChange, onSaveChats }:
   const [justSaved, setJustSaved] = useState(false);
   const lastSavedCountRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const cleanupRef = useRef<(() => void) | null>(null);
   const user = useSelector((state: AuthState) => state.auth.user);
 
   const userMessages = messages.filter((m) => m.sentby !== "bot");
@@ -63,19 +64,47 @@ export default function ChatComponent({ roomId, onMessagesChange, onSaveChats }:
   }, [messages]);
 
   useEffect(() => {
-    const socket = getSocket();
-    if (!socket) return;
+    let retryTimer: ReturnType<typeof setInterval> | null = null;
 
-    socket.emit("joinRoom", { roomId, name: user?.name });
+    const joinAndListen = () => {
+      const socket = getSocket();
+      if (!socket) return false;
 
-    const handleMessage = ({ msg, sentby }: Message) => {
-      setMessages((prev) => [...prev, { msg, sentby }]);
+      socket.emit("joinRoom", { roomId, name: user?.name });
+
+      const handleMessage = ({ msg, sentby }: Message) => {
+        setMessages((prev) => [...prev, { msg, sentby }]);
+      };
+
+      const handleReconnect = () => {
+        socket.emit("joinRoom", { roomId, name: user?.name });
+      };
+
+      socket.on(`message:${roomId}`, handleMessage);
+      socket.on("connect", handleReconnect);
+
+      cleanupRef.current = () => {
+        socket.off(`message:${roomId}`, handleMessage);
+        socket.off("connect", handleReconnect);
+        socket.emit("leaveRoom", { roomId });
+      };
+
+      return true;
     };
 
-    socket.on(`message:${roomId}`, handleMessage);
+    if (!joinAndListen()) {
+      retryTimer = setInterval(() => {
+        if (joinAndListen() && retryTimer) {
+          clearInterval(retryTimer);
+          retryTimer = null;
+        }
+      }, 200);
+    }
+
     return () => {
-      socket.off(`message:${roomId}`, handleMessage);
-      socket.emit("leaveRoom", { roomId });
+      if (retryTimer) clearInterval(retryTimer);
+      cleanupRef.current?.();
+      cleanupRef.current = null;
     };
   }, [roomId, user]);
 
@@ -113,11 +142,11 @@ export default function ChatComponent({ roomId, onMessagesChange, onSaveChats }:
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
       {/* Messages area */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-3 py-4 space-y-3 bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-850"
+        className="flex-1 min-h-0 overflow-y-auto px-3 py-4 space-y-3 bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-850"
         style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")" }}
       >
         {messages.length === 0 && (

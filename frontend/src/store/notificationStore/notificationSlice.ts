@@ -38,6 +38,11 @@ const notificationSlice = createSlice({
     removeNotification(state, action: PayloadAction<string>) {
       state.items = state.items.filter((n) => n._id !== action.payload);
     },
+    removeByTypeAndSender(state, action: PayloadAction<{ type: AppNotification['type']; fromUserId: string }>) {
+      state.items = state.items.filter(
+        (n) => !(n.type === action.payload.type && n.fromUserId === action.payload.fromUserId),
+      );
+    },
   },
 });
 
@@ -47,6 +52,7 @@ export const {
   markOneRead,
   markAllReadLocal,
   removeNotification,
+  removeByTypeAndSender,
 } = notificationSlice.actions;
 
 export default notificationSlice.reducer;

@@ -4,7 +4,7 @@ import { getSocketIdForUser, getIO } from '../socketServer';
 import {
   findById,
 } from '../db/queries/users';
-import { createNotification } from '../db/queries/notifications';
+import { createNotification, deleteByTypeAndSender } from '../db/queries/notifications';
 import {
   findCompanionPair,
   createCompanion,
@@ -118,6 +118,13 @@ export const acceptCompanionRequest = async (req: AuthenticatedRequest, res: Res
     const acceptorSocketId = getSocketIdForUser(recipientId);
     if (io && acceptorSocketId && requesterSocketId) {
       io.to(acceptorSocketId).emit('companion:online', { userId: requesterId });
+    }
+
+    // Remove the old "companion_request" notification from the acceptor's bell
+    try {
+      await deleteByTypeAndSender(recipientId, 'companion_request', requesterId);
+    } catch (err) {
+      console.error('Failed to clear companion_request notification:', err);
     }
 
     // Save notification and push to bell in real-time

@@ -25,7 +25,7 @@ export default function JoinRoomPage() {
       return;
     }
     dispatch(enterRoom({ roomId, isOwner: false }));
-    navigate("/room/call", { replace: true });
+    navigate("/room/call", { replace: true, state: { roomId } });
   }, [roomId, isAuthenticated]);
 
   return (

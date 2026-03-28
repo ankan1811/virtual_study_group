@@ -176,7 +176,7 @@ function InlineDm({
     name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
       {/* DM header */}
       <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2.5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
         <button
@@ -273,7 +273,7 @@ export default function ChatTabPanel({ roomId, onMessagesChange, onSaveChats }: 
   // Conversation list view
   if (view === "list") {
     return (
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
         {/* Scrollable conversation list */}
         <div className="flex-1 overflow-y-auto">
           {/* Room Chat — pinned at top */}
@@ -356,7 +356,7 @@ export default function ChatTabPanel({ roomId, onMessagesChange, onSaveChats }: 
   // Room chat view
   if (view === "room") {
     return (
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col h-full min-h-0 overflow-hidden">
         {/* Back to list header */}
         <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
           <button
@@ -372,7 +372,7 @@ export default function ChatTabPanel({ roomId, onMessagesChange, onSaveChats }: 
             Room Chat
           </p>
         </div>
-        <div className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
           <ChatComponent
             roomId={roomId}
             onMessagesChange={onMessagesChange}

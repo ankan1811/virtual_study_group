@@ -10,6 +10,11 @@ interface ChatDoc {
   sessionId: string;
 }
 
+export async function insertChat(doc: ChatDoc) {
+  const db = getNeonDb();
+  await db.insert(chats).values(doc);
+}
+
 export async function bulkInsertChats(docs: ChatDoc[]) {
   if (docs.length === 0) return;
   const db = getNeonDb();

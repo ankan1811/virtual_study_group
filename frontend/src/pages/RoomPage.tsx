@@ -30,6 +30,7 @@ import {
   addCompanion,
 } from "../store/companionStore/companionSlice";
 import { enterRoom } from "../store/RoomStore/roomSlice";
+import { removeByTypeAndSender } from "../store/notificationStore/notificationSlice";
 import { getSocket } from "../utils/socketInstance";
 
 interface NewsArticle {
@@ -442,6 +443,7 @@ export default function RoomPage() {
       dispatch(setCompanions(res.data.companions || res.data));
       getSocket()?.emit("companion:getOnlineCompanions");
       dispatch(removePendingRequest(requesterId));
+      dispatch(removeByTypeAndSender({ type: "companion_request", fromUserId: requesterId }));
       playSuccessSound();
       setInviteStatus({ msg: "Companion request accepted!", type: "success" });
       setTimeout(() => setInviteStatus(null), 3000);

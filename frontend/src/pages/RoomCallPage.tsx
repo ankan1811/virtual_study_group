@@ -3,7 +3,7 @@ import { useSelector, useDispatch } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
 import Navbar from "../components/Navbar";
-import { Users, LogOut, MessageSquare, Bot, PenTool, Share2, Check, Video, Sparkles, Loader2 } from "lucide-react";
+import { Users, LogOut, MessageSquare, Bot, PenTool, Share2, Check, Video, Sparkles, Loader2, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Stream from "../components/Stream";
 import type {
@@ -77,6 +77,12 @@ export default function RoomCallPage() {
   const [isInCall, setIsInCall] = useState(false);
   const [lobbySummaryLoading, setLobbySummaryLoading] = useState(false);
   const [lobbySummaryDone, setLobbySummaryDone] = useState(false);
+
+  // ---- Call usage rate limit state ----
+  const [remainingSeconds, setRemainingSeconds] = useState(3600);
+  const [callLimitToast, setCallLimitToast] = useState<string | null>(null);
+  const callStartTimeRef = useRef(0);
+  const lastSyncedRef = useRef(0);
 
   // ---- Chat persistence state ----
   const [showSavePrompt, setShowSavePrompt] = useState(false);
@@ -153,8 +159,48 @@ export default function RoomCallPage() {
     setIsAudioPubed(true);
   };
 
+  // ---- Call usage sync helper ----
+  const syncUsageToServer = (final?: boolean) => {
+    const elapsed = Math.floor((Date.now() - callStartTimeRef.current) / 1000);
+    const delta = elapsed - lastSyncedRef.current;
+    if (delta <= 0) return;
+    lastSyncedRef.current = elapsed;
+
+    const authToken = localStorage.getItem("token");
+    const url = `${import.meta.env.VITE_API_URL}/room/call-usage`;
+
+    if (final) {
+      // keepalive fetch survives page unload and supports auth headers
+      fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: authToken || "" },
+        body: JSON.stringify({ deltaSeconds: delta }),
+        keepalive: true,
+      }).catch(() => {});
+    } else {
+      axios
+        .post(url, { deltaSeconds: delta }, { headers: { Authorization: authToken || "" } })
+        .catch((err) => console.error("Call usage sync failed:", err));
+    }
+  };
+
   const handleStartCall = async () => {
     try {
+      // Fetch remaining call time from server
+      const authToken = localStorage.getItem("token");
+      const { data } = await axios.get(
+        `${import.meta.env.VITE_API_URL}/room/call-usage`,
+        { headers: { Authorization: authToken || "" } }
+      );
+      if (data.remainingSeconds <= 0) {
+        setCallLimitToast("You've used your daily 1-hour call limit. Try again tomorrow!");
+        setTimeout(() => setCallLimitToast(null), 4000);
+        return;
+      }
+      setRemainingSeconds(data.remainingSeconds);
+      callStartTimeRef.current = Date.now();
+      lastSyncedRef.current = 0;
+
       await joinChannel();
       setIsInCall(true);
     } catch (err) {
@@ -163,6 +209,7 @@ export default function RoomCallPage() {
   };
 
   const handleEndCall = async () => {
+    syncUsageToServer();
     await leaveChannelInternal();
     setIsInCall(false);
   };
@@ -257,7 +304,7 @@ export default function RoomCallPage() {
       <Navbar />
 
       {/* Main content */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Left: Participants strip */}
         <div className="w-16 flex-shrink-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col items-center pt-14 pb-4 gap-3">
           <div className="flex flex-col items-center gap-1">
@@ -321,7 +368,7 @@ export default function RoomCallPage() {
         </div>
 
         {/* Right: Tabbed panel */}
-        <div className="w-[380px] flex-shrink-0 h-full flex flex-col bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700">
+        <div className="w-[380px] flex-shrink-0 h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700">
           {/* Top bar: Whiteboard button (left of bell icon area) */}
           <div className="h-14 flex-shrink-0 flex items-center justify-start px-3 gap-2">
             <button
@@ -362,7 +409,7 @@ export default function RoomCallPage() {
           </div>
 
           {/* Tab content */}
-          <div className="flex-1 overflow-hidden flex flex-col">
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
             {activeTab === "chat" ? (
               <ChatTabPanel
                 roomId={roomId}
