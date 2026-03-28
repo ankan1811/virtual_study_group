@@ -4,6 +4,7 @@ import { getSocketIdForUser, getIO } from '../socketServer';
 import {
   findById,
 } from '../db/queries/users';
+import { createNotification } from '../db/queries/notifications';
 import {
   findCompanionPair,
   createCompanion,
@@ -48,13 +49,37 @@ export const sendCompanionRequest = async (req: AuthenticatedRequest, res: Respo
     }
 
     const requester = await findById(requesterId);
+    const requesterName = requester?.name || 'Someone';
     const io = getIO();
     const targetSocketId = getSocketIdForUser(targetUserId);
     if (io && targetSocketId) {
       io.to(targetSocketId).emit('companion:requestReceived', {
         requesterId,
-        requesterName: requester?.name || 'Someone',
+        requesterName,
       });
+    }
+
+    // Save notification and push to bell in real-time
+    try {
+      const notif = await createNotification({
+        recipientId: targetUserId,
+        type: 'companion_request',
+        fromUserId: requesterId,
+        fromUserName: requesterName,
+      });
+      if (io && targetSocketId) {
+        io.to(targetSocketId).emit('notification:new', {
+          _id: notif.id,
+          type: notif.type,
+          fromUserId: notif.fromUserId,
+          fromUserName: notif.fromUserName,
+          data: notif.data,
+          read: false,
+          createdAt: notif.createdAt,
+        });
+      }
+    } catch (notifErr) {
+      console.error('Notification save error:', notifErr);
     }
 
     res.status(201).json({ message: 'Companion request sent' });

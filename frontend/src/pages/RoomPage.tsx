@@ -282,16 +282,25 @@ export default function RoomPage() {
       }
     };
 
+    const onOnlineList = ({ onlineIds }: { onlineIds: string[] }) => {
+      onlineIds.forEach((id) => dispatch(setOnline(id)));
+    };
+
     socket.on("companion:online", onOnline);
     socket.on("companion:offline", onOffline);
+    socket.on("companion:onlineList", onOnlineList);
     socket.on("inviteError", onInviteError);
     socket.on("companion:requestReceived", onRequestReceived);
     socket.on("companion:accepted", onCompanionAccepted);
     socket.on("dm:receive", onDmReceive);
 
+    // Ask server which companions are currently online
+    socket.emit("companion:getOnlineCompanions");
+
     return () => {
       socket.off("companion:online", onOnline);
       socket.off("companion:offline", onOffline);
+      socket.off("companion:onlineList", onOnlineList);
       socket.off("inviteError", onInviteError);
       socket.off("companion:requestReceived", onRequestReceived);
       socket.off("companion:accepted", onCompanionAccepted);
@@ -380,6 +389,7 @@ export default function RoomPage() {
         { headers: { Authorization: token || "" } }
       );
       getSocket()?.emit("companion:sendRequest", { targetUserId });
+      if (fromModal) setShowAddModal(false);
       setInviteStatus({ msg: "Companion request sent!", type: "success" });
       setTimeout(() => setInviteStatus(null), 3000);
     } catch (err: any) {
@@ -390,6 +400,7 @@ export default function RoomPage() {
   };
 
   const handleAcceptRequest = async (requesterId: string) => {
+    dispatch(removePendingRequest(requesterId));
     const token = localStorage.getItem("token");
     try {
       await axios.post(
@@ -397,13 +408,17 @@ export default function RoomPage() {
         { requesterId },
         { headers: { Authorization: token || "" } }
       );
-      dispatch(removePendingRequest(requesterId));
       // Refresh companion list
       const res = await axios.get(`${import.meta.env.VITE_API_URL}/companion/list`, {
         headers: { Authorization: token || "" },
       });
       dispatch(setCompanions(res.data.companions || res.data));
-    } catch (err: any) { console.error(err); }
+      setInviteStatus({ msg: "Companion request accepted!", type: "success" });
+      setTimeout(() => setInviteStatus(null), 3000);
+    } catch (err: any) {
+      console.error(err);
+      dispatch(addPendingRequest({ requesterId, requesterName: "" }));
+    }
   };
 
   const handleDeclineRequest = async (requesterId: string) => {

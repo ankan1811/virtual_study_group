@@ -111,6 +111,13 @@ export function initSocketServer(httpServer: http.Server): Server {
       }
     });
 
+    // ── Companion online status sync ──────────────────────────────────────
+    socket.on('companion:getOnlineCompanions', async () => {
+      const cIds = await getAcceptedCompanionIds(userId);
+      const onlineIds = cIds.filter((cId) => userSocketMap.has(cId));
+      socket.emit('companion:onlineList', { onlineIds });
+    });
+
     // ── Room chat ───────────────────────────────────────────────────────────
 
     socket.on('joinRoom', ({ roomId, name }: { roomId: string; name: string }) => {
