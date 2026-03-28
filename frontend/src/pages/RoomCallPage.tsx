@@ -408,102 +408,106 @@ export default function RoomCallPage() {
             </button>
           </div>
 
-          {/* Tab content */}
-          <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-            {activeTab === "chat" ? (
-              <ChatTabPanel
-                roomId={roomId}
-                onMessagesChange={setChatMessages}
-                onSaveChats={handleInlineSaveChats}
-              />
-            ) : (
-              <AiPanel
-                tab={activeTab as "ai"}
-                chatMessages={chatMessages}
-                roomId={roomId}
-              />
-            )}
-          </div>
+          {/* Tab content + bottom bar — kept in one container for Safari compat */}
+          <div className="flex-1 min-h-0 relative">
+            <div className="absolute inset-0 flex flex-col">
+              <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+                {activeTab === "chat" ? (
+                  <ChatTabPanel
+                    roomId={roomId}
+                    onMessagesChange={setChatMessages}
+                    onSaveChats={handleInlineSaveChats}
+                  />
+                ) : (
+                  <AiPanel
+                    tab={activeTab as "ai"}
+                    chatMessages={chatMessages}
+                    roomId={roomId}
+                  />
+                )}
+              </div>
 
-          {/* Bottom action bar: Invite + Summary */}
-          <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-            <button
-              onClick={async () => {
-                const link = `${window.location.origin}/join/${roomId}`;
-                try {
-                  await navigator.clipboard.writeText(link);
-                } catch {
-                  const ta = document.createElement("textarea");
-                  ta.value = link;
-                  document.body.appendChild(ta);
-                  ta.select();
-                  document.execCommand("copy");
-                  document.body.removeChild(ta);
-                }
-                setCopied(true);
-                setTimeout(() => setCopied(false), 2000);
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 text-indigo-500 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-[11px] font-semibold poppins-semibold transition-colors"
-            >
-              <AnimatePresence mode="wait" initial={false}>
-                {copied ? (
-                  <motion.span
-                    key="check"
-                    initial={{ scale: 0, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0, opacity: 0 }}
-                    transition={{ duration: 0.15 }}
-                    className="flex items-center gap-1 text-emerald-500"
+              {/* Bottom action bar */}
+              <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                <button
+                  onClick={async () => {
+                    const link = `${window.location.origin}/join/${roomId}`;
+                    try {
+                      await navigator.clipboard.writeText(link);
+                    } catch {
+                      const ta = document.createElement("textarea");
+                      ta.value = link;
+                      document.body.appendChild(ta);
+                      ta.select();
+                      document.execCommand("copy");
+                      document.body.removeChild(ta);
+                    }
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 text-indigo-500 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-[11px] font-semibold poppins-semibold transition-colors"
+                >
+                  <AnimatePresence mode="wait" initial={false}>
+                    {copied ? (
+                      <motion.span
+                        key="check"
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0, opacity: 0 }}
+                        transition={{ duration: 0.15 }}
+                        className="flex items-center gap-1 text-emerald-500"
+                      >
+                        <Check size={12} />
+                        Copied!
+                      </motion.span>
+                    ) : (
+                      <motion.span
+                        key="share"
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0, opacity: 0 }}
+                        transition={{ duration: 0.15 }}
+                        className="flex items-center gap-1"
+                      >
+                        <Share2 size={12} />
+                        Invite
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                </button>
+                {activeTab === "chat" && (
+                  <button
+                    onClick={async () => {
+                      setLobbySummaryLoading(true);
+                      try {
+                        await generateAndSaveSummary(
+                          "/ai/summary",
+                          { messages: chatMessages },
+                          { type: "room", contextId: roomId, contextLabel: `Room ${roomId}` }
+                        );
+                        setLobbySummaryDone(true);
+                        setTimeout(() => setLobbySummaryDone(false), 2500);
+                      } catch (err) {
+                        console.error("Summary failed:", err);
+                      } finally {
+                        setLobbySummaryLoading(false);
+                      }
+                    }}
+                    disabled={lobbySummaryLoading || chatMessages.filter((m) => m.sentby !== "bot").length === 0}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-50 dark:bg-violet-950/30 text-violet-500 hover:bg-violet-100 dark:hover:bg-violet-900/40 text-[11px] font-semibold poppins-semibold transition-colors disabled:opacity-40"
                   >
-                    <Check size={12} />
-                    Copied!
-                  </motion.span>
-                ) : (
-                  <motion.span
-                    key="share"
-                    initial={{ scale: 0, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0, opacity: 0 }}
-                    transition={{ duration: 0.15 }}
-                    className="flex items-center gap-1"
-                  >
-                    <Share2 size={12} />
-                    Invite
-                  </motion.span>
+                    {lobbySummaryLoading ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : lobbySummaryDone ? (
+                      <Check size={12} className="text-emerald-500" />
+                    ) : (
+                      <Sparkles size={12} />
+                    )}
+                    {lobbySummaryLoading ? "Saving..." : lobbySummaryDone ? "Saved!" : "Summary"}
+                  </button>
                 )}
-              </AnimatePresence>
-            </button>
-            {activeTab === "chat" && (
-              <button
-                onClick={async () => {
-                  setLobbySummaryLoading(true);
-                  try {
-                    await generateAndSaveSummary(
-                      "/ai/summary",
-                      { messages: chatMessages },
-                      { type: "room", contextId: roomId, contextLabel: `Room ${roomId}` }
-                    );
-                    setLobbySummaryDone(true);
-                    setTimeout(() => setLobbySummaryDone(false), 2500);
-                  } catch (err) {
-                    console.error("Summary failed:", err);
-                  } finally {
-                    setLobbySummaryLoading(false);
-                  }
-                }}
-                disabled={lobbySummaryLoading || chatMessages.filter((m) => m.sentby !== "bot").length === 0}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-50 dark:bg-violet-950/30 text-violet-500 hover:bg-violet-100 dark:hover:bg-violet-900/40 text-[11px] font-semibold poppins-semibold transition-colors disabled:opacity-40"
-              >
-                {lobbySummaryLoading ? (
-                  <Loader2 size={12} className="animate-spin" />
-                ) : lobbySummaryDone ? (
-                  <Check size={12} className="text-emerald-500" />
-                ) : (
-                  <Sparkles size={12} />
-                )}
-                {lobbySummaryLoading ? "Saving..." : lobbySummaryDone ? "Saved!" : "Summary"}
-              </button>
-            )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
