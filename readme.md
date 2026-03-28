@@ -144,11 +144,25 @@ These are textbook Redis use cases and don't need a PostgreSQL alternative:
 
 These are **relational, permanent, and queryable** — the core of the application. They have foreign keys, need JOINs, support complex aggregations (unread counts, recent conversations, companion status), and must never be lost. This is what PostgreSQL was built for.
 
+##### Why notifications stay in PostgreSQL, not Redis
+
+Notifications might *look* like a TTL candidate (10-day retention, auto-cleanup) but they don't belong in Redis for three reasons:
+
+1. **Size** — each notification has `recipientId`, `type`, `fromUserId`, `fromUserName`, `data` (JSONB), `read` state, and timestamps. Multiply that by every user × every event × 10 days of retention. That's a lot of structured data eating into the Upstash free tier (256 MB, 10K commands/day).
+
+2. **Queryability** — notifications require relational operations: filter by recipient, sort by date, toggle read/unread, bulk mark-all-read, delete individual ones. That's `WHERE recipientId = X AND read = false ORDER BY createdAt DESC LIMIT 50` — clean SQL, but ugly in Redis (would need sorted sets, manual indexing, and multiple round-trips).
+
+3. **No natural TTL fit** — the 10-day retention isn't a clean TTL problem. Notifications have per-row `read` state that gets updated mid-lifetime. A Redis key with TTL is immutable until it expires — you'd need separate keys per notification, making the query problem even worse.
+
+The cron job approach (daily cleanup at 03:00 UTC, `DELETE WHERE createdAt < cutoff`) is the right call. One cheap SQL delete once a day is far simpler than managing hundreds of individual Redis keys with TTLs.
+
 #### Summary: The Decision in One Sentence
 
 > **Postgres for data you can't afford to lose; Redis for data you can't afford to be slow.**
 
-Upload counters protect a real cost boundary (R2 storage) and must survive for a month — Postgres. Embedding counters protect a soft daily budget and fire on every AI call — Redis. Everything else follows from asking: "Is this relational and permanent, or transient and fast?"
+Upload counters protect a real cost boundary (R2 storage) and must survive for a month — Postgres. Embedding counters protect a soft daily budget and fire on every AI call — Redis. Notifications need relational queries and mutable state — Postgres. Everything else follows from asking: "Is this relational and permanent, or transient and fast?"
+
+**Rule of thumb:** Redis TTL works when you have one value per key that you set and forget (`otp:{email}`, `news:articles`, `podcast:{topic}`). The moment you need to query, filter, update, or relate data — that's Postgres territory.
 
 ### Set up your database
 
