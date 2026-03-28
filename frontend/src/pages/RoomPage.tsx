@@ -183,6 +183,7 @@ export default function RoomPage() {
 
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  const [decliningId, setDecliningId] = useState<string | null>(null);
 
   // Invite / status toast
   const [inviteStatus, setInviteStatus] = useState<{
@@ -468,6 +469,7 @@ export default function RoomPage() {
   };
 
   const handleDeclineRequest = async (requesterId: string) => {
+    setDecliningId(requesterId);
     const token = localStorage.getItem("token");
     try {
       await axios.post(
@@ -477,6 +479,7 @@ export default function RoomPage() {
       );
       dispatch(removePendingRequest(requesterId));
     } catch (err: any) { console.error(err); }
+    finally { setDecliningId(null); }
   };
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -721,9 +724,14 @@ export default function RoomPage() {
                       </button>
                       <button
                         onClick={() => handleDeclineRequest(req.requesterId)}
-                        className="px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs poppins-semibold transition-colors"
+                        disabled={decliningId === req.requesterId}
+                        className="px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs poppins-semibold transition-colors disabled:opacity-60 flex items-center gap-1.5"
                       >
-                        Decline
+                        {decliningId === req.requesterId ? (
+                          <><Loader2 size={12} className="animate-spin" /> Declining...</>
+                        ) : (
+                          "Decline"
+                        )}
                       </button>
                     </div>
                   </motion.div>

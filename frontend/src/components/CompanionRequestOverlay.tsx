@@ -14,6 +14,7 @@ interface CompanionRequest {
 export default function CompanionRequestOverlay() {
   const dispatch = useDispatch();
   const [queue, setQueue] = useState<CompanionRequest[]>([]);
+  const [actionLoading, setActionLoading] = useState<"accept" | "decline" | null>(null);
   const current = queue[0] ?? null;
 
   useEffect(() => {
@@ -36,7 +37,8 @@ export default function CompanionRequestOverlay() {
   const dismiss = () => setQueue((prev) => prev.slice(1));
 
   const handleAccept = async () => {
-    if (!current) return;
+    if (!current || actionLoading) return;
+    setActionLoading("accept");
     const token = localStorage.getItem("token");
     try {
       await axios.post(
@@ -50,12 +52,15 @@ export default function CompanionRequestOverlay() {
       dispatch(removePendingRequest(current.requesterId));
     } catch (err) {
       console.error("Accept companion error:", err);
+    } finally {
+      setActionLoading(null);
     }
     dismiss();
   };
 
   const handleDecline = async () => {
-    if (!current) return;
+    if (!current || actionLoading) return;
+    setActionLoading("decline");
     const token = localStorage.getItem("token");
     try {
       await axios.post(
@@ -65,6 +70,8 @@ export default function CompanionRequestOverlay() {
       );
     } catch (err) {
       console.error("Decline companion error:", err);
+    } finally {
+      setActionLoading(null);
     }
     dismiss();
   };
@@ -108,15 +115,25 @@ export default function CompanionRequestOverlay() {
               <div className="flex gap-2 mt-3">
                 <button
                   onClick={handleAccept}
-                  className="flex-1 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-semibold poppins-semibold hover:opacity-90 transition-opacity"
+                  disabled={actionLoading !== null}
+                  className="flex-1 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-semibold poppins-semibold hover:opacity-90 transition-opacity disabled:opacity-60 flex items-center justify-center gap-1.5"
                 >
-                  Accept
+                  {actionLoading === "accept" ? (
+                    <><Loader2 size={14} className="animate-spin" /> Accepting...</>
+                  ) : (
+                    "Accept"
+                  )}
                 </button>
                 <button
                   onClick={handleDecline}
-                  className="flex-1 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium poppins-regular hover:bg-gray-200 transition-colors"
+                  disabled={actionLoading !== null}
+                  className="flex-1 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium poppins-regular hover:bg-gray-200 transition-colors disabled:opacity-60 flex items-center justify-center gap-1.5"
                 >
-                  Decline
+                  {actionLoading === "decline" ? (
+                    <><Loader2 size={14} className="animate-spin" /> Declining...</>
+                  ) : (
+                    "Decline"
+                  )}
                 </button>
               </div>
             </div>
