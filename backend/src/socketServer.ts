@@ -148,7 +148,7 @@ export function initSocketServer(httpServer: http.Server): Server {
     socket.on(
       'serverMessage',
       async ({ message, roomId, sentby, sessionId }: { message: string; roomId: string; sentby: string; sessionId?: string }) => {
-        io.to(roomId).emit(`message:${roomId}`, { msg: message, sentby });
+        io.to(roomId).emit(`message:${roomId}`, { msg: message, sentby, sentById: userId });
         try {
           await insertChat({
             sendById: userId,

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Send, Save, Check, Loader2 } from "lucide-react";
 import { useSelector } from "react-redux";
+import axios from "axios";
 import { AuthState } from "../store/authStore/store";
 import { getSocket } from "../utils/socketInstance";
 
@@ -32,6 +33,7 @@ function Linkify({ text }: { text: string }) {
 interface Message {
   msg: string;
   sentby: string;
+  sentById?: string;
 }
 
 interface ChatComponentProps {
@@ -53,6 +55,22 @@ export default function ChatComponent({ roomId, onMessagesChange, onSaveChats }:
   const userMessages = messages.filter((m) => m.sentby !== "bot");
   const hasUnsaved = userMessages.length > 0 && userMessages.length > lastSavedCountRef.current;
 
+  // Fetch chat history on mount
+  useEffect(() => {
+    if (!roomId) return;
+    axios
+      .get(`${import.meta.env.VITE_API_URL}/chat/view/${roomId}`)
+      .then((res) => {
+        const history: Message[] = (res.data.chats || []).map((c: any) => ({
+          msg: c.message,
+          sentby: c.senderName,
+          sentById: c.sendById,
+        }));
+        if (history.length > 0) setMessages(history);
+      })
+      .catch(() => {});
+  }, [roomId]);
+
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -72,8 +90,8 @@ export default function ChatComponent({ roomId, onMessagesChange, onSaveChats }:
 
       socket.emit("joinRoom", { roomId, name: user?.name });
 
-      const handleMessage = ({ msg, sentby }: Message) => {
-        setMessages((prev) => [...prev, { msg, sentby }]);
+      const handleMessage = ({ msg, sentby, sentById }: Message) => {
+        setMessages((prev) => [...prev, { msg, sentby, sentById }]);
       };
 
       const handleReconnect = () => {
@@ -115,6 +133,7 @@ export default function ChatComponent({ roomId, onMessagesChange, onSaveChats }:
       message: inputValue,
       roomId,
       sentby: user?.name,
+      sentById: user?.userId,
     });
     setInputValue("");
   };
@@ -185,7 +204,7 @@ export default function ChatComponent({ roomId, onMessagesChange, onSaveChats }:
             );
           }
 
-          const isMe = message.sentby === user?.name;
+          const isMe = message.sentById ? message.sentById === user?.userId : message.sentby === user?.name;
           const initials = message.sentby
             .split(" ")
             .slice(0, 2)
