@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { getRedis } from '../db/redis';
 
 interface NewsArticle {
   id: string;
@@ -44,10 +45,8 @@ function estimateReadTime(text: string): string {
   return `${Math.max(1, Math.round(words / 200))} min read`;
 }
 
-// Simple in-memory cache
-let cachedArticles: NewsArticle[] | null = null;
-let cacheTimestamp = 0;
-const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
+const REDIS_KEY = 'news:articles';
+const CACHE_TTL = 86400; // 24 hours
 
 // Fallback mock articles
 const fallbackArticles: NewsArticle[] = [
@@ -223,14 +222,16 @@ async function fetchFromNewsAPI(): Promise<NewsArticle[]> {
 }
 
 export const getNews = async (_req: Request, res: Response): Promise<void> => {
+  const redis = getRedis();
+
   // Return cached if fresh
-  if (cachedArticles && Date.now() - cacheTimestamp < CACHE_DURATION) {
-    res.status(200).json(cachedArticles);
+  const cached = await redis.get<NewsArticle[]>(REDIS_KEY);
+  if (cached) {
+    res.status(200).json(cached);
     return;
   }
 
   const articles = await fetchFromNewsAPI();
-  cachedArticles = articles;
-  cacheTimestamp = Date.now();
+  await redis.set(REDIS_KEY, articles, { ex: CACHE_TTL });
   res.status(200).json(articles);
 };
