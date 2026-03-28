@@ -606,9 +606,7 @@ virtual_study_group/
         |   |                          Linkify helper renders URLs in bot messages as
         |   |                          clickable links. Summary bot messages get special
         |   |                          violet styling distinct from regular bot messages.
-        |   |                          Inline "Save" button: onSaveChats callback,
-        |   |                          lastSavedCountRef tracks save state, disabled
-        |   |                          when no unsaved msgs, "Saved" checkmark on success
+        |   |                          Chats persist in real-time (no manual save needed)
         |   |-- DmPanel.tsx          # Slide-in DM panel from right. Optimistic send
         |   |                          (tempId), delivery states: sending/delivered/read.
         |   |                          Tick icons: clock=sending, ✓=delivered, ✓✓=read.
