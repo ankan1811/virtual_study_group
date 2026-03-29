@@ -1,4 +1,4 @@
-import { eq, or, and } from 'drizzle-orm';
+import { eq, or, and, sql } from 'drizzle-orm';
 import { getNeonDb } from '../neon';
 import { companions, users } from '../schema';
 
@@ -100,8 +100,8 @@ export async function getPendingRequests(userId: string) {
 
 export async function countAcceptedCompanions(userId: string): Promise<number> {
   const db = getNeonDb();
-  const rows = await db
-    .select({ id: companions.id })
+  const [result] = await db
+    .select({ count: sql<number>`cast(count(*) as integer)` })
     .from(companions)
     .where(
       and(
@@ -109,7 +109,7 @@ export async function countAcceptedCompanions(userId: string): Promise<number> {
         eq(companions.status, 'accepted'),
       ),
     );
-  return rows.length;
+  return result?.count ?? 0;
 }
 
 export async function getAcceptedCompanionIds(userId: string): Promise<string[]> {
