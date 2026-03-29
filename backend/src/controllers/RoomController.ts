@@ -7,6 +7,7 @@ import {
   getUsersInRoom,
 } from '../db/queries/rooms';
 
+
 export const createRoom = async (req: Request, res: Response): Promise<void> => {
   try {
     const { room_id, user_id } = req.body;
@@ -64,12 +65,11 @@ export const joinRoom = async (req: Request, res: Response): Promise<void> => {
 export const getUsersInRoomController = async (req: Request, res: Response): Promise<void> => {
   try {
     const { room_id } = req.params;
-    const room = await findRoomById(room_id);
-    if (!room) {
-      res.status(404).json({ error: 'Room not found' });
+    const users = await getUsersInRoom(room_id);
+    if (users.length === 0) {
+      res.status(404).json({ error: 'Room not found or empty' });
       return;
     }
-    const users = await getUsersInRoom(room_id);
     res.status(200).json({ users });
   } catch (error) {
     console.error(error);

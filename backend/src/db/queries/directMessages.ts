@@ -94,13 +94,17 @@ export async function getRecentChats(userId: string) {
 export async function getUnreadCounts(userId: string): Promise<Record<string, number>> {
   const db = getNeonDb();
   const rows = await db
-    .select({ fromId: directMessages.fromId })
+    .select({
+      fromId: directMessages.fromId,
+      count: sql<number>`cast(count(*) as integer)`,
+    })
     .from(directMessages)
-    .where(and(eq(directMessages.toId, userId), eq(directMessages.read, false)));
+    .where(and(eq(directMessages.toId, userId), eq(directMessages.read, false)))
+    .groupBy(directMessages.fromId);
 
   const counts: Record<string, number> = {};
   for (const row of rows) {
-    counts[row.fromId] = (counts[row.fromId] || 0) + 1;
+    counts[row.fromId] = row.count;
   }
   return counts;
 }
