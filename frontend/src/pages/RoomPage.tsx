@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -165,6 +166,7 @@ export default function RoomPage() {
 
   // Companion popover
   const [openPopover, setOpenPopover] = useState<string | null>(null);
+  const [openPopoverPos, setOpenPopoverPos] = useState<{ x: number; y: number } | null>(null);
 
   // Add companion modal
   const [showAddModal, setShowAddModal] = useState(false);
@@ -807,14 +809,21 @@ export default function RoomPage() {
             </motion.div>
           ) : (
             <div className={`relative ${showDummy ? "mt-3" : ""}`}>
-              <div className={`flex gap-4 overflow-x-auto pt-1 pb-1 scrollbar-none ${showDummy ? "blur-[2px] select-none pointer-events-none" : ""}`}>
+              <div className={`flex gap-4 overflow-x-auto px-1 py-1 scrollbar-none ${showDummy ? "blur-[2px] select-none pointer-events-none" : ""}`}>
                 {companionList.map((c) => (
                   <div key={c.userId} className="relative flex-shrink-0">
                     <button
-                      onClick={() => {
+                      onClick={(e) => {
                         if (!isAuthenticated) { navigate("/login"); return; }
                         if (showDummy) return;
-                        setOpenPopover(openPopover === c.userId ? null : c.userId);
+                        if (openPopover === c.userId) {
+                          setOpenPopover(null);
+                          setOpenPopoverPos(null);
+                        } else {
+                          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                          setOpenPopoverPos({ x: rect.left + rect.width / 2, y: rect.bottom + 8 });
+                          setOpenPopover(c.userId);
+                        }
                       }}
                       className="flex flex-col items-center gap-1.5 group"
                     >
@@ -822,7 +831,7 @@ export default function RoomPage() {
                         <div
                           className={`w-14 h-14 rounded-full flex items-center justify-center text-white text-sm font-bold poppins-semibold ${getAvatarColor(c.userId)} transition-all duration-300 ${
                             (showDummy ? dummyUnreadIds.has(c.userId) : unreadDmFrom.has(c.userId))
-                              ? "ring-[3px] ring-emerald-400"
+                              ? "ring-[3px] ring-indigo-500"
                               : "ring-2 ring-gray-300 dark:ring-gray-700"
                           }`}
                         >
@@ -839,55 +848,6 @@ export default function RoomPage() {
                       </span>
                     </button>
 
-                    {/* Popover — only for real companions when logged in */}
-                    {isAuthenticated && !showDummy && (
-                      <AnimatePresence>
-                        {openPopover === c.userId && (
-                          <motion.div
-                            initial={{ opacity: 0, scale: 0.92, y: 8 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.92, y: 8 }}
-                            transition={{ type: "spring", damping: 24, stiffness: 300 }}
-                            className="absolute top-[76px] left-1/2 -translate-x-1/2 z-50 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 p-3 w-44 space-y-1"
-                          >
-                            <p className="text-xs font-semibold text-gray-700 dark:text-gray-200 poppins-semibold px-1 truncate">
-                              {c.name}
-                            </p>
-                            <p className="text-[10px] flex items-center gap-1 px-1 mb-2">
-                              {c.isOnline ? (
-                                <>
-                                  <Wifi size={10} className="text-emerald-500" />
-                                  <span className="text-emerald-600">Online</span>
-                                </>
-                              ) : (
-                                <>
-                                  <WifiOff size={10} className="text-gray-400" />
-                                  <span className="text-gray-400">Offline</span>
-                                </>
-                              )}
-                            </p>
-                            <button
-                              onClick={() => openDm(c.userId, c.name)}
-                              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors poppins-regular"
-                            >
-                              <MessageCircle size={13} />
-                              Message
-                              {unreadDmFrom.has(c.userId) && (
-                                <span className="ml-auto w-2 h-2 rounded-full bg-emerald-400" />
-                              )}
-                            </button>
-                            <button
-                              onClick={() => inviteCompanion(c.userId)}
-                              disabled={!c.isOnline}
-                              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-gray-700 dark:text-gray-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors poppins-regular disabled:opacity-40 disabled:cursor-not-allowed"
-                            >
-                              <DoorOpen size={13} />
-                              Invite to My Room
-                            </button>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    )}
                   </div>
                 ))}
               </div>
@@ -906,8 +866,63 @@ export default function RoomPage() {
 
         {/* Close popover on outside click */}
         {openPopover && (
-          <div className="fixed inset-0 z-40" onClick={() => setOpenPopover(null)} />
+          <div className="fixed inset-0 z-[199]" onClick={() => { setOpenPopover(null); setOpenPopoverPos(null); }} />
         )}
+
+        {/* Companion popover — rendered via portal so it escapes overflow-x-auto clipping */}
+        {isAuthenticated && !showDummy && openPopover && openPopoverPos && (() => {
+          const pc = companionList.find(comp => comp.userId === openPopover);
+          if (!pc) return null;
+          return createPortal(
+            <AnimatePresence>
+              <motion.div
+                key={pc.userId}
+                initial={{ opacity: 0, scale: 0.92, y: 8 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.92, y: 8 }}
+                transition={{ type: "spring", damping: 24, stiffness: 300 }}
+                style={{ position: "fixed", left: openPopoverPos.x, top: openPopoverPos.y, transform: "translateX(-50%)" }}
+                className="z-[200] bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 p-3 w-44 space-y-1"
+              >
+                <p className="text-xs font-semibold text-gray-700 dark:text-gray-200 poppins-semibold px-1 truncate">
+                  {pc.name}
+                </p>
+                <p className="text-[10px] flex items-center gap-1 px-1 mb-2">
+                  {pc.isOnline ? (
+                    <>
+                      <Wifi size={10} className="text-emerald-500" />
+                      <span className="text-emerald-600">Online</span>
+                    </>
+                  ) : (
+                    <>
+                      <WifiOff size={10} className="text-gray-400" />
+                      <span className="text-gray-400">Offline</span>
+                    </>
+                  )}
+                </p>
+                <button
+                  onClick={() => openDm(pc.userId, pc.name)}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors poppins-regular"
+                >
+                  <MessageCircle size={13} />
+                  Message
+                  {unreadDmFrom.has(pc.userId) && (
+                    <span className="ml-auto w-2 h-2 rounded-full bg-indigo-500" />
+                  )}
+                </button>
+                <button
+                  onClick={() => inviteCompanion(pc.userId)}
+                  disabled={!pc.isOnline}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-gray-700 dark:text-gray-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors poppins-regular disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <DoorOpen size={13} />
+                  Invite to My Room
+                </button>
+              </motion.div>
+            </AnimatePresence>,
+            document.body
+          );
+        })()}
 
         {/* ── CTA ──────────────────────────────────────────────────────────── */}
         <motion.section

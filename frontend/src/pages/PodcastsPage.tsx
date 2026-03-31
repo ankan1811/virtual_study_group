@@ -7,6 +7,8 @@ import {
   Cpu,
   Briefcase,
   Zap,
+  Play,
+  Pause,
   ExternalLink,
   Star,
   RefreshCw,
@@ -14,6 +16,7 @@ import {
 } from "lucide-react";
 import axios from "axios";
 import Navbar from "../components/Navbar";
+import { usePodcastPlayer } from "../context/PodcastPlayerContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -27,6 +30,9 @@ interface PodcastItem {
   listenScore: number | null;
   website: string | null;
   listenNotesUrl: string;
+  audio: string | null;
+  audioLengthSec: number | null;
+  latestEpisodeTitle: string | null;
 }
 
 interface PodcastsResponse {
@@ -171,9 +177,13 @@ function ErrorState({
 function PodcastCard({
   podcast,
   accentColor,
+  isCurrentlyPlaying,
+  onPlay,
 }: {
   podcast: PodcastItem;
   accentColor: string;
+  isCurrentlyPlaying: boolean;
+  onPlay: (podcast: PodcastItem) => void;
 }) {
   return (
     <motion.div
@@ -249,18 +259,39 @@ function PodcastCard({
             ? `${podcast.totalEpisodes.toLocaleString()} eps`
             : ""}
         </span>
-        <a
-          href={podcast.listenNotesUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
-                     bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400
-                     hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <ExternalLink size={11} />
-          Listen Now
-        </a>
+        {podcast.audio ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onPlay(podcast);
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              isCurrentlyPlaying
+                ? "bg-teal-100 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300"
+                : "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40"
+            }`}
+          >
+            {isCurrentlyPlaying ? (
+              <Pause size={11} fill="currentColor" />
+            ) : (
+              <Play size={11} fill="currentColor" />
+            )}
+            {isCurrentlyPlaying ? "Playing" : "Play"}
+          </button>
+        ) : (
+          <a
+            href={podcast.website || podcast.listenNotesUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
+                       bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400
+                       hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ExternalLink size={11} />
+            Listen Now
+          </a>
+        )}
       </div>
     </motion.div>
   );
@@ -275,8 +306,24 @@ export default function PodcastsPage() {
   >({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { state: podcastState, playTrack, pause, resume } = usePodcastPlayer();
 
   const API = import.meta.env.VITE_API_URL;
+
+  const handlePlay = (podcast: PodcastItem) => {
+    if (podcastState.currentTrack?.id === podcast.id) {
+      podcastState.isPlaying ? pause() : resume();
+    } else if (podcast.audio) {
+      playTrack({
+        id: podcast.id,
+        title: podcast.latestEpisodeTitle || podcast.title,
+        publisher: podcast.publisher,
+        thumbnail: podcast.thumbnail,
+        audioUrl: podcast.audio,
+        durationSec: podcast.audioLengthSec || 0,
+      });
+    }
+  };
 
   const fetchTopic = async (topic: TopicKey) => {
     if (topicCache[topic]) return;
@@ -452,6 +499,11 @@ export default function PodcastsPage() {
                       key={podcast.id}
                       podcast={podcast}
                       accentColor={activeTabConfig.accentColor}
+                      isCurrentlyPlaying={
+                        podcastState.currentTrack?.id === podcast.id &&
+                        podcastState.isPlaying
+                      }
+                      onPlay={handlePlay}
                     />
                   ))}
                 </motion.div>

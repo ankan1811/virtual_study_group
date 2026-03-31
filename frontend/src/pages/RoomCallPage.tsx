@@ -64,18 +64,21 @@ export default function RoomCallPage() {
   const [isAudioPubed, setIsAudioPubed] = useState(false);
   const [isVideoPubed, setIsVideoPubed] = useState(false);
   const [isVideoSubed, setIsVideoSubed] = useState(false);
+  const [hasRemoteUser, setHasRemoteUser] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>("chat");
   // Lifted chat messages for AI summary
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
   const [copied, setCopied] = useState(false);
 
-  const channel = useRef(roomId);
+  const channel = useRef(roomId.slice(0, 64));
   const appid = useRef(import.meta.env.VITE_AGORA_APP_ID || "");
   const token = useRef("");
   const [isJoined, setIsJoined] = useState(false);
   const [isInCall, setIsInCall] = useState(false);
   const [lobbySummaryLoading, setLobbySummaryLoading] = useState(false);
   const [lobbySummaryDone, setLobbySummaryDone] = useState(false);
+  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+  const [callLimitToast, setCallLimitToast] = useState<string | null>(null);
 
   // ---- Call usage rate limit state ----
   const callStartTimeRef = useRef(0);
@@ -117,10 +120,27 @@ export default function RoomCallPage() {
     }
   };
 
+  const onUserUnpublish = async (
+    _user: IAgoraRTCRemoteUser,
+    mediaType: "video" | "audio"
+  ) => {
+    if (mediaType === "video") setIsVideoSubed(false);
+  };
+
   const joinChannel = async () => {
     const ch = channel.current || "react-room";
+    console.log("[Agora] Joining channel:", ch, "| roomId:", roomId, "| uid:", user?.name);
     if (isJoined) await leaveChannelInternal();
+    client.removeAllListeners();
     client.on("user-published", onUserPublish);
+    client.on("user-unpublished", onUserUnpublish);
+    client.on("user-joined", (remoteUser) => {
+      console.log("[Agora] Remote user joined:", remoteUser.uid);
+      setHasRemoteUser(true);
+    });
+    client.on("user-left", () => {
+      setHasRemoteUser(false);
+    });
     await client.join(appid.current, ch, token.current || null, null);
     setIsJoined(true);
   };
@@ -206,8 +226,23 @@ export default function RoomCallPage() {
     setIsInCall(false);
   };
 
+  // Auto-publish video & audio once the call view mounts (sequential to avoid Agora conflicts)
   useEffect(() => {
-    channel.current = roomId;
+    if (!isInCall || isVideoPubed) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        await publishVideo();
+        if (!cancelled) await publishAudio();
+      } catch (err) {
+        console.error("[Agora] Auto-publish failed:", err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isInCall]);
+
+  useEffect(() => {
+    channel.current = roomId.slice(0, 64);
     AgoraRTC.setLogLevel(4);
     return () => {
       if (isJoined) leaveChannelInternal();
@@ -287,6 +322,8 @@ export default function RoomCallPage() {
               turnOnMicrophone={turnOnMicrophone}
               publishAudio={publishAudio}
               publishVideo={publishVideo}
+              hasRemoteUser={hasRemoteUser}
+              remoteUserName={chatMessages.find((m) => m.sentby !== "bot" && m.sentby !== user?.name)?.sentby || ""}
               onEndCall={handleEndCall}
             />
           ) : (
@@ -456,6 +493,20 @@ export default function RoomCallPage() {
         </div>
       </div>
 
+      {/* Call limit toast */}
+      <AnimatePresence>
+        {callLimitToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 40 }}
+            transition={{ duration: 0.25 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl bg-red-500 text-white text-sm poppins-semibold shadow-lg shadow-red-500/30"
+          >
+            {callLimitToast}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

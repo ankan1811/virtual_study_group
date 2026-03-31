@@ -13,6 +13,9 @@ export interface PodcastItem {
   listenScore: number | null;
   website: string | null;
   listenNotesUrl: string;
+  audio: string | null;
+  audioLengthSec: number | null;
+  latestEpisodeTitle: string | null;
 }
 
 type Topic = "trending" | "ai" | "tech" | "business" | "productivity";
@@ -44,7 +47,7 @@ async function readCache(topic: Topic): Promise<{ data: PodcastItem[]; fetchedAt
 async function writeCache(topic: Topic, data: PodcastItem[]): Promise<void> {
   const redis = getRedis();
   const entry: PodcastCacheEntry = { data, fetchedAt: new Date().toISOString() };
-  await redis.set(`podcast:${topic}`, entry, { ex: PODCAST_TTL_SECONDS });
+  await redis.set(`podcast:v2:${topic}`, entry, { ex: PODCAST_TTL_SECONDS });
 }
 
 // ─── Cache validity: refresh on Tue (2) and Sat (6) ─────────────────────────
@@ -92,8 +95,97 @@ function mapApiResponse(data: Record<string, unknown>, topic: Topic): PodcastIte
     totalEpisodes: (p.total_episodes as number) ?? 0,
     listenScore: p.listen_score != null ? Number(p.listen_score) : null,
     website: (p.website as string) || null,
-    listenNotesUrl: `https://www.listennotes.com/podcasts/${p.id}/`,
+    listenNotesUrl: (p.listennotes_url as string) || `https://www.listennotes.com/podcasts/${p.id}/`,
+    audio: (p.audio as string) || null,
+    audioLengthSec: (p.audio_length_sec as number) ?? null,
+    latestEpisodeTitle: (p.latest_episode_title as string) || null,
   }));
+}
+
+// ─── iTunes Search API → RSS → Audio enrichment ─────────────────────────────
+
+async function findRssUrl(title: string, publisher: string): Promise<string | null> {
+  try {
+    const query = encodeURIComponent(`${title} ${publisher}`);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 5000);
+    const res = await fetch(
+      `https://itunes.apple.com/search?term=${query}&entity=podcast&limit=1`,
+      { signal: ctrl.signal }
+    );
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const data = (await res.json()) as { results?: { feedUrl?: string }[] };
+    return data.results?.[0]?.feedUrl || null;
+  } catch {
+    return null;
+  }
+}
+
+async function parseRssForAudio(rssUrl: string): Promise<{
+  audio: string | null;
+  audioLengthSec: number | null;
+  latestEpisodeTitle: string | null;
+}> {
+  const empty = { audio: null, audioLengthSec: null, latestEpisodeTitle: null };
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 5000);
+    const res = await fetch(rssUrl, { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!res.ok) return empty;
+
+    const xml = await res.text();
+
+    // Find the first <item> block (latest episode)
+    const itemMatch = xml.match(/<item[\s>]([\s\S]*?)<\/item>/);
+    if (!itemMatch) return empty;
+    const item = itemMatch[1];
+
+    // Extract audio URL from <enclosure url="...">
+    const encMatch = item.match(/<enclosure[^>]*url=["']([^"']+)["']/);
+    const audio = encMatch?.[1] || null;
+
+    // Extract episode title from <title>
+    const titleMatch = item.match(/<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/);
+    const latestEpisodeTitle = titleMatch?.[1]?.trim() || null;
+
+    // Extract duration from <itunes:duration> (can be seconds or HH:MM:SS)
+    const durMatch = item.match(/<itunes:duration>(.*?)<\/itunes:duration>/);
+    let audioLengthSec: number | null = null;
+    if (durMatch) {
+      const d = durMatch[1].trim();
+      if (d.includes(":")) {
+        const parts = d.split(":").map(Number);
+        audioLengthSec =
+          parts.length === 3
+            ? parts[0] * 3600 + parts[1] * 60 + parts[2]
+            : parts[0] * 60 + parts[1];
+      } else {
+        audioLengthSec = parseInt(d, 10) || null;
+      }
+    }
+
+    return { audio, audioLengthSec, latestEpisodeTitle };
+  } catch {
+    return empty;
+  }
+}
+
+async function enrichWithAudio(items: PodcastItem[]): Promise<PodcastItem[]> {
+  return Promise.all(
+    items.map(async (item) => {
+      const rssUrl = await findRssUrl(item.title, item.publisher);
+      if (!rssUrl) return item;
+      const rssData = await parseRssForAudio(rssUrl);
+      return {
+        ...item,
+        audio: rssData.audio || item.audio,
+        audioLengthSec: rssData.audioLengthSec || item.audioLengthSec,
+        latestEpisodeTitle: rssData.latestEpisodeTitle || item.latestEpisodeTitle,
+      };
+    })
+  );
 }
 
 async function fetchFromListenNotes(topic: Topic): Promise<PodcastItem[] | null> {
@@ -117,7 +209,11 @@ async function fetchFromListenNotes(topic: Topic): Promise<PodcastItem[] | null>
 
     const data = (await response.json()) as Record<string, unknown>;
     const items = mapApiResponse(data, topic);
-    return items.length > 0 ? items : null;
+    if (items.length === 0) return null;
+
+    // Enrich with actual audio from iTunes → RSS (parallel, 5s timeout each)
+    const enriched = await enrichWithAudio(items);
+    return enriched;
   } catch (err) {
     console.error(`[PodcastController] Fetch failed for ${topic}:`, (err as Error).message);
     return null;

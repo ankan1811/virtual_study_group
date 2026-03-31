@@ -25,6 +25,8 @@ interface propsInterface {
   turnOnMicrophone: VoidFunction;
   publishVideo: VoidFunction;
   publishAudio: VoidFunction;
+  hasRemoteUser?: boolean;
+  remoteUserName?: string;
   onEndCall?: () => void;
 }
 
@@ -133,13 +135,43 @@ export default function Stream(prop: propsInterface) {
               className="w-full h-full object-cover"
               hidden={!prop.isVideoSubed}
             />
+            {prop.isVideoSubed && prop.remoteUserName && (
+              <div className="absolute bottom-2 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/50 backdrop-blur-sm">
+                <span className="text-xs text-white poppins-medium">{prop.remoteUserName}</span>
+              </div>
+            )}
             {!prop.isVideoSubed && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-                <div className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center">
-                  <Users size={24} className="text-gray-500" />
-                </div>
-                <span className="text-xs text-gray-500 poppins-regular">
-                  Waiting...
+                {prop.hasRemoteUser ? (
+                  <>
+                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-lg font-bold poppins-semibold">
+                      {prop.remoteUserName
+                        ? prop.remoteUserName.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase()
+                        : <Users size={24} />}
+                    </div>
+                    <span className="text-xs text-gray-300 poppins-medium">
+                      {prop.remoteUserName || "Companion"}
+                    </span>
+                    <span className="text-[10px] text-gray-500 poppins-regular">
+                      Camera off
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center">
+                      <Users size={24} className="text-gray-500" />
+                    </div>
+                    <span className="text-xs text-gray-500 poppins-regular">
+                      Waiting...
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
+            {prop.hasRemoteUser && (
+              <div className="absolute bottom-2 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/50 backdrop-blur-sm">
+                <span className="text-xs text-white poppins-medium">
+                  {prop.remoteUserName || "Companion"}
                 </span>
               </div>
             )}

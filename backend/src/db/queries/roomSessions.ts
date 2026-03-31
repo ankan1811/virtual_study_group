@@ -19,7 +19,7 @@ export async function getActiveSession(ownerId: string) {
 
 export async function createSession(ownerId: string) {
   const db = getNeonDb();
-  const roomId = `user_${ownerId}_${randomUUID()}`;
+  const roomId = `rm_${randomUUID()}`;
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
   const [row] = await db
     .insert(roomSessions)

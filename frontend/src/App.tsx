@@ -25,7 +25,9 @@ import axios from "axios";
 import InviteNotificationOverlay from "./components/InviteNotificationOverlay";
 import CompanionRequestOverlay from "./components/CompanionRequestOverlay";
 import { RadioProvider } from "./context/RadioContext";
+import { PodcastPlayerProvider } from "./context/PodcastPlayerContext";
 import MiniPlayer from "./components/MiniPlayer";
+import PodcastMiniPlayer from "./components/PodcastMiniPlayer";
 
 function AppInner() {
   const dispatch = useDispatch();
@@ -57,9 +59,11 @@ function AppInner() {
   return (
     <BrowserRouter>
       <RadioProvider>
+        <PodcastPlayerProvider>
         <InviteNotificationOverlay />
         <CompanionRequestOverlay />
         <MiniPlayer />
+        <PodcastMiniPlayer />
         <Routes>
           <Route element={<Navigate to="/home" replace />} path="/" />
           <Route element={<RoomPage />} path="/home" />
@@ -80,6 +84,7 @@ function AppInner() {
           <Route element={<WhiteboardPage />} path="/whiteboard" />
           <Route element={<NotFoundPage />} path="*" />
         </Routes>
+        </PodcastPlayerProvider>
       </RadioProvider>
     </BrowserRouter>
   );
