@@ -254,6 +254,31 @@ export const listSummaries = async (req: AuthenticatedRequest, res: Response): P
   }
 };
 
+// ── Download a summary (fresh presigned URL) ──────────────────
+export const downloadSummary = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    const { id } = req.params;
+
+    const doc = await Summary.findOne({ _id: id, userId }).select('r2Key');
+    if (!doc?.r2Key) {
+      res.status(404).json({ error: 'Summary not found or no file available' });
+      return;
+    }
+
+    const url = await getSignedUrl(
+      getR2Client(),
+      new GetObjectCommand({ Bucket: getBucket(), Key: doc.r2Key }),
+      { expiresIn: 3600 }
+    );
+
+    res.status(200).json({ url });
+  } catch (error: any) {
+    console.error('Download summary error:', error?.message);
+    res.status(500).json({ error: 'Failed to generate download link.' });
+  }
+};
+
 // ── Delete a summary ────────────────────────────────────────────
 export const deleteSummary = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {

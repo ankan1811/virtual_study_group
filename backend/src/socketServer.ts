@@ -8,6 +8,7 @@ import { createDm, markDmRead as dbMarkDmRead } from './db/queries/directMessage
 import { insertChat } from './db/queries/chats';
 import { createNotification } from './db/queries/notifications';
 import type { notificationTypeEnum } from './db/schema';
+import WhiteboardState from './models/WhiteboardState';
 
 type NotificationType = (typeof notificationTypeEnum.enumValues)[number];
 
@@ -15,6 +16,10 @@ let io: Server;
 const userSocketMap = new Map<string, string>(); // userId → socketId
 // roomId → Set of { socketId, userId, userName }
 const roomParticipants = new Map<string, Map<string, { userId: string; userName: string }>>();
+// ── Whiteboard in-memory cache ──────────────────────────────────────────────
+const whiteboardCache = new Map<string, any[]>(); // roomId → elements[]
+// roomId → Map<userId, { userId, userName }>
+const whiteboardUsers = new Map<string, Map<string, { userId: string; userName: string }>>();
 
 // ── Socket event throttling ──────────────────────────────────────────────────
 // Map<userId, Map<eventName, lastTimestamp>>
@@ -311,17 +316,76 @@ export function initSocketServer(httpServer: http.Server): Server {
       'whiteboard:update',
       ({ roomId, elements }: { roomId: string; elements: any[] }) => {
         if (isSocketThrottled(userId, 'whiteboard:update', 100)) return;
+        whiteboardCache.set(roomId, elements);
         socket.to(roomId).emit('whiteboard:sync', { elements, fromUserId: userId });
       }
     );
 
     socket.on('whiteboard:clear', ({ roomId }: { roomId: string }) => {
+      whiteboardCache.delete(roomId);
+      WhiteboardState.deleteOne({ roomId }).catch((err) => console.error('Whiteboard DB clear error:', err));
       socket.to(roomId).emit('whiteboard:cleared', { fromUserId: userId });
+    });
+
+    socket.on('whiteboard:join', async ({ roomId }: { roomId: string }) => {
+      // Ensure socket is in the room (may have navigated directly to whiteboard)
+      socket.join(roomId);
+
+      // Track whiteboard presence
+      if (!whiteboardUsers.has(roomId)) {
+        whiteboardUsers.set(roomId, new Map());
+      }
+      whiteboardUsers.get(roomId)!.set(userId, { userId, userName });
+      const usersList = Array.from(whiteboardUsers.get(roomId)!.values());
+      // Emit to the joining socket directly + broadcast to others in room
+      socket.emit('whiteboard:users', usersList);
+      socket.to(roomId).emit('whiteboard:users', usersList);
+
+      // Try in-memory cache first
+      let els = whiteboardCache.get(roomId);
+      // Fallback to MongoDB (handles server restart)
+      if (!els) {
+        try {
+          const doc = await WhiteboardState.findOne({ roomId });
+          if (doc?.elements?.length) {
+            els = doc.elements;
+            whiteboardCache.set(roomId, els);
+          }
+        } catch (err) {
+          console.error('Whiteboard load error:', err);
+        }
+      }
+      if (els && els.length > 0) {
+        socket.emit('whiteboard:state', { elements: els });
+      }
+    });
+
+    socket.on('whiteboard:leave', ({ roomId }: { roomId: string }) => {
+      const wbUsers = whiteboardUsers.get(roomId);
+      if (wbUsers) {
+        wbUsers.delete(userId);
+        if (wbUsers.size === 0) {
+          whiteboardUsers.delete(roomId);
+        } else {
+          io.to(roomId).emit('whiteboard:users', Array.from(wbUsers.values()));
+        }
+      }
+    });
+
+    socket.on('whiteboard:save', async ({ roomId }: { roomId: string }) => {
+      const els = whiteboardCache.get(roomId);
+      if (els && els.length > 0) {
+        try {
+          await WhiteboardState.findOneAndUpdate({ roomId }, { elements: els }, { upsert: true });
+        } catch (err) {
+          console.error('Whiteboard save error:', err);
+        }
+      }
     });
 
     socket.on(
       'whiteboard:pointer',
-      ({ roomId, pointer, button }: { roomId: string; pointer: { x: number; y: number }; button: 'up' | 'down' }) => {
+      ({ roomId, pointer, button }: { roomId: string; pointer: { x: number; y: number; tool?: string }; button: 'up' | 'down' }) => {
         if (isSocketThrottled(userId, 'whiteboard:pointer', 50)) return;
         socket.to(roomId).emit('whiteboard:pointer-update', { userId, userName, pointer, button });
       }
@@ -332,11 +396,21 @@ export function initSocketServer(httpServer: http.Server): Server {
     // Leave room explicitly
     socket.on('leaveRoom', ({ roomId }: { roomId: string }) => {
       socket.leave(roomId);
+
+      // Clean up whiteboard presence
+      const wbUsers = whiteboardUsers.get(roomId);
+      if (wbUsers) {
+        wbUsers.delete(userId);
+        if (wbUsers.size === 0) whiteboardUsers.delete(roomId);
+        else io.to(roomId).emit('whiteboard:users', Array.from(wbUsers.values()));
+      }
+
       const participants = roomParticipants.get(roomId);
       if (participants) {
         participants.delete(userId);
         if (participants.size === 0) {
           roomParticipants.delete(roomId);
+          whiteboardCache.delete(roomId);
         } else {
           io.to(roomId).emit(`room:participants:${roomId}`, Array.from(participants.values()));
           io.to(roomId).emit(`message:${roomId}`, {
@@ -351,12 +425,22 @@ export function initSocketServer(httpServer: http.Server): Server {
       userSocketMap.delete(userId);
       socketThrottles.delete(userId);
 
+      // Clean up whiteboard presence on disconnect
+      for (const [roomId, wbUsers] of whiteboardUsers.entries()) {
+        if (wbUsers.has(userId)) {
+          wbUsers.delete(userId);
+          if (wbUsers.size === 0) whiteboardUsers.delete(roomId);
+          else io.to(roomId).emit('whiteboard:users', Array.from(wbUsers.values()));
+        }
+      }
+
       // Clean up room participants on disconnect
       for (const [roomId, participants] of roomParticipants.entries()) {
         if (participants.has(userId)) {
           participants.delete(userId);
           if (participants.size === 0) {
             roomParticipants.delete(roomId);
+            whiteboardCache.delete(roomId);
           } else {
             io.to(roomId).emit(`room:participants:${roomId}`, Array.from(participants.values()));
             io.to(roomId).emit(`message:${roomId}`, {

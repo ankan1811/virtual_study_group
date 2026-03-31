@@ -15,6 +15,7 @@ import {
   Sparkles,
   Send,
   AlertCircle,
+  Download,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import Navbar from "../components/Navbar";
@@ -70,6 +71,7 @@ export default function SummariesPage() {
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   // Q&A state
   const [qaOpen, setQaOpen] = useState(false);
@@ -115,6 +117,23 @@ export default function SummariesPage() {
       console.error("Failed to delete summary:", err);
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handleDownload = async (id: string) => {
+    setDownloadingId(id);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get(`${API}/ai/summaries/${id}/download`, {
+        headers: { Authorization: token || "" },
+      });
+      if (res.data.url) {
+        window.open(res.data.url, "_blank");
+      }
+    } catch (err) {
+      console.error("Failed to download summary:", err);
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -450,6 +469,18 @@ export default function SummariesPage() {
                         )}
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
+                        <button
+                          onClick={() => handleDownload(s._id)}
+                          disabled={downloadingId === s._id}
+                          className="p-1.5 rounded-lg hover:bg-violet-50 dark:hover:bg-violet-950/30 text-gray-400 hover:text-violet-500 transition-colors disabled:opacity-40"
+                          title="Download summary"
+                        >
+                          {downloadingId === s._id ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <Download size={14} />
+                          )}
+                        </button>
                         <button
                           onClick={() => toggleExpand(s._id)}
                           className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
