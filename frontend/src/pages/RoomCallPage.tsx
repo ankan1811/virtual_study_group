@@ -292,7 +292,7 @@ export default function RoomCallPage() {
       {/* Main content */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Left: Participants strip */}
-        <div className="w-16 flex-shrink-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col items-center pt-14 pb-4 gap-3">
+        <div className="w-16 flex-shrink-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col items-center pt-28 pb-4 gap-3">
           <div className="flex flex-col items-center gap-1">
             <Users size={16} className="text-gray-400" />
             <span className="text-[10px] text-gray-400 poppins-medium">{user ? 1 : 0}</span>

@@ -17,7 +17,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 | **State Management** | Redux Toolkit                                                     |
 | **Whiteboard**       | @excalidraw/excalidraw (MIT, client-side, lazy-loaded)            |
 | **Study Radio**      | SomaFM internet radio streams (ambient/chill/electronic)          |
-| **Podcasts**         | Listen Notes API (300 free calls/month) — curated across 5 topics, Upstash Redis cache (TTL 4 days), node-cron bi-weekly refresh |
+| **Podcasts**         | Listen Notes API (300 free calls/month) — curated across 5 topics, Upstash Redis cache (TTL 4 days), node-cron bi-weekly refresh. In-house audio playback via iTunes Search API → RSS feed parsing for direct MP3 URLs |
 | **Styling**          | Tailwind CSS, shadcn/ui, Framer Motion                            |
 | **Auth**             | Redis-backed OTP (HMAC-SHA256 + Upstash Redis TTL) + Google OAuth + JWT + Resend (email delivery) |
 | **Rate Limiting**    | @upstash/ratelimit (sliding window, Redis-backed, per-user + per-IP, all thresholds via env vars) |
@@ -376,13 +376,20 @@ This is **not** data migration — it's DDL (Data Definition Language). Think of
 - **Podcast discovery page** at `/podcasts` accessible from the sidebar (Mic2 icon)
 - **5 topic tabs:** Trending, AI, Tech, Business, Productivity & Tools — each lazily fetched on first tab visit
 - **Listen Notes API** integration (`GET /podcasts/:topic`) — uses `best_podcasts` endpoint for genre-based topics and `search` for AI
+- **In-house audio playback** — podcasts play directly inside the app, no external redirects:
+  - **Audio enrichment pipeline:** Listen Notes API (podcast metadata) → iTunes Search API (RSS feed URL, free, no API key) → RSS feed parsing (extracts `<enclosure>` MP3 URL, episode title, duration from first `<item>`)
+  - 12 podcasts per topic enriched in parallel with 5s timeout per feed; all audio URLs cached in Redis alongside podcast metadata
+  - `PodcastPlayerContext` — global audio state (play/pause/stop/seek/volume) using native `HTMLAudioElement`, follows RadioContext pattern. Stops radio when a podcast starts. Volume persisted to localStorage
+  - `PodcastMiniPlayer` — fixed bottom bar (z-50, above radio's z-40) with teal/emerald gradient theme. Thumbnail, track info, clickable progress bar with seek thumb, time display (mm:ss), play/pause, volume, close. Spring animations via Framer Motion
+  - Audio streams directly from podcast CDN (Buzzsprout/Libsyn/Simplecast/etc.) to the browser — zero Vercel CPU/bandwidth cost
+  - Falls back to external link (podcast website) only when no audio URL is available
 - **Upstash Redis cache** — each topic stored at key `podcast:{topic}` with 4-day TTL (345,600s); auto-expires, no cleanup jobs needed. Replaced former MongoDB `Podcast` model
   - Cache validity: checks if `fetchedAt >= last Tuesday or Saturday midnight` (no cron needed for correctness)
   - Refresh chain: fresh cache → Listen Notes API → stale cache → 3 mock fallback podcasts per topic
   - `source` field in response: `"cache" | "api" | "stale-cache" | "mock"` — frontend shows amber notice on stale/mock
-- **Scheduled refresh** via `node-cron` — runs at 02:00 UTC every Tuesday and Saturday (5 topics × 2 = 10 API calls/week ≈ 40/month, well within the 300/month free tier). Registered in `server.ts` on startup.
+- **Scheduled refresh** via `node-cron` — runs at 02:00 UTC every Tuesday and Saturday (5 topics × 2 = 10 Listen Notes API calls/week ≈ 40/month, well within the 300/month free tier). iTunes Search + RSS fetches are unlimited and free. Registered in `server.ts` on startup.
 - Sequential topic fetching with 1.5s gap to avoid API burst limits
-- **Podcast cards**: thumbnail, title, publisher, 3-line description, listen score badge, episode count, "Listen Now" external link → Listen Notes
+- **Podcast cards**: thumbnail, title, publisher, 3-line description, listen score badge, episode count, "Play" button (or "Playing" with teal highlight when active); falls back to external link when no audio
 - **Refresh banner**: pulsing dot + "Fresh drops every Tue & Sat — stay ahead of the curve."
 - **Animated tab bar** with Framer Motion `layoutId` sliding gradient highlight per topic
 - Skeleton loading grid (8 ghost cards) while fetching; error state with retry button
@@ -400,10 +407,18 @@ This is **not** data migration — it's DDL (Data Definition Language). Think of
 
 - **Opt-in video calls** — Agora RTC only starts when the user clicks "Start Video Call" in the room lobby. Chat, AI, and whiteboard tools are available immediately without consuming Agora hours
 - Agora App ID loaded from environment variable (`VITE_AGORA_APP_ID`)
-- Multi-user video grid supporting up to 5 participants
+- **Agora channel naming** — uses the room's `roomId` (truncated to 64 bytes for Agora's limit) as the channel name, ensuring both users who joined via invite link are placed in the same Agora channel
+- **Auto-publish on join** — camera and microphone are automatically published (sequentially to avoid Agora SDK conflicts) when a user clicks "Start Video Call". No manual publish step needed
+- **Track lifecycle management** — video and audio tracks are properly closed and disposed when ending a call (`audioTrack.close()`, `videoTrack.close()`). Prevents stale module-level track objects from causing camera-not-visible bugs on subsequent calls
+- **Camera DOM rebinding** — `turnOnCamera()` always calls `videoTrack.play("camera-video")` when enabling, ensuring the track is bound to the current DOM element even if the component remounted
 - Camera toggle (on/off), microphone toggle (mute/unmute)
 - End call button (red PhoneOff) in the video grid to leave the call without leaving the room
-- Automatic remote user subscription
+- **Remote user events** — subscribes to `user-published`, `user-unpublished`, `user-joined`, and `user-left` Agora events. Event listeners are cleaned up via `client.removeAllListeners()` before each join to prevent accumulation
+- **Remote user presence** — `hasRemoteUser` state tracks whether a companion is in the call. When companion's camera is off, shows their initials avatar + name + "Camera off" label instead of a blank tile
+- **Companion name display** — remote user's name derived from chat messages (`sentby` field). Shown as a name label overlay on the remote video tile (matching the "You" label style on the local tile)
+- **Voice activity detection** — custom `useVoiceActivity` hook using Web Audio API `AnalyserNode` (not Agora). Green ring + pulsing dot on local video tile when speaking
+- **Daily call time limit** — 1-hour daily cap enforced via `GET /room/call-usage` (checks remaining seconds) and `POST /room/call-usage` (reports consumed seconds). Usage synced periodically during call and via `keepalive` fetch on page unload. Themed toast popup when limit reached
+- **What Agora handles vs in-house** — Agora provides the real-time media transport layer (WebRTC infra, TURN/STUN, encoding, channel routing, publish/subscribe). Everything else is in-house: room sessions, invite links, call UI, track lifecycle, voice detection, usage limits, remote user presence, companion name display. See `video-call-architecture.txt` for full breakdown
 
 ### Real-time Chat
 
@@ -421,7 +436,9 @@ This is **not** data migration — it's DDL (Data Definition Language). Think of
 - Switchable AI provider via `AI_PROVIDER` env variable:
   - **Gemini 2.5 Flash** (default) — Google's free tier (250 requests/day, resets daily)
   - **Grok 3 Mini** — xAI's API (fallback option)
-- Both providers use the OpenAI-compatible SDK — no code changes needed to switch
+  - **OpenRouter** — API gateway with automatic `middle-out` context compression (trims long conversations intelligently, keeping system prompt + first/last messages, trimming from the middle). Uses `google/gemini-2.5-flash` by default via OpenRouter
+- All providers use the OpenAI-compatible SDK — no code changes needed to switch
+- Embeddings always use Gemini directly (via dedicated `getEmbeddingClient()`) regardless of AI_PROVIDER, since OpenRouter doesn't support embedding models
 - Text input with full conversation history
 - Voice input via Web Speech API (browser mic button)
 - Styled Q&A cards with generic "AI Assistant" branding
@@ -520,7 +537,7 @@ This is **not** data migration — it's DDL (Data Definition Language). Think of
 - Upstash Redis account (free tier: 256 MB, 10K commands/day) — for OTP TTL caching, podcast cache, and distributed rate limiting. Sign up at [upstash.com](https://upstash.com)
 - Agora account (for video call App ID)
 - Google Cloud Console OAuth Client ID (for Google sign-in — [create one](https://console.cloud.google.com/apis/credentials))
-- Google AI Studio API key (for Gemini AI — [get one free](https://aistudio.google.com)) or xAI API key (for Grok — [get one free](https://console.x.ai))
+- Google AI Studio API key (for Gemini AI — [get one free](https://aistudio.google.com)) or xAI API key (for Grok — [get one free](https://console.x.ai)) or OpenRouter API key (for OpenRouter — [get one free](https://openrouter.ai))
 - Cloudflare account with R2 bucket + API token (for summary storage — [free tier](https://developers.cloudflare.com/r2/))
 
 ### Quick Start (Monorepo)
@@ -554,10 +571,11 @@ UPSTASH_REDIS_REST_URL=https://xxxx.upstash.io  # Upstash Redis REST URL (from c
 UPSTASH_REDIS_REST_TOKEN=AXxxxxxxxxxxxx          # Upstash Redis REST token
 PORT=7002
 JWT_SECRET=your_jwt_secret
-AI_PROVIDER=gemini                # "gemini" (default) or "grok"
-GEMINI_API_KEY=your_gemini_key    # from https://aistudio.google.com
+AI_PROVIDER=gemini                # "gemini" (default), "grok", or "openrouter"
+GEMINI_API_KEY=your_gemini_key    # from https://aistudio.google.com (always needed for embeddings)
 GEMINI_EMBEDDING_MODEL=text-embedding-004  # Embedding model for RAG Q&A (default: text-embedding-004)
 GROK_API_KEY=your_xai_api_key     # from https://console.x.ai (optional, for grok provider)
+OPENROUTER_API_KEY=your_openrouter_key  # from https://openrouter.ai (optional, for openrouter provider)
 R2_ACCOUNT_ID=your_cloudflare_id  # Cloudflare account ID (from dashboard URL)
 R2_ACCESS_KEY_ID=your_r2_key      # R2 API token access key
 R2_SECRET_ACCESS_KEY=your_r2_secret # R2 API token secret key
@@ -657,7 +675,7 @@ VITE_GOOGLE_CLIENT_ID=your_google_client_id # Google OAuth Client ID (from https
 | PUT    | `/user/profile`           | Update profile (name, bio, avatar, education, projects, workExperience) — re-issues JWT |
 | GET    | `/user/search?q=`         | Search users by name/email (rate limited: per-user)                  |
 | GET    | `/news`                   | Get news feed articles                                               |
-| GET    | `/podcasts/:topic`        | Get podcasts for topic (`trending\|ai\|tech\|business\|productivity`) — MongoDB cache, Tue/Sat refresh |
+| GET    | `/podcasts/:topic`        | Get podcasts for topic (`trending\|ai\|tech\|business\|productivity`) — Redis cache, Tue/Sat refresh, audio enriched via iTunes→RSS |
 | POST   | `/ai/ask`                 | Ask AI a study question (rate limited: per-user)                     |
 | POST   | `/ai/summary`             | Generate AI chat session summary (rate limited: per-user)            |
 | POST   | `/ai/whiteboard-explain`  | AI analysis of whiteboard drawing (rate limited: per-user)           |

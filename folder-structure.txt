@@ -6,13 +6,21 @@ virtual_study_group/
 |-- README.md                        # Project documentation (features, setup, routes, API)
 |-- folder-structure.txt             # This file - explains the project structure
 |-- LICENSE                          # GNU General Public License v3.0
+|-- video-call-architecture.txt     # Breakdown of what's in-house vs Agora in the
+|                                     video call feature (~80% in-house). Covers:
+|                                     Agora's role (WebRTC transport, TURN/STUN,
+|                                     encoding, channel routing, publish/subscribe)
+|                                     vs in-house code (room sessions, invite links,
+|                                     call UI, track lifecycle, voice activity
+|                                     detection, usage limits, remote user presence,
+|                                     companion name, chat, AI, whiteboard)
 |
 |-- backend/                         # Node.js + Express + TypeScript backend
 |   |-- .env                         # Environment variables (DATABASE_URL, MONGODB_URI,
 |   |                                  UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN,
 |   |                                  JWT_SECRET, PORT, OTP_SECRET, OTP_EXPIRY_MINUTES,
 |   |                                  AI_PROVIDER, GEMINI_API_KEY, GEMINI_EMBEDDING_MODEL,
-|   |                                  GROK_API_KEY,
+|   |                                  GROK_API_KEY, OPENROUTER_API_KEY,
 |   |                                  R2_*, AGORA_APP_ID,
 |   |                                  RESEND_API_KEY, RESEND_FROM_EMAIL,
 |   |                                  LISTEN_NOTES_API_KEY,
@@ -108,6 +116,13 @@ virtual_study_group/
 |       |                              MongoDB TTL index. Exports startNotificationCleanupJob()
 |       |                              called from server.ts on startup
 |       |
+|       |-- helpers/                 # Backend helper modules
+|       |   |-- callUsage.ts        # Daily call time tracking via Upstash Redis.
+|       |                              MAX_DAILY_CALL_SECONDS = 3600 (1 hour).
+|       |                              Redis key: callUsage:{userId}:{YYYY-MM-DD}
+|       |                              with 24h TTL. Exports: getRemainingSeconds(),
+|       |                              incrementCallUsage(deltaSeconds)
+|       |
 |       |-- controllers/             # Request handlers (business logic)
 |       |   |-- AuthController.ts    # OTP-based auth + Google OAuth. Uses Drizzle
 |       |   |                          queries (findByEmail, createUser, updateUser).
@@ -154,10 +169,15 @@ virtual_study_group/
 |       |   |                          education/projects/workExperience, re-issues JWT.
 |       |   |                          searchUsers: search by name/email (case-insensitive,
 |       |   |                          excludes self, limit 10). All via Drizzle queries
-|       |   |-- AiController.ts      # Switchable AI provider (Gemini/Grok) via
-|       |   |                          AI_PROVIDER env var. Uses OpenAI SDK with
+|       |   |-- AiController.ts      # Switchable AI provider (Gemini/Grok/OpenRouter)
+|       |   |                          via AI_PROVIDER env var. Uses OpenAI SDK with
 |       |   |                          provider config object + lazy-initialized
 |       |   |                          singleton. Default: Gemini 2.5 Flash.
+|       |   |                          OpenRouter provider adds middle-out context
+|       |   |                          compression (auto-trims long conversations).
+|       |   |                          Separate getEmbeddingClient() always uses
+|       |   |                          Gemini directly for embeddings (OpenRouter
+|       |   |                          doesn't support embedding models).
 |       |   |                          POST /ai/ask (question -> answer)
 |       |   |                          POST /ai/summary (messages -> summary)
 |       |   |                          POST /ai/whiteboard-explain (elements +
@@ -210,6 +230,13 @@ virtual_study_group/
 |       |   |                          All queries via Drizzle (db/queries/notifications)
 |       |   |-- NewsController.ts    # Returns 12 mock news articles across
 |       |   |                          AI, Tech, Productivity categories
+|       |   |-- CallUsageController.ts # Daily call time rate limiting.
+|       |   |                          getCallTimeRemaining: GET /room/call-usage
+|       |   |                          — returns { remainingSeconds } for current
+|       |   |                          user. reportCallUsage: POST /room/call-usage
+|       |   |                          — accepts { deltaSeconds }, increments daily
+|       |   |                          usage. Uses helpers/callUsage (Redis-backed,
+|       |   |                          MAX_DAILY_CALL_SECONDS = 3600s = 1 hour)
 |       |   |-- PodcastController.ts # Listen Notes API integration with Upstash Redis
 |       |                              cache. Topics: trending, ai, tech, business,
 |       |                              productivity. Cache: Redis key podcast:{topic}
@@ -219,7 +246,16 @@ virtual_study_group/
 |       |                              back up to 7 days). Request flow: fresh cache ->
 |       |                              Listen Notes API -> stale cache -> mock fallback
 |       |                              (3 items/topic). Response: { data, fetchedAt,
-|       |                              source }. Exports: getPodcasts (controller),
+|       |                              source }. Audio enrichment pipeline:
+|       |                              findRssUrl() queries iTunes Search API (free,
+|       |                              no key) to get RSS feed URL by podcast title +
+|       |                              publisher; parseRssForAudio() fetches RSS XML
+|       |                              and extracts <enclosure> MP3 URL, <title>,
+|       |                              <itunes:duration> from first <item>; enrichWithAudio()
+|       |                              runs both in parallel for all 12 podcasts (5s
+|       |                              timeout each). PodcastItem includes: audio (MP3
+|       |                              URL | null), audioLengthSec, latestEpisodeTitle.
+|       |                              Exports: getPodcasts (controller),
 |       |                              refreshTopicCache (used by cron job), VALID_TOPICS,
 |       |                              Topic type. Env: LISTEN_NOTES_API_KEY
 |       |
@@ -228,7 +264,10 @@ virtual_study_group/
 |       |   |                          /auth/register, /auth/login,
 |       |   |                          /auth/google (Google OAuth, IP rate limited).
 |       |   |                          Dual-layer rate limiting: per-email + per-IP
-|       |   |-- roomRoutes.ts        # /room/create, /room/join/:room_id, /room/users/:room_id
+|       |   |-- roomRoutes.ts        # /room/create, /room/join/:room_id, /room/users/:room_id,
+|       |   |                          GET /room/call-usage (verifyToken,
+|       |   |                          getCallTimeRemaining), POST /room/call-usage
+|       |   |                          (verifyToken, reportCallUsage)
 |       |   |-- chatRoutes.ts        # /chat/join, /chat/add, /chat/view/:room_id,
 |       |   |                          POST /chat/bulk-save (verifyToken, bulkSaveChats)
 |       |   |-- companionRoutes.ts   # /companion/request, /companion/accept,
@@ -505,10 +544,35 @@ virtual_study_group/
         |   |                          /whiteboard/:roomId. Bottom action bar
         |   |                          with Invite + Summary buttons (Summary
         |   |                          only on Chat tab, disabled when no user
-        |   |                          messages). RoomId from Redux. Agora App
-        |   |                          ID from env var. Chats are persisted in
-        |   |                          real-time via insertChat in the socket
-        |   |                          handler (no manual save needed).
+        |   |                          messages). Agora App ID from env var.
+        |   |                          RoomId resolution: router state >
+        |   |                          Redux > user's personal roomId.
+        |   |                          Channel name: roomId.slice(0, 64)
+        |   |                          (Agora's 64-byte channel name limit).
+        |   |                          Auto-publish: useEffect sequentially
+        |   |                          publishes video then audio when isInCall
+        |   |                          becomes true (avoids concurrent
+        |   |                          client.publish conflicts).
+        |   |                          Track lifecycle: module-level videoTrack
+        |   |                          and audioTrack vars. leaveChannelInternal
+        |   |                          calls .close() on both and nulls them
+        |   |                          out to prevent stale track reuse.
+        |   |                          turnOnCamera re-plays track to DOM
+        |   |                          element on enable (rebinds after
+        |   |                          component remount).
+        |   |                          Remote user: hasRemoteUser state via
+        |   |                          user-joined/user-left events.
+        |   |                          user-unpublished resets isVideoSubed
+        |   |                          (shows avatar when camera turns off).
+        |   |                          Companion name from chatMessages
+        |   |                          (first non-bot, non-self sentby).
+        |   |                          Call usage: fetches remainingSeconds
+        |   |                          from GET /room/call-usage before join,
+        |   |                          syncs deltaSeconds via POST during call
+        |   |                          and on page unload (keepalive fetch).
+        |   |                          Themed toast on daily limit reached.
+        |   |                          Chats persisted in real-time via
+        |   |                          insertChat in socket handler.
         |   |                          Safari fix: absolute positioning for
         |   |                          tab content + bottom bar
         |   |-- WhiteboardPage.tsx   # Full-page collaborative whiteboard at
@@ -543,7 +607,7 @@ virtual_study_group/
         |   |                          play/pause, volume slider, and canvas-based
         |   |                          audio visualizer. Uses RadioContext for
         |   |                          global playback state
-        |   |-- PodcastsPage.tsx     # Podcast discovery page at /podcasts.
+        |   |-- PodcastsPage.tsx     # Podcast discovery + in-house playback at /podcasts.
         |   |                          5 topic tabs (Trending, AI, Tech, Business,
         |   |                          Productivity & Tools). Lazy-fetches per tab
         |   |                          via GET /podcasts/:topic; component-state cache
@@ -554,10 +618,15 @@ virtual_study_group/
         |   |                          PodcastCard: 3px accent strip, thumbnail (Mic2
         |   |                          fallback), title (line-clamp-2), publisher,
         |   |                          description (line-clamp-3), listen score badge
-        |   |                          (Star, amber), episode count, Listen Now link.
+        |   |                          (Star, amber), episode count, "Play" button
+        |   |                          (teal highlight when active, Pause icon) that
+        |   |                          starts in-house playback via PodcastPlayerContext;
+        |   |                          falls back to external link when no audio URL.
+        |   |                          handlePlay: toggle play/pause if same track,
+        |   |                          else playTrack() with audio URL + metadata.
         |   |                          SkeletonGrid (8 ghost cards, animate-pulse).
         |   |                          Amber notice badge for stale-cache/mock source.
-        |   |                          No Redux — all state local
+        |   |                          No Redux — podcast state via usePodcastPlayer()
         |   |-- JoinRoomPage.tsx     # Auth-gated join redirect at /join/:roomId.
         |   |                          If authenticated: dispatches enterRoom and
         |   |                          navigates to /room/call, passes roomId in
@@ -652,6 +721,14 @@ virtual_study_group/
         |   |                          channel is playing. Play/pause, volume,
         |   |                          mute, expand to full page, close controls.
         |   |                          Uses RadioContext for shared audio state
+        |   |-- PodcastMiniPlayer.tsx # Fixed bottom podcast player (z-50, above
+        |   |                          radio z-40). Teal/emerald gradient theme.
+        |   |                          Thumbnail, track title + publisher, clickable
+        |   |                          progress bar with hover seek thumb, time
+        |   |                          display (mm:ss / mm:ss), play/pause with
+        |   |                          loading spinner, volume + mute, close/stop.
+        |   |                          Framer Motion spring entry/exit. Uses
+        |   |                          PodcastPlayerContext for shared audio state
         |   |-- InviteNotificationOverlay.tsx  # Animated banner for incoming room
         |   |                          invites. Accept navigates to /room/call,
         |   |                          Decline dismisses. Socket: receiveInvite
@@ -659,10 +736,22 @@ virtual_study_group/
         |   |                          requests. Accept calls POST /companion/accept
         |   |                          + emits companion:acceptNotify
         |   |-- Messages.tsx         # Placeholder message component for AI demo page
-        |   |-- Stream.tsx           # Video stream grid - up to 5 video slots,
-        |   |                          camera/mic/screenshare controls, expandable view.
-        |   |                          onEndCall prop: red PhoneOff button to
-        |   |                          leave call without leaving the room
+        |   |-- Stream.tsx           # Video call UI — 2-up grid (local + remote).
+        |   |                          Local: #camera-video element, hidden when
+        |   |                          isVideoOn=false, "You" label with speaking
+        |   |                          indicator. Remote: #remote-video element,
+        |   |                          hidden when isVideoSubed=false. When remote
+        |   |                          user connected but camera off: shows initials
+        |   |                          avatar (gradient circle) + name + "Camera
+        |   |                          off" label. When no remote user: gray
+        |   |                          "Waiting..." placeholder. Name label overlay
+        |   |                          on remote tile (visible with/without video).
+        |   |                          Controls: camera toggle, mic toggle, publish
+        |   |                          (MonitorUp), end call (PhoneOff).
+        |   |                          useVoiceActivity hook: Web Audio API
+        |   |                          AnalyserNode for real-time speaking detection
+        |   |                          (green ring + pulsing dot). Props:
+        |   |                          hasRemoteUser, remoteUserName, onEndCall
         |   |
         |   |-- shared/              # Shared/utility components
         |       |-- BackgroundImage.tsx  # Background image wrapper component
@@ -704,11 +793,21 @@ virtual_study_group/
         |
         |-- context/                  # React context providers
         |   |-- RadioContext.tsx    # Global radio playback context. useReducer
-        |                              for state (currentChannel, isPlaying,
-        |                              volume, isMiniPlayerEnabled). Manages
-        |                              HTMLAudioElement + Web Audio API AnalyserNode.
-        |                              State persisted to sessionStorage. Exports
-        |                              RadioProvider + useRadio() hook
+        |   |                          for state (currentChannel, isPlaying,
+        |   |                          volume, isMiniPlayerEnabled). Manages
+        |   |                          HTMLAudioElement + Web Audio API AnalyserNode.
+        |   |                          State persisted to sessionStorage. Exports
+        |   |                          RadioProvider + useRadio() hook
+        |   |-- PodcastPlayerContext.tsx # Global podcast audio context. useReducer
+        |                              for state (currentTrack, isPlaying, volume,
+        |                              currentTime, duration, isLoading). Native
+        |                              HTMLAudioElement with timeupdate/loadedmetadata/
+        |                              ended/waiting/canplay event listeners. Supports
+        |                              seeking (seekTo), progress tracking, volume.
+        |                              Stops radio (calls radio.stop()) when a podcast
+        |                              starts — mutual exclusion. Volume persisted to
+        |                              localStorage (key: study-podcast-player). Exports
+        |                              PodcastPlayerProvider + usePodcastPlayer() hook
         |
         |-- data/                    # Static data files
         |   |-- radioChannels.ts   # 8 curated SomaFM radio channels (Groove Salad,
@@ -746,7 +845,7 @@ ENV CONFIGURATION
                      UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN
                        (Upstash Redis — OTP cache, podcast cache, rate limiting),
                      PORT, JWT_SECRET, OTP_SECRET, OTP_EXPIRY_MINUTES,
-                     AI_PROVIDER, GEMINI_API_KEY, GEMINI_EMBEDDING_MODEL, GROK_API_KEY,
+                     AI_PROVIDER, GEMINI_API_KEY, GEMINI_EMBEDDING_MODEL, GROK_API_KEY, OPENROUTER_API_KEY,
                      R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME,
                      R2_MAX_UPLOADS_PER_MONTH, AGORA_APP_ID,
                      LISTEN_NOTES_API_KEY,
@@ -800,7 +899,7 @@ API ROUTES SUMMARY
     PUT    /user/profile             Update profile (name, bio, avatar, education, projects, workExperience) — re-issues JWT
     GET    /user/search?q=          Search users by name/email
 
-  AI (Gemini / Grok — switchable via AI_PROVIDER env var):
+  AI (Gemini / Grok / OpenRouter — switchable via AI_PROVIDER env var):
     POST   /ai/ask                  Ask AI a study question
     POST   /ai/summary             Generate AI summary of chat messages
     POST   /ai/whiteboard-explain  AI analysis of whiteboard drawing (+ optional question)
@@ -831,8 +930,11 @@ API ROUTES SUMMARY
                                     No auth. Upstash Redis cache per topic (key podcast:{topic},
                                     4-day TTL). Cache valid until last Tue or Sat midnight
                                     (lazy refresh). node-cron pre-warms cache at 02:00 UTC
-                                    every Tue & Sat. Response: { data: PodcastItem[], fetchedAt,
-                                    source }
+                                    every Tue & Sat. Audio enrichment: iTunes Search API →
+                                    RSS feed parsing → direct MP3 URLs from podcast CDN.
+                                    Response: { data: PodcastItem[], fetchedAt, source }.
+                                    PodcastItem includes audio (MP3 URL | null),
+                                    audioLengthSec, latestEpisodeTitle for in-house playback
 
 
 SOCKET EVENTS

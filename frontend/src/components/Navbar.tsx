@@ -73,7 +73,7 @@ export default function Navbar() {
   return (
     <>
       {/* Floating menu toggle + dark mode toggle */}
-      <div className="fixed top-4 left-4 z-50 flex items-center gap-2">
+      <div className="fixed top-3 left-0 w-16 z-50 flex flex-col items-center gap-2">
         <button
           onClick={() => setIsOpen(true)}
           aria-label="Open menu"
