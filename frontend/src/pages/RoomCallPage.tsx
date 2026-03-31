@@ -153,10 +153,10 @@ export default function RoomCallPage() {
     client.on("user-unpublished", onUserUnpublish);
     client.on("user-joined", (remoteUser) => {
       console.log("[Agora] Remote user joined:", remoteUser.uid);
-      setHasRemoteUser(true);
+      setRemoteUsers(prev => [...prev, { uid: remoteUser.uid, isVideoSubed: false, name: "" }]);
     });
-    client.on("user-left", () => {
-      setHasRemoteUser(false);
+    client.on("user-left", (remoteUser) => {
+      setRemoteUsers(prev => prev.filter(u => u.uid !== remoteUser.uid));
     });
     await client.join(appid.current, ch, token.current || null, null);
     setIsJoined(true);
@@ -332,18 +332,22 @@ export default function RoomCallPage() {
               isVideoOn={isVideoOn}
               isAudioPubed={isAudioPubed}
               isVideoPubed={isVideoPubed}
-              isVideoSubed={isVideoSubed}
               setIsAudioOn={setIsAudioOn}
               setIsAudioPubed={setIsAudioPubed}
               setIsVideoOn={setIsVideoOn}
               setIsVideoPubed={setIsVideoPubed}
-              setIsVideoSubed={setIsVideoSubed}
               turnOnCamera={turnOnCamera}
               turnOnMicrophone={turnOnMicrophone}
               publishAudio={publishAudio}
               publishVideo={publishVideo}
-              hasRemoteUser={hasRemoteUser}
-              remoteUserName={chatMessages.find((m) => m.sentby !== "bot" && m.sentby !== user?.name)?.sentby || ""}
+              remoteUsers={(() => {
+                const remoteNamesFromChat = Array.from(new Set(
+                  chatMessages
+                    .filter(m => m.sentby !== "bot" && m.sentby !== user?.name)
+                    .map(m => m.sentby)
+                ));
+                return remoteUsers.map((u, i) => ({ ...u, name: remoteNamesFromChat[i] || "" }));
+              })()}
               onEndCall={handleEndCall}
             />
           ) : (

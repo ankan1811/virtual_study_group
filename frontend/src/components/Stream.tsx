@@ -8,6 +8,13 @@ import {
   PhoneOff,
   Users,
 } from "lucide-react";
+import type { UID } from "agora-rtc-sdk-ng/esm";
+
+interface RemoteUserInfo {
+  uid: UID;
+  isVideoSubed: boolean;
+  name: string;
+}
 
 type StateFunction<T> = React.Dispatch<React.SetStateAction<T>>;
 interface propsInterface {
@@ -15,18 +22,15 @@ interface propsInterface {
   isVideoOn: boolean;
   isAudioPubed: boolean;
   isVideoPubed: boolean;
-  isVideoSubed: boolean;
   setIsAudioOn: StateFunction<boolean>;
   setIsVideoOn: StateFunction<boolean>;
   setIsAudioPubed: StateFunction<boolean>;
   setIsVideoPubed: StateFunction<boolean>;
-  setIsVideoSubed: StateFunction<boolean>;
   turnOnCamera: VoidFunction;
   turnOnMicrophone: VoidFunction;
   publishVideo: VoidFunction;
   publishAudio: VoidFunction;
-  hasRemoteUser?: boolean;
-  remoteUserName?: string;
+  remoteUsers?: RemoteUserInfo[];
   onEndCall?: () => void;
 }
 
@@ -90,12 +94,19 @@ function useVoiceActivity(isAudioOn: boolean) {
 
 export default function Stream(prop: propsInterface) {
   const isSpeaking = useVoiceActivity(prop.isAudioOn);
+  const remoteUsers = prop.remoteUsers ?? [];
+
+  const total = 1 + remoteUsers.length;
+  const gridCols =
+    total <= 1 ? "grid-cols-1 max-w-xl" :
+    total <= 4 ? "grid-cols-2 max-w-3xl" :
+                 "grid-cols-3 max-w-5xl";
 
   return (
     <div className="relative flex flex-col h-full bg-gray-950">
       {/* Video grid */}
       <div className="flex-1 p-4 flex items-center justify-center">
-        <div className="grid grid-cols-2 gap-3 w-full max-w-3xl">
+        <div className={`grid ${gridCols} gap-3 w-full`}>
           {/* Local user */}
           <div
             className={`relative aspect-video bg-gray-800 rounded-2xl overflow-hidden transition-all duration-200 ${
@@ -125,57 +136,45 @@ export default function Stream(prop: propsInterface) {
             </div>
           </div>
 
-          {/* Remote user */}
-          <div
-            className="relative aspect-video bg-gray-800 rounded-2xl overflow-hidden ring-1 ring-white/10"
-            id="user-container-2"
-          >
-            <video
-              id="remote-video"
-              className="w-full h-full object-cover"
-              hidden={!prop.isVideoSubed}
-            />
-            {prop.isVideoSubed && prop.remoteUserName && (
+          {/* Remote users — one slab per participant */}
+          {remoteUsers.map((ru) => (
+            <div
+              key={String(ru.uid)}
+              className="relative aspect-video bg-gray-800 rounded-2xl overflow-hidden ring-1 ring-white/10"
+            >
+              <video
+                id={`remote-video-${ru.uid}`}
+                className="w-full h-full object-cover"
+                hidden={!ru.isVideoSubed}
+              />
+              {!ru.isVideoSubed && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                  <div className="w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-lg font-bold poppins-semibold">
+                    {ru.name
+                      ? ru.name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase()
+                      : <Users size={24} />}
+                  </div>
+                  <span className="text-xs text-gray-300 poppins-medium">{ru.name || "Companion"}</span>
+                  <span className="text-[10px] text-gray-500 poppins-regular">Camera off</span>
+                </div>
+              )}
               <div className="absolute bottom-2 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/50 backdrop-blur-sm">
-                <span className="text-xs text-white poppins-medium">{prop.remoteUserName}</span>
+                <span className="text-xs text-white poppins-medium">{ru.name || "Companion"}</span>
               </div>
-            )}
-            {!prop.isVideoSubed && (
+            </div>
+          ))}
+
+          {/* Waiting tile — shown only when no remote participants yet */}
+          {remoteUsers.length === 0 && (
+            <div className="relative aspect-video bg-gray-800 rounded-2xl overflow-hidden ring-1 ring-white/10">
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-                {prop.hasRemoteUser ? (
-                  <>
-                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-lg font-bold poppins-semibold">
-                      {prop.remoteUserName
-                        ? prop.remoteUserName.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase()
-                        : <Users size={24} />}
-                    </div>
-                    <span className="text-xs text-gray-300 poppins-medium">
-                      {prop.remoteUserName || "Companion"}
-                    </span>
-                    <span className="text-[10px] text-gray-500 poppins-regular">
-                      Camera off
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <div className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center">
-                      <Users size={24} className="text-gray-500" />
-                    </div>
-                    <span className="text-xs text-gray-500 poppins-regular">
-                      Waiting...
-                    </span>
-                  </>
-                )}
+                <div className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center">
+                  <Users size={24} className="text-gray-500" />
+                </div>
+                <span className="text-xs text-gray-500 poppins-regular">Waiting...</span>
               </div>
-            )}
-            {prop.hasRemoteUser && (
-              <div className="absolute bottom-2 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/50 backdrop-blur-sm">
-                <span className="text-xs text-white poppins-medium">
-                  {prop.remoteUserName || "Companion"}
-                </span>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
