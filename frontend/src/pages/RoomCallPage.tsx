@@ -70,7 +70,6 @@ export default function RoomCallPage() {
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
   const [copied, setCopied] = useState(false);
 
-  const channel = useRef(roomId.slice(0, 64));
   const appid = useRef(import.meta.env.VITE_AGORA_APP_ID || "");
   const token = useRef("");
   const [isJoined, setIsJoined] = useState(false);
@@ -93,7 +92,11 @@ export default function RoomCallPage() {
   const turnOnCamera = async (flag?: boolean) => {
     flag = flag ?? !isVideoOn;
     setIsVideoOn(flag);
-    if (videoTrack) return videoTrack.setEnabled(flag);
+    if (videoTrack) {
+      await videoTrack.setEnabled(flag);
+      if (flag) videoTrack.play("camera-video");
+      return;
+    }
     videoTrack = await createCameraVideoTrack();
     videoTrack.play("camera-video");
   };
@@ -128,7 +131,7 @@ export default function RoomCallPage() {
   };
 
   const joinChannel = async () => {
-    const ch = channel.current || "react-room";
+    const ch = roomId.slice(0, 64) || "react-room";
     console.log("[Agora] Joining channel:", ch, "| roomId:", roomId, "| uid:", user?.name);
     if (isJoined) await leaveChannelInternal();
     client.removeAllListeners();
@@ -149,7 +152,11 @@ export default function RoomCallPage() {
     setIsJoined(false);
     setIsAudioPubed(false);
     setIsVideoPubed(false);
+    setIsAudioOn(false);
+    setIsVideoOn(false);
     await client.leave();
+    if (audioTrack) { audioTrack.close(); audioTrack = null!; }
+    if (videoTrack) { videoTrack.close(); videoTrack = null!; }
   };
 
   const leaveChannel = async () => {
@@ -242,10 +249,9 @@ export default function RoomCallPage() {
   }, [isInCall]);
 
   useEffect(() => {
-    channel.current = roomId.slice(0, 64);
     AgoraRTC.setLogLevel(4);
     return () => {
-      if (isJoined) leaveChannelInternal();
+      leaveChannelInternal();
       dispatch(leaveRoom());
     };
   }, []);
