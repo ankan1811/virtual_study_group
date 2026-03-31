@@ -53,6 +53,7 @@ export default function WhiteboardPage() {
   const [api, setApi] = useState<any>(null);
   const isRemoteUpdate = useRef(false);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastVersionRef = useRef<number>(0);
   const [elements, setElements] = useState<WhiteboardElement[]>([]);
   const [collaborators, setCollaborators] = useState<Map<string, any>>(new Map());
   const pointerThrottle = useRef<number>(0);
@@ -68,20 +69,33 @@ export default function WhiteboardPage() {
 
   // Whiteboard presence
   const [wbUsers, setWbUsers] = useState<{ userId: string; userName: string }[]>([]);
+  const [followingId, setFollowingId] = useState<string | null>(null);
+  const followingIdRef = useRef<string | null>(null);
+  followingIdRef.current = followingId;
+  if (followingId) console.log("[RENDER] followingId:", followingId, "ref:", followingIdRef.current);
 
   // Save-on-exit modal
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [savingWb, setSavingWb] = useState(false);
 
-  // Excalidraw onChange — fully debounced to avoid infinite loops
+  // Excalidraw onChange — only emit when elements actually changed
   const handleChange = useCallback(
     (excElements: readonly any[]) => {
       if (isRemoteUpdate.current) {
         isRemoteUpdate.current = false;
         return;
       }
+
+      // Fingerprint: sum of element versions — skips re-emitting unchanged elements
+      const version = excElements.reduce(
+        (acc: number, el: any) => acc + (el.version || 0) + (el.isDeleted ? 0 : 1),
+        0
+      );
+      if (version === lastVersionRef.current) return;
+
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
       debounceTimer.current = setTimeout(() => {
+        lastVersionRef.current = version;
         const active = excElements.filter((el: any) => !el.isDeleted);
         setElements(
           active.map((el: any) => ({
@@ -118,10 +132,13 @@ export default function WhiteboardPage() {
     return COLLAB_COLORS[hash];
   };
 
-  // Remote sync
+  // Remote sync + presence (single useEffect to keep socket room membership stable)
+  const joinedRoomRef = useRef<string | null>(null);
+
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
+
     const onSync = ({ elements: els }: { elements: any[] }) => {
       if (api) {
         isRemoteUpdate.current = true;
@@ -145,6 +162,7 @@ export default function WhiteboardPage() {
       pointer: { x: number; y: number; tool?: "pointer" | "laser" };
       button: "up" | "down";
     }) => {
+      console.log("[PTR] Received from:", uid, "followingId:", followingIdRef.current);
       setCollaborators((prev) => {
         const next = new Map(prev);
         next.set(uid, {
@@ -156,6 +174,32 @@ export default function WhiteboardPage() {
         });
         return next;
       });
+
+      // Follow mode — scroll viewport to center on followed user's cursor
+      if (followingIdRef.current === uid) {
+        console.log("[FOLLOW] followingId:", followingIdRef.current, "uid:", uid, "api:", !!api);
+        if (api) {
+          const s = api.getAppState();
+          const zoom = s.zoom?.value || 1;
+          const w = s.width || window.innerWidth;
+          const h = s.height || window.innerHeight;
+          const ol = s.offsetLeft || 0;
+          const ot = s.offsetTop || 0;
+          const newScrollX = (w / 2 - ol) / zoom - pointer.x;
+          const newScrollY = (h / 2 - ot) / zoom - pointer.y;
+          console.log("[FOLLOW] pointer:", pointer, "zoom:", zoom, "w:", w, "h:", h, "ol:", ol, "ot:", ot);
+          console.log("[FOLLOW] setting scrollX:", newScrollX, "scrollY:", newScrollY);
+          api.updateScene({
+            appState: {
+              scrollX: newScrollX,
+              scrollY: newScrollY,
+            },
+          });
+          // Verify it took effect
+          const after = api.getAppState();
+          console.log("[FOLLOW] after scrollX:", after.scrollX, "scrollY:", after.scrollY);
+        }
+      }
     };
     const onState = ({ elements: els }: { elements: any[] }) => {
       if (api) {
@@ -163,39 +207,49 @@ export default function WhiteboardPage() {
         api.updateScene({ elements: els });
       }
     };
+    const onUsers = (users: { userId: string; userName: string }[]) => {
+      setWbUsers(users);
+    };
+
     socket.on("whiteboard:sync", onSync);
     socket.on("whiteboard:cleared", onCleared);
     socket.on("whiteboard:pointer-update", onPointerUpdate);
     socket.on("whiteboard:state", onState);
+    socket.on("whiteboard:users", onUsers);
+
+    // Only emit join once per roomId (not on every api change)
+    if (roomId && joinedRoomRef.current !== roomId) {
+      joinedRoomRef.current = roomId;
+      socket.emit("whiteboard:join", { roomId });
+    }
 
     return () => {
       socket.off("whiteboard:sync", onSync);
       socket.off("whiteboard:cleared", onCleared);
       socket.off("whiteboard:pointer-update", onPointerUpdate);
       socket.off("whiteboard:state", onState);
+      socket.off("whiteboard:users", onUsers);
     };
   }, [api, roomId]);
 
-  // Whiteboard presence — separate from api-dependent sync to avoid re-join flicker
+  // Clean up whiteboard presence on unmount
   useEffect(() => {
-    const socket = getSocket();
-    if (!socket || !roomId) return;
-
-    const onUsers = (users: { userId: string; userName: string }[]) => {
-      setWbUsers(users);
-    };
-    socket.on("whiteboard:users", onUsers);
-    socket.emit("whiteboard:join", { roomId });
-
     return () => {
-      socket.off("whiteboard:users", onUsers);
-      socket.emit("whiteboard:leave", { roomId });
+      const socket = getSocket();
+      if (socket && joinedRoomRef.current) {
+        socket.emit("whiteboard:leave", { roomId: joinedRoomRef.current });
+        joinedRoomRef.current = null;
+      }
     };
-  }, [roomId]);
+  }, []);
 
   // Pointer move → broadcast to others
   const handlePointerUpdate = useCallback(
     ({ pointer, button }: { pointer: { x: number; y: number; tool: "pointer" | "laser" }; button: "up" | "down" }) => {
+      // Stop following when local user clicks/draws on canvas
+      if (button === "down" && followingIdRef.current) {
+        setFollowingId(null);
+      }
       const now = Date.now();
       if (now - pointerThrottle.current < 50) return;
       pointerThrottle.current = now;
@@ -305,15 +359,26 @@ export default function WhiteboardPage() {
             <div className="flex items-center gap-1.5 mr-1">
               {wbUsers.map((u) => {
                 const isMe = u.userId === user?.userId;
+                const isFollowing = followingId === u.userId;
                 const color = getColorForUser(u.userId);
                 return (
-                  <div
+                  <button
                     key={u.userId}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full backdrop-blur-sm border ${
+                    onClick={() => {
+                      if (!isMe) {
+                        const newVal = isFollowing ? null : u.userId;
+                        console.log("[PILL] click → setting followingId to:", newVal);
+                        setFollowingId(newVal);
+                      }
+                    }}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full backdrop-blur-sm border transition-all duration-200 ${
                       isMe
-                        ? "bg-white/20 border-white/25"
-                        : "bg-white/10 border-white/10"
+                        ? "bg-white/20 border-white/25 cursor-default"
+                        : isFollowing
+                          ? "bg-white/25 border-white/40 ring-1 ring-white/30 cursor-pointer"
+                          : "bg-white/10 border-white/10 hover:bg-white/15 cursor-pointer"
                     }`}
+                    title={isMe ? "You" : isFollowing ? `Stop following ${u.userName}` : `Follow ${u.userName}`}
                   >
                     <span className="relative flex h-2 w-2">
                       {isMe ? (
@@ -335,9 +400,9 @@ export default function WhiteboardPage() {
                       )}
                     </span>
                     <span className="text-[11px] text-white/90 poppins-medium truncate max-w-[80px]">
-                      {isMe ? "You" : u.userName}
+                      {isMe ? "You" : isFollowing ? `Following ${u.userName}` : u.userName}
                     </span>
-                  </div>
+                  </button>
                 );
               })}
               <div className="w-px h-5 bg-violet-400/30" />
