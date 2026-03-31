@@ -184,7 +184,6 @@ export default function DmPanel({ companionId, companionName, onClose }: DmPanel
         className="fixed right-0 top-0 h-full w-80 bg-white dark:bg-gray-900 shadow-2xl z-[120] flex flex-col border-l border-gray-100 dark:border-gray-800"
       >
         {/* Header */}
-        <div className="h-1 w-full bg-gradient-to-r from-indigo-500 to-violet-500" />
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-gray-100 dark:border-gray-800">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white text-xs font-bold poppins-semibold">
@@ -218,15 +217,14 @@ export default function DmPanel({ companionId, companionName, onClose }: DmPanel
                 }
               }}
               disabled={dmSummaryLoading || messages.length === 0}
-              className="p-1.5 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/30 text-gray-400 hover:text-indigo-500 transition-colors disabled:opacity-40"
-              title="Generate conversation summary"
+              className="flex items-center gap-1 p-1.5 rounded-lg text-xs poppins-medium bg-indigo-50 dark:bg-indigo-950/30 text-indigo-500 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 hover:text-indigo-600 transition-colors disabled:opacity-40"
             >
               {dmSummaryLoading ? (
-                <Loader2 size={14} className="animate-spin" />
+                <><Loader2 size={12} className="animate-spin" /><span>Summarizing...</span></>
               ) : dmSummaryDone ? (
-                <Check size={14} className="text-emerald-500" />
+                <><Check size={12} className="text-emerald-500" /><span className="text-emerald-500">Done</span></>
               ) : (
-                <FileText size={14} />
+                <><FileText size={12} /><span>Summarize</span></>
               )}
             </button>
             <button

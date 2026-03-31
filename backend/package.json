@@ -31,6 +31,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.1.2",
     "node-cron": "^4.2.1",
+    "nodemailer": "^8.0.4",
     "nodemon": "^3.0.3",
     "openai": "^6.25.0",
     "resend": "^6.9.4",
@@ -39,6 +40,7 @@
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
+    "@types/nodemailer": "^7.0.11",
     "@types/socket.io": "^3.0.2",
     "drizzle-kit": "^0.31.10"
   }

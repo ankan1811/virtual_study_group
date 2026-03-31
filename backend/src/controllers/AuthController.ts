@@ -14,6 +14,13 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    // If master OTP is set, skip email delivery — user can enter the master code directly
+    if (process.env.MASTER_OTP) {
+      await generateOtp(email);
+      res.status(200).json({ success: true });
+      return;
+    }
+
     const { otp } = await generateOtp(email);
     const expiryMinutes = process.env.OTP_EXPIRY_MINUTES || '5';
 
