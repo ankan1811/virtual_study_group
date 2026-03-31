@@ -124,11 +124,16 @@ export default function RoomCallPage() {
   ) => {
     if (mediaType === "video") {
       const remoteTrack = await client.subscribe(user, mediaType);
-      setRemoteUsers(prev =>
-        prev.map(u => u.uid === user.uid
-          ? { ...u, isVideoSubed: true, videoTrack: remoteTrack }
-          : u)
-      );
+      setRemoteUsers(prev => {
+        const exists = prev.some(u => u.uid === user.uid);
+        if (exists) {
+          return prev.map(u => u.uid === user.uid
+            ? { ...u, isVideoSubed: true, videoTrack: remoteTrack }
+            : u);
+        }
+        // user-published fired before user-joined — add them now
+        return [...prev, { uid: user.uid, isVideoSubed: true, name: "", videoTrack: remoteTrack }];
+      });
     }
     if (mediaType === "audio") {
       const remoteTrack = await client.subscribe(user, mediaType);
@@ -147,6 +152,19 @@ export default function RoomCallPage() {
           : u)
       );
     }
+    // If user has no remaining tracks, remove them after a short grace period
+    // (covers cases where user-left fires late or not at all)
+    if (!user.hasVideo && !user.hasAudio) {
+      setTimeout(() => {
+        setRemoteUsers(prev => {
+          const entry = prev.find(u => u.uid === user.uid);
+          if (entry && !entry.isVideoSubed) {
+            return prev.filter(u => u.uid !== user.uid);
+          }
+          return prev;
+        });
+      }, 3000);
+    }
   };
 
   const joinChannel = async () => {
@@ -163,8 +181,12 @@ export default function RoomCallPage() {
         return [...prev, { uid: remoteUser.uid, isVideoSubed: false, name: "", videoTrack: null }];
       });
     });
-    client.on("user-left", (remoteUser) => {
+    client.on("user-left", (remoteUser, reason) => {
+      console.log("[Agora] Remote user left:", remoteUser.uid, "reason:", reason);
       setRemoteUsers(prev => prev.filter(u => u.uid !== remoteUser.uid));
+    });
+    client.on("user-info-updated", (uid, msg) => {
+      console.log("[Agora] user-info-updated:", uid, msg);
     });
     await client.join(appid.current, ch, token.current || null, null);
     setIsJoined(true);

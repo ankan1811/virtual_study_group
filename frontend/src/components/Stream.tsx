@@ -132,11 +132,12 @@ export default function Stream(prop: propsInterface) {
   const isSpeaking = useVoiceActivity(prop.isAudioOn);
   const remoteUsers = prop.remoteUsers ?? [];
 
-  const total = 1 + remoteUsers.length;
+  // Count displayed tiles: local + remotes (or the waiting placeholder if alone)
+  const displayed = 1 + Math.max(remoteUsers.length, 1);
   const gridCols =
-    total <= 1 ? "grid-cols-1 max-w-xl" :
-    total <= 4 ? "grid-cols-2 max-w-3xl" :
-                 "grid-cols-3 max-w-5xl";
+    displayed <= 2 ? "grid-cols-2 max-w-3xl" :
+    displayed <= 4 ? "grid-cols-2 max-w-3xl" :
+                     "grid-cols-3 max-w-5xl";
 
   return (
     <div className="relative flex flex-col h-full bg-gray-950">
