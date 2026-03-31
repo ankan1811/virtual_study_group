@@ -20,7 +20,7 @@ const providers = {
   },
   openrouter: {
     baseURL: 'https://openrouter.ai/api/v1',
-    model: 'google/gemini-2.5-flash',
+    model: 'google/gemini-2.5-flash:free',
     getApiKey: () => process.env.OPENROUTER_API_KEY || '',
   },
 } as const;
