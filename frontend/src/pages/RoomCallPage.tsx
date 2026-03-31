@@ -11,6 +11,7 @@ import type {
   IMicrophoneAudioTrack,
   IAgoraRTCClient,
   IAgoraRTCRemoteUser,
+  IRemoteVideoTrack,
   UID,
 } from "agora-rtc-sdk-ng/esm";
 import AgoraRTC from "agora-rtc-sdk-ng";
@@ -26,6 +27,7 @@ import AiPanel from "../components/AiPanel";
 import { AuthState } from "../store/authStore/store";
 import { leaveRoom } from "../store/RoomStore/roomSlice";
 import { generateAndSaveSummary } from "../utils/summaryApi";
+import { getSocket } from "../utils/socketInstance";
 
 onCameraChanged((device) => {
   console.log("onCameraChanged: ", device);
@@ -53,6 +55,7 @@ interface RemoteUserInfo {
   uid: UID;
   isVideoSubed: boolean;
   name: string;
+  videoTrack?: IRemoteVideoTrack | null;
 }
 
 export default function RoomCallPage() {
@@ -84,6 +87,7 @@ export default function RoomCallPage() {
   const [lobbySummaryDone, setLobbySummaryDone] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [callLimitToast, setCallLimitToast] = useState<string | null>(null);
+  const [uidToName, setUidToName] = useState<Record<string, string>>({});
 
   // ---- Call usage rate limit state ----
   const callStartTimeRef = useRef(0);
@@ -121,11 +125,10 @@ export default function RoomCallPage() {
     if (mediaType === "video") {
       const remoteTrack = await client.subscribe(user, mediaType);
       setRemoteUsers(prev =>
-        prev.map(u => u.uid === user.uid ? { ...u, isVideoSubed: true } : u)
+        prev.map(u => u.uid === user.uid
+          ? { ...u, isVideoSubed: true, videoTrack: remoteTrack }
+          : u)
       );
-      // Give React one tick to render the dynamic video element before playing
-      await new Promise(r => setTimeout(r, 50));
-      remoteTrack.play(`remote-video-${user.uid}`);
     }
     if (mediaType === "audio") {
       const remoteTrack = await client.subscribe(user, mediaType);
@@ -139,7 +142,9 @@ export default function RoomCallPage() {
   ) => {
     if (mediaType === "video") {
       setRemoteUsers(prev =>
-        prev.map(u => u.uid === user.uid ? { ...u, isVideoSubed: false } : u)
+        prev.map(u => u.uid === user.uid
+          ? { ...u, isVideoSubed: false, videoTrack: null }
+          : u)
       );
     }
   };
@@ -153,13 +158,20 @@ export default function RoomCallPage() {
     client.on("user-unpublished", onUserUnpublish);
     client.on("user-joined", (remoteUser) => {
       console.log("[Agora] Remote user joined:", remoteUser.uid);
-      setRemoteUsers(prev => [...prev, { uid: remoteUser.uid, isVideoSubed: false, name: "" }]);
+      setRemoteUsers(prev => {
+        if (prev.some(u => u.uid === remoteUser.uid)) return prev;
+        return [...prev, { uid: remoteUser.uid, isVideoSubed: false, name: "", videoTrack: null }];
+      });
     });
     client.on("user-left", (remoteUser) => {
       setRemoteUsers(prev => prev.filter(u => u.uid !== remoteUser.uid));
     });
     await client.join(appid.current, ch, token.current || null, null);
     setIsJoined(true);
+
+    // Broadcast our Agora UID → app identity so other clients can map names
+    const socket = getSocket();
+    socket?.emit("agora:register", { roomId, agoraUid: client.uid });
   };
 
   const leaveChannelInternal = async () => {
@@ -270,6 +282,18 @@ export default function RoomCallPage() {
     };
   }, []);
 
+  // Listen for Agora UID → identity mappings from other participants
+  useEffect(() => {
+    if (!roomId) return;
+    const socket = getSocket();
+    if (!socket) return;
+    const handler = ({ agoraUid, userName }: { agoraUid: string | number; userName: string }) => {
+      setUidToName(prev => ({ ...prev, [String(agoraUid)]: userName }));
+    };
+    socket.on(`agora:uid-map:${roomId}`, handler);
+    return () => { socket.off(`agora:uid-map:${roomId}`, handler); };
+  }, [roomId]);
+
   // NavbarCall exit click
   const handleExitClick = () => {
     if (isInCall) leaveChannel();
@@ -340,14 +364,10 @@ export default function RoomCallPage() {
               turnOnMicrophone={turnOnMicrophone}
               publishAudio={publishAudio}
               publishVideo={publishVideo}
-              remoteUsers={(() => {
-                const remoteNamesFromChat = Array.from(new Set(
-                  chatMessages
-                    .filter(m => m.sentby !== "bot" && m.sentby !== user?.name)
-                    .map(m => m.sentby)
-                ));
-                return remoteUsers.map((u, i) => ({ ...u, name: remoteNamesFromChat[i] || "" }));
-              })()}
+              remoteUsers={remoteUsers.map(u => ({
+                ...u,
+                name: uidToName[String(u.uid)] || ""
+              }))}
               onEndCall={handleEndCall}
             />
           ) : (

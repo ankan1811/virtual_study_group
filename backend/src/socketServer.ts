@@ -145,6 +145,11 @@ export function initSocketServer(httpServer: http.Server): Server {
       io.to(roomId).emit(`room:participants:${roomId}`, participantList);
     });
 
+    // ── Agora UID → identity mapping ─────────────────────────────────────
+    socket.on('agora:register', ({ roomId, agoraUid }: { roomId: string; agoraUid: string | number }) => {
+      io.to(roomId).emit(`agora:uid-map:${roomId}`, { agoraUid, userId, userName });
+    });
+
     socket.on(
       'serverMessage',
       async ({ message, roomId, sentby, sessionId }: { message: string; roomId: string; sentby: string; sessionId?: string }) => {

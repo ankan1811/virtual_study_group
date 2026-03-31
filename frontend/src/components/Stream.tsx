@@ -8,12 +8,13 @@ import {
   PhoneOff,
   Users,
 } from "lucide-react";
-import type { UID } from "agora-rtc-sdk-ng/esm";
+import type { UID, IRemoteVideoTrack } from "agora-rtc-sdk-ng/esm";
 
 interface RemoteUserInfo {
   uid: UID;
   isVideoSubed: boolean;
   name: string;
+  videoTrack?: IRemoteVideoTrack | null;
 }
 
 type StateFunction<T> = React.Dispatch<React.SetStateAction<T>>;
@@ -92,6 +93,41 @@ function useVoiceActivity(isAudioOn: boolean) {
   return isSpeaking;
 }
 
+function RemoteVideoTile({ ru }: { ru: RemoteUserInfo }) {
+  const videoRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (ru.videoTrack && videoRef.current) {
+      ru.videoTrack.play(videoRef.current);
+    }
+    return () => { ru.videoTrack?.stop(); };
+  }, [ru.videoTrack]);
+
+  return (
+    <div className="relative aspect-video bg-gray-800 rounded-2xl overflow-hidden ring-1 ring-white/10">
+      <div
+        ref={videoRef}
+        className="w-full h-full [&>video]:w-full [&>video]:h-full [&>video]:object-cover"
+        hidden={!ru.isVideoSubed}
+      />
+      {!ru.isVideoSubed && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-lg font-bold poppins-semibold">
+            {ru.name
+              ? ru.name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase()
+              : <Users size={24} />}
+          </div>
+          <span className="text-xs text-gray-300 poppins-medium">{ru.name || "Companion"}</span>
+          <span className="text-[10px] text-gray-500 poppins-regular">Camera off</span>
+        </div>
+      )}
+      <div className="absolute bottom-2 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/50 backdrop-blur-sm">
+        <span className="text-xs text-white poppins-medium">{ru.name || "Companion"}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function Stream(prop: propsInterface) {
   const isSpeaking = useVoiceActivity(prop.isAudioOn);
   const remoteUsers = prop.remoteUsers ?? [];
@@ -138,30 +174,7 @@ export default function Stream(prop: propsInterface) {
 
           {/* Remote users — one slab per participant */}
           {remoteUsers.map((ru) => (
-            <div
-              key={String(ru.uid)}
-              className="relative aspect-video bg-gray-800 rounded-2xl overflow-hidden ring-1 ring-white/10"
-            >
-              <video
-                id={`remote-video-${ru.uid}`}
-                className="w-full h-full object-cover"
-                hidden={!ru.isVideoSubed}
-              />
-              {!ru.isVideoSubed && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-                  <div className="w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-lg font-bold poppins-semibold">
-                    {ru.name
-                      ? ru.name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase()
-                      : <Users size={24} />}
-                  </div>
-                  <span className="text-xs text-gray-300 poppins-medium">{ru.name || "Companion"}</span>
-                  <span className="text-[10px] text-gray-500 poppins-regular">Camera off</span>
-                </div>
-              )}
-              <div className="absolute bottom-2 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/50 backdrop-blur-sm">
-                <span className="text-xs text-white poppins-medium">{ru.name || "Companion"}</span>
-              </div>
-            </div>
+            <RemoteVideoTile key={String(ru.uid)} ru={ru} />
           ))}
 
           {/* Waiting tile — shown only when no remote participants yet */}
