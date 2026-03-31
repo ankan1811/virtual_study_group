@@ -80,11 +80,19 @@ Everything else — which is the majority of the user-facing application:
      * Agora client lifecycle (join, publish, subscribe, leave)
      * Track management (create, enable/disable, close, dispose)
      * Auto-publish video+audio sequentially when call starts
-     * Remote user presence tracking (hasRemoteUser state)
+     * Multi-participant remote user tracking (remoteUsers[] array of RemoteUserInfo)
+     * Dedup guard on user-joined to prevent ghost slabs on reconnect
+     * Agora UID → app identity mapping via Socket.IO (agora:register / agora:uid-map)
+     * uidToName state maps Agora UIDs to real user names (replaces old index-based chat name derivation)
+     * Remote video tracks stored in state (videoTrack field on RemoteUserInfo)
+       — Stream component plays them via ref when DOM mounts, eliminating the old
+       fragile 50ms setTimeout hack
      * Call usage sync to backend during call
      * Browser tab close warning for unsaved chat messages
    - frontend/src/components/Stream.tsx — the video UI:
-     * 2-up grid layout (local + remote video)
+     * Dynamic grid layout: 1-col (solo), 2-col (2–4 people), 3-col (5+)
+     * RemoteVideoTile component — plays remote video via useRef + useEffect
+       (passes HTMLElement directly to track.play(), no string ID lookup)
      * Camera/mic toggle buttons (toggle local track, NOT Agora publish)
      * Publish button (pushes track to Agora for remote users to see)
      * End call button
@@ -102,7 +110,10 @@ Everything else — which is the majority of the user-facing application:
      * Broadcasting participant lists (room:participants:${roomId})
      * Join/leave bot messages
      * Message persistence to database
-   - Chat messages are used to derive companion's name for the video UI
+     * Agora UID identity relay (agora:register → agora:uid-map:${roomId})
+       Each client emits agora:register with their Agora UID after joining
+       the channel; server broadcasts the UID→userId→userName mapping to
+       the room so all clients can display correct names on video tiles
 
 7. AI Features (alongside video)
    - frontend/src/components/AiPanel.tsx — AI doubt-solving tab
@@ -126,11 +137,13 @@ SUMMARY
 | User auth & invite links                 | TURN/STUN servers         |
 | Call usage tracking & daily limits       | Media encoding (VP8)      |
 | Redux state for room membership          | Adaptive bitrate          |
-| Video call UI (grid, controls, avatars)  | Packet loss recovery      |
-| Voice activity detection (Web Audio API) | Echo cancellation         |
-| Camera/mic toggle logic                  | Channel-based routing     |
-| Track lifecycle (create/dispose/rebind)  | Publish/subscribe system  |
-| Auto-publish orchestration               | Device change detection   |
+| Video call UI (dynamic grid, controls)   | Packet loss recovery      |
+| Multi-participant layout (1/2/3-col)     | Echo cancellation         |
+| Voice activity detection (Web Audio API) | Channel-based routing     |
+| Camera/mic toggle logic                  | Publish/subscribe system  |
+| Track lifecycle (create/dispose/rebind)  | Device change detection   |
+| Auto-publish orchestration               |                           |
+| Agora UID → identity mapping (Socket.IO) |                           |
 | Remote user presence & name display      |                           |
 | Real-time chat (Socket.IO)               |                           |
 | AI panel & chat summaries                |                           |
