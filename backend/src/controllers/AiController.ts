@@ -18,33 +18,56 @@ const providers = {
     model: 'grok-3-mini',
     getApiKey: () => process.env.GROK_API_KEY || '',
   },
+  openrouter: {
+    baseURL: 'https://openrouter.ai/api/v1',
+    model: 'google/gemini-2.5-flash',
+    getApiKey: () => process.env.OPENROUTER_API_KEY || '',
+  },
 } as const;
 
 type ProviderName = keyof typeof providers;
 
-// ── Lazy-initialized client ──────────────────────────────────────
-// Uses a getter so process.env is read AFTER dotenv.config() runs
+// ── Lazy-initialized clients ─────────────────────────────────────
+// Uses getters so process.env is read AFTER dotenv.config() runs
 // (module-level code executes before dotenv.config in server.ts)
 let _client: OpenAI | null = null;
+let _embeddingClient: OpenAI | null = null;
 let _model: string = '';
+let _providerName: ProviderName = 'gemini';
 
 function getClient(): OpenAI {
   if (!_client) {
-    const name = (process.env.AI_PROVIDER || 'gemini') as ProviderName;
-    const config = providers[name] || providers.gemini;
+    _providerName = (process.env.AI_PROVIDER || 'gemini') as ProviderName;
+    const config = providers[_providerName] || providers.gemini;
     _client = new OpenAI({
       apiKey: config.getApiKey(),
       baseURL: config.baseURL,
     });
     _model = config.model;
-    console.log(`AI provider initialized: ${name} (model: ${_model})`);
+    console.log(`AI provider initialized: ${_providerName} (model: ${_model})`);
   }
   return _client;
+}
+
+// Embeddings always go through Gemini directly (OpenRouter doesn't support them)
+function getEmbeddingClient(): OpenAI {
+  if (!_embeddingClient) {
+    _embeddingClient = new OpenAI({
+      apiKey: process.env.GEMINI_API_KEY || '',
+      baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+    });
+  }
+  return _embeddingClient;
 }
 
 function getModel(): string {
   getClient();
   return _model;
+}
+
+function getChatExtra(): Record<string, unknown> {
+  getClient();
+  return _providerName === 'openrouter' ? { transforms: ['middle-out'] } : {};
 }
 
 // ── Helpers ──────────────────────────────────────────────────────
@@ -80,6 +103,7 @@ export const askDoubt = async (req: AuthenticatedRequest, res: Response): Promis
         { role: 'user', content: question.trim() },
       ],
       max_tokens: 500,
+      ...getChatExtra(),
     });
 
     const answer = completion.choices[0]?.message?.content || 'Sorry, I could not generate an answer.';
@@ -118,6 +142,7 @@ export const summarizeSession = async (req: AuthenticatedRequest, res: Response)
         },
       ],
       max_tokens: 400,
+      ...getChatExtra(),
     });
 
     const summary = completion.choices[0]?.message?.content || 'Could not generate summary.';
@@ -159,6 +184,7 @@ export const explainWhiteboard = async (req: AuthenticatedRequest, res: Response
         { role: 'user', content: userPrompt },
       ],
       max_tokens: 600,
+      ...getChatExtra(),
     });
 
     const explanation = completion.choices[0]?.message?.content || 'Could not generate an explanation.';
@@ -205,6 +231,7 @@ export const summarizeDm = async (req: AuthenticatedRequest, res: Response): Pro
         },
       ],
       max_tokens: 400,
+      ...getChatExtra(),
     });
 
     const summary = completion.choices[0]?.message?.content || 'Could not generate summary.';
@@ -245,6 +272,7 @@ export const summarizeWhiteboard = async (req: AuthenticatedRequest, res: Respon
         },
       ],
       max_tokens: 500,
+      ...getChatExtra(),
     });
 
     const summary = completion.choices[0]?.message?.content || 'Could not generate whiteboard summary.';
@@ -264,7 +292,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     throw new Error('Daily embedding limit reached. Please try again tomorrow.');
   }
 
-  const response = await getClient().embeddings.create({
+  const response = await getEmbeddingClient().embeddings.create({
     model: process.env.GEMINI_EMBEDDING_MODEL || 'text-embedding-004',
     input: text.slice(0, 2048),
   });
@@ -364,6 +392,7 @@ export const querySummaries = async (req: AuthenticatedRequest, res: Response): 
         },
       ],
       max_tokens: 800,
+      ...getChatExtra(),
     });
 
     const answer = completion.choices[0]?.message?.content || 'Sorry, I could not generate an answer.';

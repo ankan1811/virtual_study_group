@@ -11,7 +11,7 @@ A full-stack web application for creating virtual study group spaces with real-t
 | **Database**         | PostgreSQL via NeonDB + Drizzle ORM (structured data) · MongoDB (Mongoose) for unstructured/AI data · Upstash Redis (TTL cache + rate limiting) |
 | **Real-time**        | Socket.IO                                                         |
 | **Video Calls**      | Agora RTC SDK                                                     |
-| **AI**               | Switchable: Google Gemini 2.5 Flash (default) / xAI Grok          |
+| **AI**               | Switchable: Google Gemini 2.5 Flash (default) / xAI Grok / OpenRouter (middle-out context compression) |
 | **RAG / Embeddings** | Gemini `text-embedding-004` (768-dim vectors, free tier)          |
 | **Cloud Storage**    | Cloudflare R2 (S3-compatible, free tier) for summary persistence  |
 | **State Management** | Redux Toolkit                                                     |
