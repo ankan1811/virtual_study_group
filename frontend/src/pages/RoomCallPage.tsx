@@ -11,6 +11,7 @@ import type {
   IMicrophoneAudioTrack,
   IAgoraRTCClient,
   IAgoraRTCRemoteUser,
+  UID,
 } from "agora-rtc-sdk-ng/esm";
 import AgoraRTC from "agora-rtc-sdk-ng";
 import {
@@ -48,6 +49,12 @@ interface Message {
   sentby: string;
 }
 
+interface RemoteUserInfo {
+  uid: UID;
+  isVideoSubed: boolean;
+  name: string;
+}
+
 export default function RoomCallPage() {
   const dispatch = useDispatch();
   const location = useLocation();
@@ -63,8 +70,7 @@ export default function RoomCallPage() {
   const [isVideoOn, setIsVideoOn] = useState(false);
   const [isAudioPubed, setIsAudioPubed] = useState(false);
   const [isVideoPubed, setIsVideoPubed] = useState(false);
-  const [isVideoSubed, setIsVideoSubed] = useState(false);
-  const [hasRemoteUser, setHasRemoteUser] = useState(false);
+  const [remoteUsers, setRemoteUsers] = useState<RemoteUserInfo[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>("chat");
   // Lifted chat messages for AI summary
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
@@ -114,8 +120,12 @@ export default function RoomCallPage() {
   ) => {
     if (mediaType === "video") {
       const remoteTrack = await client.subscribe(user, mediaType);
-      remoteTrack.play("remote-video");
-      setIsVideoSubed(true);
+      setRemoteUsers(prev =>
+        prev.map(u => u.uid === user.uid ? { ...u, isVideoSubed: true } : u)
+      );
+      // Give React one tick to render the dynamic video element before playing
+      await new Promise(r => setTimeout(r, 50));
+      remoteTrack.play(`remote-video-${user.uid}`);
     }
     if (mediaType === "audio") {
       const remoteTrack = await client.subscribe(user, mediaType);
@@ -124,10 +134,14 @@ export default function RoomCallPage() {
   };
 
   const onUserUnpublish = async (
-    _user: IAgoraRTCRemoteUser,
+    user: IAgoraRTCRemoteUser,
     mediaType: "video" | "audio"
   ) => {
-    if (mediaType === "video") setIsVideoSubed(false);
+    if (mediaType === "video") {
+      setRemoteUsers(prev =>
+        prev.map(u => u.uid === user.uid ? { ...u, isVideoSubed: false } : u)
+      );
+    }
   };
 
   const joinChannel = async () => {
