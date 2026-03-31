@@ -319,6 +319,14 @@ export function initSocketServer(httpServer: http.Server): Server {
       socket.to(roomId).emit('whiteboard:cleared', { fromUserId: userId });
     });
 
+    socket.on(
+      'whiteboard:pointer',
+      ({ roomId, pointer, button }: { roomId: string; pointer: { x: number; y: number }; button: 'up' | 'down' }) => {
+        if (isSocketThrottled(userId, 'whiteboard:pointer', 50)) return;
+        socket.to(roomId).emit('whiteboard:pointer-update', { userId, userName, pointer, button });
+      }
+    );
+
     // ── Disconnect ──────────────────────────────────────────────────────────
 
     // Leave room explicitly

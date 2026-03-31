@@ -52,6 +52,8 @@ export default function WhiteboardPage() {
   const isRemoteUpdate = useRef(false);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [elements, setElements] = useState<WhiteboardElement[]>([]);
+  const [collaborators, setCollaborators] = useState<Map<string, any>>(new Map());
+  const pointerThrottle = useRef<number>(0);
 
   // AI panel
   const [showAi, setShowAi] = useState(false);
@@ -92,6 +94,21 @@ export default function WhiteboardPage() {
     [roomId]
   );
 
+  // Collaborator color generator (deterministic from userId)
+  const COLLAB_COLORS = [
+    { background: "#FF6B6B", stroke: "#C0392B" },
+    { background: "#4ECDC4", stroke: "#16A085" },
+    { background: "#45B7D1", stroke: "#2980B9" },
+    { background: "#96CEB4", stroke: "#27AE60" },
+    { background: "#FFEAA7", stroke: "#F39C12" },
+    { background: "#DDA0DD", stroke: "#8E44AD" },
+  ];
+  const getColorForUser = (uid: string) => {
+    let hash = 0;
+    for (let i = 0; i < uid.length; i++) hash = (hash + uid.charCodeAt(i)) % COLLAB_COLORS.length;
+    return COLLAB_COLORS[hash];
+  };
+
   // Remote sync
   useEffect(() => {
     const socket = getSocket();
@@ -108,13 +125,51 @@ export default function WhiteboardPage() {
         api.updateScene({ elements: [] });
       }
     };
+    const onPointerUpdate = ({
+      userId: uid,
+      userName: uname,
+      pointer,
+      button,
+    }: {
+      userId: string;
+      userName: string;
+      pointer: { x: number; y: number };
+      button: "up" | "down";
+    }) => {
+      setCollaborators((prev) => {
+        const next = new Map(prev);
+        next.set(uid, {
+          username: uname,
+          color: getColorForUser(uid),
+          pointer: { ...pointer, tool: "pointer" as const },
+          button,
+        });
+        return next;
+      });
+    };
     socket.on("whiteboard:sync", onSync);
     socket.on("whiteboard:cleared", onCleared);
+    socket.on("whiteboard:pointer-update", onPointerUpdate);
     return () => {
       socket.off("whiteboard:sync", onSync);
       socket.off("whiteboard:cleared", onCleared);
+      socket.off("whiteboard:pointer-update", onPointerUpdate);
     };
   }, [api]);
+
+  // Pointer move → broadcast to others
+  const handlePointerUpdate = useCallback(
+    ({ pointer, button }: { pointer: { x: number; y: number }; button: "up" | "down" }) => {
+      const now = Date.now();
+      if (now - pointerThrottle.current < 50) return;
+      pointerThrottle.current = now;
+      const socket = getSocket();
+      if (socket && roomId) {
+        socket.emit("whiteboard:pointer", { roomId, pointer, button });
+      }
+    },
+    [roomId]
+  );
 
   // Clear whiteboard
   const handleClear = () => {
@@ -210,7 +265,7 @@ export default function WhiteboardPage() {
                 await generateAndSaveSummary(
                   "/ai/whiteboard-summary",
                   { elements },
-                  { type: "whiteboard", contextId: roomId, contextLabel: `Whiteboard ${roomId}` }
+                  { type: "whiteboard", contextId: roomId, contextLabel: `${user?.name || "Unknown"}'s Whiteboard` }
                 );
                 setWbSummaryDone(true);
                 setTimeout(() => setWbSummaryDone(false), 2500);
@@ -270,6 +325,8 @@ export default function WhiteboardPage() {
             <Excalidraw
               excalidrawAPI={(excalidrawApi: any) => setApi(excalidrawApi)}
               onChange={handleChange}
+              onPointerUpdate={handlePointerUpdate}
+              collaborators={collaborators}
               theme="light"
               UIOptions={{
                 canvasActions: {
