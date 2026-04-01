@@ -385,9 +385,9 @@ export function initSocketServer(httpServer: http.Server): Server {
 
     socket.on(
       'whiteboard:pointer',
-      ({ roomId, pointer, button }: { roomId: string; pointer: { x: number; y: number; tool?: string }; button: 'up' | 'down' }) => {
+      ({ roomId, pointer, button, viewport }: { roomId: string; pointer: { x: number; y: number; tool?: string }; button: 'up' | 'down'; viewport?: { scrollX: number; scrollY: number; zoom: number } }) => {
         if (isSocketThrottled(userId, 'whiteboard:pointer', 50)) return;
-        socket.to(roomId).emit('whiteboard:pointer-update', { userId, userName, pointer, button });
+        socket.to(roomId).emit('whiteboard:pointer-update', { userId, userName, pointer, button, viewport });
       }
     );
 

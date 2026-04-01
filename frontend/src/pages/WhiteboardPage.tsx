@@ -145,11 +145,13 @@ export default function WhiteboardPage() {
       userName: uname,
       pointer,
       button,
+      viewport,
     }: {
       userId: string;
       userName: string;
       pointer: { x: number; y: number; tool?: "pointer" | "laser" };
       button: "up" | "down";
+      viewport?: { scrollX: number; scrollY: number; zoom: number };
     }) => {
       setCollaborators((prev) => {
         const next = new Map(prev);
@@ -163,16 +165,13 @@ export default function WhiteboardPage() {
         return next;
       });
 
-      // Follow mode — scroll viewport to center on followed user's cursor
-      if (followingIdRef.current === uid && apiRef.current) {
-        const s = apiRef.current.getAppState();
-        const zoom = s.zoom?.value || 1;
-        const w = s.width || window.innerWidth;
-        const h = s.height || window.innerHeight;
+      // Follow mode — mirror the followed person's viewport (see what they see)
+      if (followingIdRef.current === uid && apiRef.current && viewport) {
         apiRef.current.updateScene({
           appState: {
-            scrollX: w / 2 / zoom - pointer.x,
-            scrollY: (h / 2 - 48) / zoom - pointer.y,
+            scrollX: viewport.scrollX,
+            scrollY: viewport.scrollY,
+            zoom: { value: viewport.zoom },
           },
         });
       }
@@ -252,7 +251,10 @@ export default function WhiteboardPage() {
       pointerThrottle.current = now;
       const socket = getSocket();
       if (socket && roomId) {
-        socket.emit("whiteboard:pointer", { roomId, pointer, button });
+        // Include viewport state so followers can mirror what we see
+        const s = apiRef.current?.getAppState();
+        const viewport = s ? { scrollX: s.scrollX, scrollY: s.scrollY, zoom: s.zoom?.value || 1 } : undefined;
+        socket.emit("whiteboard:pointer", { roomId, pointer, button, viewport });
       }
     },
     [roomId]
