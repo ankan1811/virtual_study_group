@@ -17,10 +17,12 @@ import {
   Check,
   Save,
   X,
+  Eye,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
 import { generateAndSaveSummary } from "../utils/summaryApi";
+import { useDarkMode } from "../utils/useDarkMode";
 
 const Excalidraw = React.lazy(() =>
   import("@excalidraw/excalidraw").then((mod) => ({
@@ -43,6 +45,7 @@ interface QA {
 export default function WhiteboardPage() {
   const { roomId: paramRoomId } = useParams<{ roomId: string }>();
   const user = useSelector((state: AuthState) => state.auth.user);
+  const { isDark } = useDarkMode();
   const roomIdFromRedux = useSelector(
     (state: AuthState) => state.room.currentRoomId
   );
@@ -175,14 +178,26 @@ export default function WhiteboardPage() {
           },
         });
       }
+
+      // Self-healing presence: if this user's pill disappeared, restore it
+      setWbUsers((prev) => {
+        if (prev.some((u) => u.userId === uid)) return prev;
+        return [...prev, { userId: uid, userName: uname }];
+      });
     };
 
     const onUsers = (users: { userId: string; userName: string }[]) => {
       setWbUsers(users);
     };
 
+    // Re-join on socket reconnection (e.g. after brief network blip)
+    const onReconnect = () => {
+      if (roomId) socket.emit("whiteboard:join", { roomId });
+    };
+
     socket.on("whiteboard:pointer-update", onPointerUpdate);
     socket.on("whiteboard:users", onUsers);
+    socket.on("connect", onReconnect);
 
     // Join room + register presence (once per roomId)
     if (joinedRoomRef.current !== roomId) {
@@ -193,6 +208,7 @@ export default function WhiteboardPage() {
     return () => {
       socket.off("whiteboard:pointer-update", onPointerUpdate);
       socket.off("whiteboard:users", onUsers);
+      socket.off("connect", onReconnect);
     };
   }, [roomId]);
 
@@ -434,7 +450,7 @@ export default function WhiteboardPage() {
               excalidrawAPI={(excalidrawApi: any) => setApi(excalidrawApi)}
               onChange={handleChange}
               onPointerUpdate={handlePointerUpdate}
-              theme="light"
+              theme={isDark ? "dark" : "light"}
               UIOptions={{
                 canvasActions: {
                   loadScene: false,
@@ -443,59 +459,75 @@ export default function WhiteboardPage() {
               }}
               renderTopRightUI={() =>
                 wbUsers.length > 0 ? (
-                  <div className="flex items-center gap-1.5 mr-2">
-                    {wbUsers.map((u) => {
-                      const isMe = u.userId === user?.userId;
-                      const isFollowing = followingId === u.userId;
-                      const color = getColorForUser(u.userId);
-                      return (
-                        <button
-                          key={u.userId}
-                          onClick={() => {
-                            if (!isMe) {
-                              setFollowingId(isFollowing ? null : u.userId);
-                            }
-                          }}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all duration-200 shadow-sm ${
-                            isMe
-                              ? "bg-indigo-50 border-indigo-200 cursor-default"
-                              : isFollowing
-                                ? "bg-violet-100 border-violet-300 ring-1 ring-violet-300 cursor-pointer"
-                                : "bg-white border-gray-200 hover:bg-gray-50 cursor-pointer"
-                          }`}
-                          title={isMe ? "You" : isFollowing ? `Stop following ${u.userName}` : `Follow ${u.userName}`}
-                        >
-                          <span className="relative flex h-2 w-2">
-                            {isMe ? (
-                              <>
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-500 opacity-60" />
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500" />
-                              </>
-                            ) : (
-                              <>
-                                <span
-                                  className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60"
-                                  style={{ backgroundColor: color.background }}
-                                />
-                                <span
-                                  className="relative inline-flex rounded-full h-2 w-2"
-                                  style={{ backgroundColor: color.background }}
-                                />
-                              </>
+                  <div className="flex flex-col items-end gap-1 mr-2">
+                    <div className="flex items-center gap-1.5">
+                      {wbUsers.map((u) => {
+                        const isMe = u.userId === user?.userId;
+                        const isFollowing = followingId === u.userId;
+                        const color = getColorForUser(u.userId);
+                        return (
+                          <button
+                            key={u.userId}
+                            onClick={() => {
+                              if (!isMe) {
+                                setFollowingId(isFollowing ? null : u.userId);
+                              }
+                            }}
+                            className={`group flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all duration-200 shadow-sm ${
+                              isMe
+                                ? isDark
+                                  ? "bg-indigo-950/60 border-indigo-700 cursor-default"
+                                  : "bg-indigo-50 border-indigo-200 cursor-default"
+                                : isFollowing
+                                  ? isDark
+                                    ? "bg-violet-950/60 border-violet-600 ring-1 ring-violet-500/40 cursor-pointer"
+                                    : "bg-violet-100 border-violet-300 ring-1 ring-violet-300 cursor-pointer"
+                                  : isDark
+                                    ? "bg-gray-800 border-gray-600 hover:bg-gray-700 cursor-pointer"
+                                    : "bg-white border-gray-200 hover:bg-gray-50 cursor-pointer"
+                            }`}
+                            title={isMe ? "You" : isFollowing ? `Stop following ${u.userName}` : `Click to follow ${u.userName}`}
+                          >
+                            <span className="relative flex h-2 w-2">
+                              {isMe ? (
+                                <>
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-500 opacity-60" />
+                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-600" />
+                                </>
+                              ) : (
+                                <>
+                                  <span
+                                    className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60"
+                                    style={{ backgroundColor: color.background }}
+                                  />
+                                  <span
+                                    className="relative inline-flex rounded-full h-2 w-2"
+                                    style={{ backgroundColor: color.background }}
+                                  />
+                                </>
+                              )}
+                            </span>
+                            <span className={`text-[11px] poppins-medium truncate max-w-[80px] ${
+                              isMe
+                                ? isDark ? "text-indigo-300" : "text-indigo-700"
+                                : isFollowing
+                                  ? isDark ? "text-violet-300" : "text-violet-700"
+                                  : isDark ? "text-gray-300" : "text-gray-700"
+                            }`}>
+                              {isMe ? "You" : isFollowing ? `Following ${u.userName}` : u.userName}
+                            </span>
+                            {!isMe && !isFollowing && (
+                              <Eye size={10} className={`opacity-0 group-hover:opacity-100 transition-opacity ${isDark ? "text-gray-400" : "text-gray-400"}`} />
                             )}
-                          </span>
-                          <span className={`text-[11px] poppins-medium truncate max-w-[80px] ${
-                            isMe
-                              ? "text-indigo-700"
-                              : isFollowing
-                                ? "text-violet-700"
-                                : "text-gray-700"
-                          }`}>
-                            {isMe ? "You" : isFollowing ? `Following ${u.userName}` : u.userName}
-                          </span>
-                        </button>
-                      );
-                    })}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {wbUsers.length > 1 && !followingId && (
+                      <span className={`text-[9px] poppins-regular animate-pulse ${isDark ? "text-gray-500" : "text-gray-400"}`}>
+                        Click a name to follow
+                      </span>
+                    )}
                   </div>
                 ) : null
               }
