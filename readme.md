@@ -24,6 +24,16 @@ A full-stack web application for creating virtual study group spaces with real-t
 | **Caching**          | Upstash Redis (OTP hashes with TTL auto-expiry, podcast cache with 4-day TTL, news cache with 24h TTL, distributed rate limit counters) |
 | **News Feed**        | NewsAPI (100 free calls/day) — AI / Tech / Productivity categories, Upstash Redis cache (TTL 24h, max 1 API call/day), mock fallback articles |
 
+## Architecture Documentation
+
+Detailed breakdowns of how third-party services are used vs what's built in-house:
+
+| Document | Feature | In-House % | What's Ours |
+|----------|---------|-----------|-------------|
+| **[Video Call Architecture](video-call-architecture.txt)** | Agora RTC video calling | ~80% | Room sessions, invite links, call UI, track lifecycle, voice activity detection, usage limits, remote user presence, companion name display |
+| **[Whiteboard Architecture](whiteboard-architecture.txt)** | Excalidraw collaborative whiteboard | ~90% | Live diagram sync, late-joiner sync, persistent state (MongoDB), collaborator cursors, presence pills, follow mode (viewport mirroring), clear sync, AI assist, summaries, download |
+| **[Semantic Q&A Documentation](SEMANTIC_QA_DOCUMENTATION.md)** | RAG-powered summary Q&A | 100% | Vector embeddings, cosine similarity, context assembly, rate limiting |
+
 ## Database Architecture
 
 This project uses a **triple-layer data architecture** — PostgreSQL for structured relational data, MongoDB for unstructured/flexible data, and Upstash Redis for TTL-based caching and transient data.
@@ -425,7 +435,7 @@ This is **not** data migration — it's DDL (Data Definition Language). Think of
 - **Companion name display** — remote user's name derived from chat messages (`sentby` field). Shown as a name label overlay on the remote video tile (matching the "You" label style on the local tile)
 - **Voice activity detection** — custom `useVoiceActivity` hook using Web Audio API `AnalyserNode` (not Agora). Green ring + pulsing dot on local video tile when speaking
 - **Daily call time limit** — 1-hour daily cap enforced via `GET /room/call-usage` (checks remaining seconds) and `POST /room/call-usage` (reports consumed seconds). Usage synced periodically during call and via `keepalive` fetch on page unload. Themed toast popup when limit reached
-- **What Agora handles vs in-house** — Agora provides the real-time media transport layer (WebRTC infra, TURN/STUN, encoding, channel routing, publish/subscribe). Everything else is in-house: room sessions, invite links, call UI, track lifecycle, voice detection, usage limits, remote user presence, companion name display. See `video-call-architecture.txt` for full breakdown
+- **What Agora handles vs in-house** — Agora provides the real-time media transport layer (WebRTC infra, TURN/STUN, encoding, channel routing, publish/subscribe). Everything else is in-house: room sessions, invite links, call UI, track lifecycle, voice detection, usage limits, remote user presence, companion name display. **[Full technical documentation](video-call-architecture.txt)** — detailed breakdown of what's in-house (~80%) vs what Agora provides
 
 ### Real-time Chat
 
