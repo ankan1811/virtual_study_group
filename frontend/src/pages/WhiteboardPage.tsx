@@ -466,8 +466,8 @@ export default function WhiteboardPage() {
                           <span className="relative flex h-2 w-2">
                             {isMe ? (
                               <>
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-60" />
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500" />
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-500 opacity-60" />
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500" />
                               </>
                             ) : (
                               <>
