@@ -351,13 +351,19 @@ export default function WhiteboardPage() {
         .excalidraw .HelpButton { display: none !important; }
         .excalidraw .help-icon { display: none !important; }
         .excalidraw .App-toolbar__extra-tools-trigger { display: none !important; }
-        .excalidraw .App-toolbar__divider:last-of-type { display: none !important; }
+        .excalidraw .App-toolbar__divider { display: none !important; }
+        .excalidraw .App-toolbar-container > .ToolIcon:first-child { display: none !important; }
+        .excalidraw .App-toolbar-container > .App-toolbar__divider:first-of-type { display: none !important; }
+        .excalidraw .unlocked-icon { display: none !important; }
+        .excalidraw .ToolIcon__icon:has(#UnlockedIcon) { display: none !important; }
+        .excalidraw label[title="Lock"] { display: none !important; }
+        .excalidraw label:has(.unlocked-icon) { display: none !important; }
         .excalidraw .Island.App-menu__left::before {
           content: '';
           display: block;
           width: 100%;
-          padding-bottom: 52px;
-          background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 48'%3E%3Ctext x='100' y='20' text-anchor='middle' font-family='system-ui,-apple-system,sans-serif' font-weight='700' font-size='14' fill='%237c3aed'%3EVirtual Study Group%3C/text%3E%3Ctext x='100' y='36' text-anchor='middle' font-family='system-ui,-apple-system,sans-serif' font-weight='400' font-size='10' fill='%239ca3af'%3Eby Ankan Pal%3C/text%3E%3C/svg%3E") no-repeat center;
+          padding-bottom: 58px;
+          background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 220 52'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='0'%3E%3Cstop offset='0%25' stop-color='%237c3aed'/%3E%3Cstop offset='100%25' stop-color='%236366f1'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cg transform='translate(30,8) scale(0.65)' fill='none' stroke='%236366f1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z'/%3E%3Cpath d='M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z'/%3E%3C/g%3E%3Ctext x='126' y='22' text-anchor='middle' font-family='system-ui,-apple-system,sans-serif' font-weight='800' font-size='13' fill='url(%23g)'%3EVirtual Study Group%3C/text%3E%3Ctext x='126' y='38' text-anchor='middle' font-family='system-ui,-apple-system,sans-serif' font-weight='400' font-size='10' font-style='italic' fill='%239ca3af'%3Eby Ankan Pal%3C/text%3E%3C/svg%3E") no-repeat center;
           border-bottom: 1px solid var(--default-border-color);
           margin-bottom: 8px;
         }
