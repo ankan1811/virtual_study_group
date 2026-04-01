@@ -1,0 +1,325 @@
+WHITEBOARD ARCHITECTURE — A-Z BREAKDOWN
+========================================
+
+Overview
+--------
+The whiteboard is a full-page collaborative drawing canvas at route /whiteboard/:roomId.
+Users access it from the room call page via the "Whiteboard" tab. Multiple users in the
+same room share a single whiteboard in real-time. The canvas is powered by Excalidraw
+(MIT-licensed React component), but every collaborative feature is built in-house using
+our Socket.IO server. Excalidraw has zero network capabilities in our setup — it is
+purely a rendering engine.
+
+
+WHAT EXCALIDRAW PROVIDES (Rendering Engine Only)
+================================================
+Excalidraw is embedded as a standalone React component. It has no awareness of other
+users and no network capabilities. It only provides:
+
+  - Canvas rendering: drawing tools, shapes, text, freehand, arrows, zoom, pan, undo/redo
+  - Element model: JSON objects representing shapes/text (type, x, y, width, height, version)
+  - onChange callback: fires when the local user draws/modifies anything
+  - onPointerUpdate callback: fires with cursor position { x, y, tool } in scene coordinates
+  - updateScene() API: accepts elements, appState, or collaborators Map to update canvas
+  - Collaborator cursor rendering: given a collaborators Map, renders colored cursors with
+    usernames on the canvas. But it does NOT fetch or sync this data — we must provide it
+  - renderTopRightUI prop: allows injecting custom JSX into the canvas top-right area
+  - UIOptions: disable certain canvas actions (loadScene, export)
+
+WHAT EXCALIDRAW CANNOT DO (Without Its Own Server)
+--------------------------------------------------
+Excalidraw's official live collaboration (real-time sync, follow mode, rooms) relies on
+their own WebSocket server at excalidraw.com. Since we use Excalidraw as an embedded
+component with our own backend, none of their server-side features are available:
+
+  - Cannot sync drawings between users
+  - Cannot track who is online
+  - Cannot follow another user's viewport
+  - Cannot persist or load whiteboard state
+  - Cannot send or receive any network requests
+
+Excalidraw's built-in collaborator avatar UI (pink circles with "click to follow") is
+hidden via CSS (.UserList-Wrapper, .UserList__collaborators, .UserList__wrapper) and
+replaced by our custom presence pills rendered via renderTopRightUI.
+
+
+IN-HOUSE FEATURES (All Via Socket.IO)
+=====================================
+Every collaborative feature is ours. Excalidraw is just the canvas.
+
+
+1. LIVE DIAGRAM SYNC
+---------------------
+When User A draws, our code:
+  1. handleChange captures elements from Excalidraw's onChange
+  2. Version fingerprinting: computes a fingerprint from element versions to skip
+     re-emitting unchanged elements (prevents flicker from collaborator cursor updates
+     triggering onChange)
+  3. Debounces at 200ms, then emits whiteboard:update via Socket.IO
+  4. Backend throttles at 100ms, caches in whiteboardCache Map, broadcasts
+     whiteboard:sync to all other users in the room
+  5. Other users' onSync handler sets isRemoteUpdate flag and calls
+     api.updateScene({ elements }) to render
+
+Echo-loop prevention: isRemoteUpdate ref flag ensures incoming sync doesn't
+re-trigger outgoing broadcasts.
+
+Version fingerprinting: sum of (element.version + isDeleted count) creates a
+fingerprint. If unchanged since last emit, handleChange returns early. This prevents
+collaborator pointer updateScene calls from triggering spurious element re-broadcasts.
+
+
+2. LATE-JOINER STATE SYNC
+--------------------------
+Problem: User B opens the whiteboard after User A has already been drawing.
+
+Solution:
+  - Backend maintains whiteboardCache Map (roomId -> elements[]) in memory
+  - Every whiteboard:update stores the latest elements in the cache
+  - When User B emits whiteboard:join, backend sends cached state via whiteboard:state
+  - If cache is empty (server restarted), backend loads from MongoDB (WhiteboardState)
+    and repopulates the cache
+  - Frontend has two useEffects: the [roomId] effect emits whiteboard:join for presence,
+    and the [api] effect re-emits whiteboard:join once api is ready to receive state
+
+Data flow:
+  User B opens whiteboard
+    -> useEffect([roomId]) emits whiteboard:join (registers presence)
+    -> useEffect([api]) emits whiteboard:join (requests state when api is ready)
+    -> Backend: socket.join(roomId), adds to whiteboardUsers, sends whiteboardCache
+    -> Frontend: onState handler applies elements via api.updateScene()
+
+
+3. PERSISTENT WHITEBOARD STATE (MongoDB)
+-----------------------------------------
+Model: WhiteboardState (backend/src/models/WhiteboardState.ts)
+  - roomId: String (unique index)
+  - elements: Mixed (Excalidraw JSON elements array)
+  - timestamps: createdAt, updatedAt
+
+Save-on-exit modal:
+  - When user clicks "Back to Room" with drawings on canvas, a themed modal appears:
+    "Save whiteboard?" with Save & Exit / Don't Save / Cancel
+  - Save: emits whiteboard:save via socket -> backend upserts to MongoDB
+  - Don't Save: navigates back without persisting
+  - Empty canvas: no modal, navigates directly
+
+Backend handler (whiteboard:save):
+  - Reads from whiteboardCache (in-memory)
+  - Upserts to WhiteboardState collection via findOneAndUpdate
+
+Cleanup:
+  - whiteboard:clear deletes from both cache and MongoDB
+  - Room empty (all users left): cache cleared, MongoDB persists for next session
+
+
+4. COLLABORATOR CURSORS (Colored Pointers With Names)
+-----------------------------------------------------
+Transport: ours. Rendering: Excalidraw's.
+
+Flow:
+  1. User A moves cursor -> Excalidraw fires onPointerUpdate with { x, y, tool, button }
+  2. handlePointerUpdate throttles at 50ms, emits whiteboard:pointer with
+     { roomId, pointer, button, viewport } via socket
+  3. Backend throttles at 50ms, broadcasts whiteboard:pointer-update with
+     { userId, userName, pointer, button, viewport } to all others in room
+  4. Other users' onPointerUpdate socket handler builds a collaborators Map entry:
+     { username, color, pointer: { x, y, tool }, button, isCurrentUser: false }
+  5. useEffect([api, collaborators]) pushes the Map to Excalidraw via
+     api.updateScene({ collaborators })
+  6. Excalidraw draws colored cursor arrows with name labels at the given positions
+
+Color assignment: deterministic hash from userId into COLLAB_COLORS array
+(teal, blue, green, purple, pink, yellow — no red to avoid "offline" confusion).
+
+Viewport data: pointer events include the sender's { scrollX, scrollY, zoom }
+for follow mode (see below).
+
+
+5. PRESENCE PILLS (Who's On The Whiteboard)
+--------------------------------------------
+Rendered inside the Excalidraw canvas via renderTopRightUI prop (replacing
+Excalidraw's built-in avatar circles which are hidden via CSS).
+
+Backend tracking:
+  - whiteboardUsers Map (roomId -> Map<userId, { userId, userName }>)
+  - whiteboard:join adds user, broadcasts whiteboard:users list to room
+  - whiteboard:leave removes user, broadcasts updated list
+  - leaveRoom / disconnect cleanup: removes from whiteboardUsers
+
+Frontend:
+  - wbUsers state updated from whiteboard:users socket events
+  - Each user rendered as a pill with:
+    - "You" pill: violet dot (bg-violet-600), indigo background
+    - Other users: colored dot matching their cursor color, white background
+    - Clickable (non-self): toggles follow mode
+
+Socket events:
+  - whiteboard:join  { roomId }          -> backend adds to whiteboardUsers
+  - whiteboard:leave { roomId }          -> backend removes from whiteboardUsers
+  - whiteboard:users [{ userId, userName }]  -> broadcast to all in room
+
+
+6. FOLLOW MODE (Viewport Mirroring)
+------------------------------------
+Click another user's presence pill to follow them. Your viewport mirrors theirs
+exactly — same scroll position, same zoom level. You see what they see.
+
+Implementation:
+  - followingId state + followingIdRef (for stable access in socket closures)
+  - apiRef (for accessing Excalidraw API from the [roomId] useEffect without
+    depending on api)
+  - When a whiteboard:pointer-update arrives from the followed user, if viewport
+    data is present, apply it directly:
+      api.updateScene({
+        appState: {
+          scrollX: viewport.scrollX,
+          scrollY: viewport.scrollY,
+          zoom: { value: viewport.zoom }
+        }
+      })
+  - Auto-unfollow: when local user clicks/draws on canvas (button === "down" in
+    handlePointerUpdate), followingId is reset to null
+
+Data flow:
+  Followed user moves cursor
+    -> their handlePointerUpdate emits pointer + viewport { scrollX, scrollY, zoom }
+    -> backend broadcasts whiteboard:pointer-update with viewport
+    -> follower receives, checks followingIdRef, applies viewport via updateScene
+
+Zero extra network cost: viewport data piggybacks on the existing pointer events.
+
+
+7. CLEAR WHITEBOARD
+--------------------
+  - Frontend: api.updateScene({ elements: [] }), setElements([]),
+    emits whiteboard:clear
+  - Backend: deletes from whiteboardCache, deletes from MongoDB WhiteboardState,
+    broadcasts whiteboard:cleared to all others
+  - Other users: onCleared handler applies empty elements via updateScene
+
+
+8. AI ASSIST SIDEBAR
+--------------------
+Collapsible right panel (360px, Framer Motion spring animation) with:
+  - "Explain This" button: sends element descriptions to POST /ai/whiteboard-explain
+  - Custom question input: ask specific questions about the drawing
+  - Q&A history: teal-accented chat bubbles with Framer Motion animations
+  - Smart payloads: sends compact text descriptions (type, text, dimensions)
+    not raw JSON
+
+Backend (AiController.ts):
+  - describeWhiteboardElements() converts elements to text
+  - POST /ai/whiteboard-explain: elements + optional question -> explanation
+  - POST /ai/whiteboard-summary: elements -> bullet-point summary
+
+
+9. WHITEBOARD SUMMARY
+----------------------
+  - Summary button in toolbar: generates AI summary of whiteboard content
+  - Uses shared generateAndSaveSummary() utility
+  - Saves to Cloudflare R2 (styled HTML) + MongoDB (metadata + raw text + embedding)
+  - contextLabel shows owner's name (e.g., "Ankan's Whiteboard") not raw roomId
+  - R2 key pattern: summaries/{userId}/{roomId}_{timestamp}.html
+  - MongoDB title: "Whiteboard Summary - {date}"
+  - Bot message broadcast to room chat with download link
+
+
+10. SUMMARY DOWNLOAD BUTTON
+----------------------------
+  - Each summary card in SummariesPage has a download button (Download icon)
+  - Clicks GET /ai/summaries/:id/download
+  - Backend (downloadSummary in SummaryController.ts):
+    - Finds summary by ID + userId ownership check
+    - Generates fresh presigned URL (1-hour expiry) from R2 key
+    - Returns { url }
+  - Frontend opens URL in new tab
+  - Loading spinner while fetching URL
+
+
+SOCKET EVENTS REFERENCE
+========================
+
+Client -> Server:
+  whiteboard:update    { roomId, elements[] }
+  whiteboard:clear     { roomId }
+  whiteboard:join      { roomId }
+  whiteboard:leave     { roomId }
+  whiteboard:save      { roomId }
+  whiteboard:pointer   { roomId, pointer: { x, y, tool? }, button, viewport?: { scrollX, scrollY, zoom } }
+
+Server -> Client:
+  whiteboard:sync      { elements[], fromUserId }
+  whiteboard:cleared   { fromUserId }
+  whiteboard:state     { elements[] }
+  whiteboard:users     [{ userId, userName }]
+  whiteboard:pointer-update  { userId, userName, pointer: { x, y, tool? }, button, viewport?: { scrollX, scrollY, zoom } }
+
+
+BACKEND DATA STRUCTURES (In-Memory)
+====================================
+
+  whiteboardCache    Map<roomId, any[]>              Elements array per room
+  whiteboardUsers    Map<roomId, Map<userId, { userId, userName }>>    Presence tracking
+  roomParticipants   Map<roomId, Map<userId, { userId, userName }>>    Room-level (shared with chat)
+
+
+MONGODB MODEL
+=============
+
+Collection: whiteboardstates
+
+  {
+    roomId:    String    (unique index)
+    elements:  Mixed     (Excalidraw JSON elements array)
+    createdAt: Date      (auto)
+    updatedAt: Date      (auto)
+  }
+
+
+FRONTEND ARCHITECTURE (WhiteboardPage.tsx)
+==========================================
+
+useEffect Split:
+  - useEffect([roomId]):      Stable — pointer + presence listeners + join emit
+                              Never torn down when api changes. Uses apiRef for
+                              Excalidraw API access without dependency coupling.
+  - useEffect([api]):         Sync — whiteboard:sync, whiteboard:cleared,
+                              whiteboard:state listeners. Re-requests state when
+                              api becomes ready.
+  - useEffect([]):            Cleanup — emits whiteboard:leave on unmount
+  - useEffect([api, collaborators]): Pushes collaborators Map to Excalidraw
+
+Version Fingerprinting:
+  handleChange computes: sum of (element.version + non-deleted count)
+  If fingerprint matches last emitted, skips the emit entirely.
+  Prevents collaborator updateScene({ collaborators }) from triggering
+  unnecessary element re-broadcasts via onChange.
+
+CSS Overrides:
+  .excalidraw .UserList-Wrapper { display: none }
+  .excalidraw .UserList__collaborators { display: none }
+  .excalidraw .UserList__wrapper { display: none }
+  Hides Excalidraw's built-in collaborator avatars — replaced by our pills.
+
+
+WHAT'S EXCALIDRAW vs WHAT'S OURS — SUMMARY TABLE
+=================================================
+
+  Feature                    | Who does it?        | Excalidraw's role
+  ---------------------------+---------------------+--------------------------------------
+  Drawing tools & canvas     | Excalidraw          | Full
+  Live diagram sync          | Us (Socket.IO)      | Just renders elements we provide
+  Late-joiner sync           | Us (Socket.IO + DB) | Just renders elements we provide
+  Persistent state           | Us (MongoDB)        | None
+  Collaborator cursors       | Us + Excalidraw     | We transport data, it renders cursors
+  Presence tracking          | Us (Socket.IO)      | None
+  Presence pills UI          | Us (renderTopRightUI)| Provides the render slot
+  Follow mode                | Us (Socket.IO)      | We set scrollX/scrollY/zoom ourselves
+  Clear whiteboard           | Us (Socket.IO + DB) | Renders empty scene we provide
+  Save-on-exit               | Us (MongoDB)        | None
+  AI Assist                  | Us (API)            | None
+  Summary generation         | Us (API + R2 + DB)  | None
+  Summary download           | Us (API + R2)       | None
+  Built-in avatar UI         | Hidden via CSS      | Disabled — replaced by our pills
+  Built-in follow mode       | Not used            | Requires Excalidraw's own server

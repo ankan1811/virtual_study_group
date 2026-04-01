@@ -14,6 +14,16 @@ virtual_study_group/
 |                                     call UI, track lifecycle, voice activity
 |                                     detection, usage limits, remote user presence,
 |                                     companion name, chat, AI, whiteboard)
+|-- whiteboard-architecture.txt    # A-Z breakdown of the collaborative whiteboard.
+|                                     Excalidraw's role (rendering engine only) vs
+|                                     in-house features (live diagram sync, late-joiner
+|                                     sync, persistent state via MongoDB, collaborator
+|                                     cursors, presence pills, follow mode via viewport
+|                                     mirroring, clear sync, AI assist, summaries,
+|                                     download button). Socket events reference,
+|                                     MongoDB WhiteboardState model, frontend
+|                                     architecture (useEffect split, version
+|                                     fingerprinting, CSS overrides)
 |
 |-- backend/                         # Node.js + Express + TypeScript backend
 |   |-- .env                         # Environment variables (DATABASE_URL, MONGODB_URI,
@@ -51,34 +61,44 @@ virtual_study_group/
 |       |
 |       |-- socketServer.ts          # Socket.IO server with JWT auth middleware.
 |       |                              Handles: room chat, invites (companion-gated),
-|       |                              companion events, DM rooms, presence tracking.
+|       |                              companion events, DM rooms, presence tracking,
+|       |                              whiteboard collaboration.
 |       |                              Uses Drizzle queries for companions, DMs,
 |       |                              notifications (no Mongoose imports for these).
 |       |                              Per-user event throttling via socketThrottles map:
 |       |                              dm:send (200ms), companion:sendRequest (5s),
-|       |                              sendInvite (3s). Throttle intervals read from
-|       |                              RATE_LIMIT_CONFIG. Emits dm:error, companion:error,
-|       |                              inviteError on throttle. Cleanup on disconnect.
+|       |                              sendInvite (3s), whiteboard:update (100ms),
+|       |                              whiteboard:pointer (50ms). Throttle intervals
+|       |                              read from RATE_LIMIT_CONFIG.
 |       |                              serverMessage handler: broadcasts to room and
-|       |                              persists each message via insertChat (Drizzle),
-|       |                              includes sentById (userId) in broadcast payload.
-|       |                              DM events: dm:send (createDm via Drizzle, echoes
-|       |                              id+tempId for delivery ack), dm:markRead
-|       |                              (dbMarkDmRead + emits dm:readUpdate to sender),
-|       |                              dm:join.
-|       |                              companion:getOnlineCompanions: client requests
-|       |                              online companion IDs, server responds with
-|       |                              companion:onlineList filtered by userSocketMap.
-|       |                              Whiteboard events: whiteboard:update (throttled
-|       |                              100ms, broadcasts whiteboard:sync to room),
-|       |                              whiteboard:clear (broadcasts whiteboard:cleared).
+|       |                              persists each message via insertChat (Drizzle).
+|       |                              DM events: dm:send, dm:markRead, dm:join.
+|       |                              Whiteboard events:
+|       |                              - whiteboard:update (caches in whiteboardCache
+|       |                                Map, broadcasts whiteboard:sync to room)
+|       |                              - whiteboard:clear (clears cache + MongoDB
+|       |                                WhiteboardState, broadcasts whiteboard:cleared)
+|       |                              - whiteboard:join (socket.join(roomId), adds to
+|       |                                whiteboardUsers, broadcasts whiteboard:users,
+|       |                                sends cached/MongoDB state via whiteboard:state)
+|       |                              - whiteboard:leave (removes from whiteboardUsers,
+|       |                                broadcasts updated whiteboard:users)
+|       |                              - whiteboard:save (upserts whiteboardCache to
+|       |                                MongoDB WhiteboardState collection)
+|       |                              - whiteboard:pointer (throttled 50ms, broadcasts
+|       |                                whiteboard:pointer-update with userId, userName,
+|       |                                pointer {x,y,tool}, button, viewport
+|       |                                {scrollX,scrollY,zoom})
+|       |                              In-memory Maps: userSocketMap (userId->socketId),
+|       |                              roomParticipants, whiteboardCache (roomId->
+|       |                              elements[]), whiteboardUsers (roomId->Map of
+|       |                              {userId,userName}). Imports WhiteboardState
+|       |                              Mongoose model for persistent state.
 |       |                              Notification events: notification:new (pushed to
 |       |                              recipient on companion_request, companion_accepted,
 |       |                              room_invite). saveAndEmitNotification() via
 |       |                              createNotification() Drizzle query.
 |       |                              Exports: getIO(), getSocketIdForUser()
-|       |                              Uses userSocketMap (userId -> socketId).
-|       |                              Imports: insertChat, randomUUID
 |       |
 |       |-- socketServer2.ts         # Socket.IO server for live streaming.
 |       |                              Spawns FFmpeg child process for RTMP output.
@@ -212,6 +232,8 @@ virtual_study_group/
 |       |   |                          (non-blocking on failure).
 |       |   |                          POST /ai/save-summary (summary + roomId -> url)
 |       |   |                          GET /ai/summaries (list by type, 50 per page)
+|       |   |                          GET /ai/summaries/:id/download (generates fresh
+|       |   |                          presigned URL from R2 key, 1-hour expiry)
 |       |   |                          DELETE /ai/summaries/:id (ownership check)
 |       |   |-- DmController.ts      # getRecentChats: SQL CTE + window function
 |       |   |                          (ROW_NUMBER OVER PARTITION BY companion)
@@ -281,6 +303,7 @@ virtual_study_group/
 |       |   |                          /ai/dm-summary (generate DM summary),
 |       |   |                          POST /ai/summary-qa (RAG Q&A, summaryQaLimiter),
 |       |   |                          GET /ai/summaries (list saved summaries),
+|       |   |                          GET /ai/summaries/:id/download (fresh presigned URL),
 |       |   |                          DELETE /ai/summaries/:id (delete summary)
 |       |   |-- dmRoutes.ts          # GET /dm/recent (recent chats aggregation),
 |       |   |                          GET /dm/unread-counts (before /:companionId to
@@ -311,6 +334,12 @@ virtual_study_group/
 |       |   |                          createdAt: -1 }. Stays in MongoDB because: variable-
 |       |   |                          length HTML (5KB-50KB+), 768-dim float arrays stored
 |       |   |                          natively, schema varies by type, no joins needed
+|       |   |-- WhiteboardState.ts  # Persistent whiteboard state (MongoDB): roomId
+|       |   |                          (unique index), elements (Mixed — Excalidraw JSON
+|       |   |                          array), timestamps. Upserted via whiteboard:save
+|       |   |                          socket event (save-on-exit). Loaded on whiteboard:join
+|       |   |                          when in-memory cache is empty (server restart).
+|       |   |                          Deleted on whiteboard:clear
 |       |
 |       |-- db/                      # PostgreSQL (NeonDB) via Drizzle ORM + Upstash Redis
 |       |   |                          All structured relational data lives here

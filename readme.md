@@ -361,15 +361,22 @@ This is **not** data migration — it's DDL (Data Definition Language). Think of
 - **Full-page collaborative whiteboard** — opens as a dedicated route (`/whiteboard/:roomId`) when the Whiteboard tab is clicked in the call room. Full drawing tools (shapes, text, freehand, arrows, etc.) powered by `@excalidraw/excalidraw`
 - **Completely free** — the whiteboard library is MIT-licensed and runs entirely client-side, AI analysis via Gemini free tier
 - **Lazy-loaded** via `React.lazy()` — whiteboard bundle only downloads when first opened, keeping initial page load fast
-- **Real-time collaboration** — all room participants see the same whiteboard live via Socket.IO
-  - Drawing changes debounced at 200ms (client) and throttled at 100ms (server)
-  - Echo-loop prevention ensures incoming sync doesn't re-trigger outgoing broadcasts
+- **Excalidraw is the rendering engine only** — it provides the canvas, drawing tools, and cursor rendering. All collaborative features (sync, presence, follow, persistence) are built in-house via Socket.IO. Excalidraw's own collaboration server is not used. See `whiteboard-architecture.txt` for the complete breakdown
+- **Real-time live diagram sync** — all room participants see the same whiteboard live via Socket.IO. Drawing changes debounced at 200ms (client) and throttled at 100ms (server). Version fingerprinting prevents flicker from non-element onChange triggers. Echo-loop prevention via `isRemoteUpdate` ref
+- **Late-joiner state sync** — when a user opens the whiteboard after drawings exist, they immediately see all current content. Backend maintains an in-memory cache (`whiteboardCache`) updated on every draw event. Falls back to MongoDB on server restart
+- **Persistent whiteboard state** — save-on-exit modal when clicking "Back to Room" with drawings on canvas. Saves to MongoDB `WhiteboardState` collection. Drawings survive server restarts and are loaded on next visit
+- **Collaborator cursors** — colored cursor pointers with usernames rendered on the canvas. Pointer positions transported via `whiteboard:pointer` socket events; Excalidraw renders them via `updateScene({ collaborators })`. Deterministic color assignment per user (no red — avoids "offline" confusion)
+- **Presence pills** — custom UI rendered inside the Excalidraw canvas via `renderTopRightUI` prop (Excalidraw's built-in avatar circles hidden via CSS). Shows who's currently on the whiteboard with animated colored dots. "You" pill uses violet theme matching the toolbar
+- **Follow mode** — click another user's presence pill to mirror their viewport exactly (same scroll position, same zoom level). Zero extra network cost — viewport data (`scrollX`, `scrollY`, `zoom`) piggybacks on existing pointer events. Auto-unfollows when you click/draw on the canvas
+- **Clear whiteboard** — synced across all users via socket + deleted from in-memory cache and MongoDB
 - **Built-in AI Assist sidebar** — collapsible right panel (360px, Framer Motion spring) with:
   - "Explain This" button to analyze the entire whiteboard
   - Custom question input to ask specific questions about the drawing
   - Q&A history with teal-accented chat bubbles and Framer Motion animations
-- **Toolbar** — top bar with Back to Room, Clear whiteboard, Summary (generates + saves whiteboard summary to R2 + MongoDB), and AI Assist toggle
+- **Toolbar** — violet gradient top bar with Back to Room (save-on-exit), Clear whiteboard, Summary (generates + saves whiteboard summary to R2 + MongoDB with owner name label), and AI Assist toggle
 - **Smart AI payloads** — sends compact text descriptions (element type, text content, dimensions) rather than raw JSON
+- **Summary download** — each summary card in the Summaries page has a download button that generates a fresh presigned URL (1-hour expiry) and opens the styled HTML document in a new tab
+- **[Full technical documentation](whiteboard-architecture.txt)** — detailed A-Z breakdown of Excalidraw vs in-house features, socket events reference, data structures, and frontend architecture
 
 ### Podcasts
 
