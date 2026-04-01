@@ -346,6 +346,8 @@ export default function WhiteboardPage() {
         .excalidraw .UserList-Wrapper { display: none !important; }
         .excalidraw .UserList__collaborators { display: none !important; }
         .excalidraw .UserList__wrapper { display: none !important; }
+        .excalidraw .layer-ui__library { display: none !important; }
+        .excalidraw .sidebar-trigger.default-sidebar-trigger { display: none !important; }
       `}</style>
       {/* Top toolbar */}
       <div className="flex-shrink-0 h-12 flex items-center justify-between px-4 bg-gradient-to-r from-violet-600 to-indigo-600 border-b border-violet-700 shadow-lg shadow-violet-500/10">
@@ -459,75 +461,67 @@ export default function WhiteboardPage() {
               }}
               renderTopRightUI={() =>
                 wbUsers.length > 0 ? (
-                  <div className="flex flex-col items-end gap-1 mr-2">
-                    <div className="flex items-center gap-1.5">
-                      {wbUsers.map((u) => {
-                        const isMe = u.userId === user?.userId;
-                        const isFollowing = followingId === u.userId;
-                        const color = getColorForUser(u.userId);
-                        return (
-                          <button
-                            key={u.userId}
-                            onClick={() => {
-                              if (!isMe) {
-                                setFollowingId(isFollowing ? null : u.userId);
-                              }
-                            }}
-                            className={`group flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all duration-200 shadow-sm ${
-                              isMe
-                                ? isDark
-                                  ? "bg-indigo-950/60 border-indigo-700 cursor-default"
-                                  : "bg-indigo-50 border-indigo-200 cursor-default"
-                                : isFollowing
+                  <div className={`flex flex-col gap-0.5 p-1.5 rounded-2xl mt-8 ${isDark ? "bg-gray-800/90" : "bg-white/90"} backdrop-blur-xl shadow-lg border ${isDark ? "border-gray-700/40" : "border-black/[0.06]"} mr-1`}>
+                    {wbUsers.map((u) => {
+                      const isMe = u.userId === user?.userId;
+                      const isFollowing = followingId === u.userId;
+                      const color = getColorForUser(u.userId);
+                      const initial = (u.userName || "?")[0].toUpperCase();
+                      const firstName = u.userName.split(" ")[0];
+                      return (
+                        <div
+                          key={u.userId}
+                          className={`flex items-center gap-2 px-1.5 py-1 rounded-xl transition-all duration-200 ${
+                            isFollowing
+                              ? isDark ? "bg-violet-500/15" : "bg-violet-50"
+                              : ""
+                          }`}
+                        >
+                          {/* Avatar */}
+                          <div className="relative flex-shrink-0">
+                            <div
+                              className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white shadow-sm"
+                              style={{ background: isMe ? "linear-gradient(135deg, #10B981, #059669)" : `linear-gradient(135deg, ${color.background}, ${color.stroke})` }}
+                            >
+                              {initial}
+                            </div>
+                            <span className={`absolute -bottom-px -right-px w-[9px] h-[9px] rounded-full border-[1.5px] ${isDark ? "border-gray-800" : "border-white"} bg-emerald-400`} />
+                          </div>
+
+                          {/* Name */}
+                          <span className={`text-[11px] poppins-semibold flex-1 min-w-0 truncate ${
+                            isMe
+                              ? isDark ? "text-emerald-400" : "text-emerald-600"
+                              : isDark ? "text-gray-200" : "text-gray-800"
+                          }`}>
+                            {isMe ? "You" : firstName}
+                          </span>
+
+                          {/* Follow button (non-self only) */}
+                          {isMe ? (
+                            <span className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] poppins-semibold ${isDark ? "bg-emerald-900/50 text-emerald-400" : "bg-emerald-50 text-emerald-600"}`}>
+                              online
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => setFollowingId(isFollowing ? null : u.userId)}
+                              className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] poppins-semibold transition-all duration-150 flex-shrink-0 ${
+                                isFollowing
                                   ? isDark
-                                    ? "bg-violet-950/60 border-violet-600 ring-1 ring-violet-500/40 cursor-pointer"
-                                    : "bg-violet-100 border-violet-300 ring-1 ring-violet-300 cursor-pointer"
+                                    ? "bg-violet-600 text-white hover:bg-violet-500"
+                                    : "bg-violet-600 text-white hover:bg-violet-500"
                                   : isDark
-                                    ? "bg-gray-800 border-gray-600 hover:bg-gray-700 cursor-pointer"
-                                    : "bg-white border-gray-200 hover:bg-gray-50 cursor-pointer"
-                            }`}
-                            title={isMe ? "You" : isFollowing ? `Stop following ${u.userName}` : `Click to follow ${u.userName}`}
-                          >
-                            <span className="relative flex h-2 w-2">
-                              {isMe ? (
-                                <>
-                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-500 opacity-60" />
-                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-600" />
-                                </>
-                              ) : (
-                                <>
-                                  <span
-                                    className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60"
-                                    style={{ backgroundColor: color.background }}
-                                  />
-                                  <span
-                                    className="relative inline-flex rounded-full h-2 w-2"
-                                    style={{ backgroundColor: color.background }}
-                                  />
-                                </>
-                              )}
-                            </span>
-                            <span className={`text-[11px] poppins-medium truncate max-w-[80px] ${
-                              isMe
-                                ? isDark ? "text-indigo-300" : "text-indigo-700"
-                                : isFollowing
-                                  ? isDark ? "text-violet-300" : "text-violet-700"
-                                  : isDark ? "text-gray-300" : "text-gray-700"
-                            }`}>
-                              {isMe ? "You" : isFollowing ? `Following ${u.userName}` : u.userName}
-                            </span>
-                            {!isMe && !isFollowing && (
-                              <Eye size={10} className={`opacity-0 group-hover:opacity-100 transition-opacity ${isDark ? "text-gray-400" : "text-gray-400"}`} />
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {wbUsers.length > 1 && !followingId && (
-                      <span className={`text-[9px] poppins-regular animate-pulse ${isDark ? "text-gray-500" : "text-gray-400"}`}>
-                        Click a name to follow
-                      </span>
-                    )}
+                                    ? "bg-violet-600 text-white hover:bg-violet-500"
+                                    : "bg-violet-600 text-white hover:bg-violet-500"
+                              }`}
+                            >
+                              <Eye size={9} />
+                              {isFollowing ? "Following" : "Follow"}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : null
               }
