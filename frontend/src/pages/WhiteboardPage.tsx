@@ -348,6 +348,9 @@ export default function WhiteboardPage() {
         .excalidraw .UserList__wrapper { display: none !important; }
         .excalidraw .layer-ui__library { display: none !important; }
         .excalidraw .sidebar-trigger.default-sidebar-trigger { display: none !important; }
+        .excalidraw .HelpButton { display: none !important; }
+        .excalidraw .help-icon { display: none !important; }
+        .excalidraw .main-menu-trigger { display: none !important; }
       `}</style>
       {/* Top toolbar */}
       <div className="flex-shrink-0 h-12 flex items-center justify-between px-4 bg-gradient-to-r from-violet-600 to-indigo-600 border-b border-violet-700 shadow-lg shadow-violet-500/10">
