@@ -50,6 +50,7 @@ export default function WhiteboardPage() {
     (state: AuthState) => state.room.currentRoomId
   );
   const roomId = paramRoomId ?? roomIdFromRedux ?? user?.roomId ?? "";
+  const isRoomOwner = roomId.includes(user?.userId || "");
   const navigate = useNavigate();
 
   // Excalidraw
@@ -362,10 +363,10 @@ export default function WhiteboardPage() {
           content: '';
           display: block;
           width: 100%;
-          padding-bottom: 58px;
-          background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 220 52'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='0'%3E%3Cstop offset='0%25' stop-color='%237c3aed'/%3E%3Cstop offset='100%25' stop-color='%236366f1'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cg transform='translate(30,8) scale(0.65)' fill='none' stroke='%236366f1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z'/%3E%3Cpath d='M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z'/%3E%3C/g%3E%3Ctext x='126' y='22' text-anchor='middle' font-family='system-ui,-apple-system,sans-serif' font-weight='800' font-size='13' fill='url(%23g)'%3EVirtual Study Group%3C/text%3E%3Ctext x='126' y='38' text-anchor='middle' font-family='system-ui,-apple-system,sans-serif' font-weight='400' font-size='10' font-style='italic' fill='%239ca3af'%3Eby Ankan Pal%3C/text%3E%3C/svg%3E") no-repeat center;
+          padding-bottom: 112px;
+          background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 220 112'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='0'%3E%3Cstop offset='0%25' stop-color='%237c3aed'/%3E%3Cstop offset='100%25' stop-color='%236366f1'/%3E%3C/linearGradient%3E%3ClinearGradient id='bg' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%237c3aed' stop-opacity='0.06'/%3E%3Cstop offset='100%25' stop-color='%236366f1' stop-opacity='0.03'/%3E%3C/linearGradient%3E%3CradialGradient id='glow' cx='0.5' cy='0.5' r='0.5'%3E%3Cstop offset='0%25' stop-color='%237c3aed' stop-opacity='0.15'/%3E%3Cstop offset='100%25' stop-color='%237c3aed' stop-opacity='0'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect x='4' y='4' width='212' height='104' rx='12' fill='url(%23bg)'/%3E%3Ccircle cx='110' cy='38' r='20' fill='url(%23glow)'/%3E%3Cg transform='translate(91,23) scale(0.75)' fill='none' stroke='%237c3aed' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z'/%3E%3Cpath d='M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z'/%3E%3C/g%3E%3Ctext x='110' y='66' text-anchor='middle' font-family='system-ui,-apple-system,sans-serif' font-weight='800' font-size='12' letter-spacing='1.5' fill='url(%23g)'%3EVIRTUAL STUDY GROUP%3C/text%3E%3Cline x1='88' y1='73' x2='132' y2='73' stroke='url(%23g)' stroke-width='1' opacity='0.3'/%3E%3Ctext x='110' y='86' text-anchor='middle' font-family='system-ui,-apple-system,sans-serif' font-weight='500' font-size='13' fill='%23a78bfa'%3Eby Ankan Pal%3C/text%3E%3C/svg%3E") no-repeat center;
           border-bottom: 1px solid var(--default-border-color);
-          margin-bottom: 8px;
+          margin-bottom: 14px;
         }
         .excalidraw .main-menu-trigger { display: none !important; }
       `}</style>
@@ -375,13 +376,13 @@ export default function WhiteboardPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => {
-              if (elements.length > 0) {
+              if (elements.length > 0 && isRoomOwner) {
                 setShowSaveModal(true);
               } else {
                 navigate(-1);
               }
             }}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-violet-200 hover:text-white hover:bg-white/15 transition-colors text-sm poppins-medium"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-violet-200 hover:text-violet-100 transition-colors text-sm poppins-medium"
           >
             <ArrowLeft size={16} />
             Back to Room
@@ -526,13 +527,9 @@ export default function WhiteboardPage() {
                             <button
                               onClick={() => setFollowingId(isFollowing ? null : u.userId)}
                               className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] poppins-semibold transition-all duration-150 flex-shrink-0 ${
-                                isFollowing
-                                  ? isDark
-                                    ? "bg-violet-600 text-white hover:bg-violet-500"
-                                    : "bg-violet-600 text-white hover:bg-violet-500"
-                                  : isDark
-                                    ? "bg-violet-600 text-white hover:bg-violet-500"
-                                    : "bg-violet-600 text-white hover:bg-violet-500"
+                                isDark
+                                  ? "bg-violet-900/50 text-violet-300"
+                                  : "bg-violet-50 text-violet-500"
                               }`}
                             >
                               <Eye size={9} />
