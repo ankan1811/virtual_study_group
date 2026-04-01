@@ -72,7 +72,8 @@ export default function WhiteboardPage() {
   const [followingId, setFollowingId] = useState<string | null>(null);
   const followingIdRef = useRef<string | null>(null);
   followingIdRef.current = followingId;
-  if (followingId) console.log("[RENDER] followingId:", followingId, "ref:", followingIdRef.current);
+  const apiRef = useRef<any>(null);
+  apiRef.current = api;
 
   // Save-on-exit modal
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -117,14 +118,14 @@ export default function WhiteboardPage() {
     [roomId]
   );
 
-  // Collaborator color generator (deterministic from userId)
+  // Collaborator color generator (deterministic from userId — no red to avoid "offline" confusion)
   const COLLAB_COLORS = [
-    { background: "#FF6B6B", stroke: "#C0392B" },
     { background: "#4ECDC4", stroke: "#16A085" },
     { background: "#45B7D1", stroke: "#2980B9" },
     { background: "#96CEB4", stroke: "#27AE60" },
-    { background: "#FFEAA7", stroke: "#F39C12" },
-    { background: "#DDA0DD", stroke: "#8E44AD" },
+    { background: "#A29BFE", stroke: "#6C5CE7" },
+    { background: "#FDA7DF", stroke: "#D63384" },
+    { background: "#FDCB6E", stroke: "#E17055" },
   ];
   const getColorForUser = (uid: string) => {
     let hash = 0;
@@ -132,25 +133,13 @@ export default function WhiteboardPage() {
     return COLLAB_COLORS[hash];
   };
 
-  // Remote sync + presence (single useEffect to keep socket room membership stable)
+  // ── Stable listeners: pointer + presence (never torn down on api change) ──
   const joinedRoomRef = useRef<string | null>(null);
 
   useEffect(() => {
     const socket = getSocket();
-    if (!socket) return;
+    if (!socket || !roomId) return;
 
-    const onSync = ({ elements: els }: { elements: any[] }) => {
-      if (api) {
-        isRemoteUpdate.current = true;
-        api.updateScene({ elements: els });
-      }
-    };
-    const onCleared = () => {
-      if (api) {
-        isRemoteUpdate.current = true;
-        api.updateScene({ elements: [] });
-      }
-    };
     const onPointerUpdate = ({
       userId: uid,
       userName: uname,
@@ -162,7 +151,6 @@ export default function WhiteboardPage() {
       pointer: { x: number; y: number; tool?: "pointer" | "laser" };
       button: "up" | "down";
     }) => {
-      console.log("[PTR] Received from:", uid, "followingId:", followingIdRef.current);
       setCollaborators((prev) => {
         const next = new Map(prev);
         next.set(uid, {
@@ -176,61 +164,73 @@ export default function WhiteboardPage() {
       });
 
       // Follow mode — scroll viewport to center on followed user's cursor
-      if (followingIdRef.current === uid) {
-        console.log("[FOLLOW] followingId:", followingIdRef.current, "uid:", uid, "api:", !!api);
-        if (api) {
-          const s = api.getAppState();
-          const zoom = s.zoom?.value || 1;
-          const w = s.width || window.innerWidth;
-          const h = s.height || window.innerHeight;
-          const ol = s.offsetLeft || 0;
-          const ot = s.offsetTop || 0;
-          const newScrollX = (w / 2 - ol) / zoom - pointer.x;
-          const newScrollY = (h / 2 - ot) / zoom - pointer.y;
-          console.log("[FOLLOW] pointer:", pointer, "zoom:", zoom, "w:", w, "h:", h, "ol:", ol, "ot:", ot);
-          console.log("[FOLLOW] setting scrollX:", newScrollX, "scrollY:", newScrollY);
-          api.updateScene({
-            appState: {
-              scrollX: newScrollX,
-              scrollY: newScrollY,
-            },
-          });
-          // Verify it took effect
-          const after = api.getAppState();
-          console.log("[FOLLOW] after scrollX:", after.scrollX, "scrollY:", after.scrollY);
-        }
+      if (followingIdRef.current === uid && apiRef.current) {
+        const s = apiRef.current.getAppState();
+        const zoom = s.zoom?.value || 1;
+        const w = s.width || window.innerWidth;
+        const h = s.height || window.innerHeight;
+        apiRef.current.updateScene({
+          appState: {
+            scrollX: w / 2 / zoom - pointer.x,
+            scrollY: (h / 2 - 48) / zoom - pointer.y,
+          },
+        });
       }
     };
-    const onState = ({ elements: els }: { elements: any[] }) => {
-      if (api) {
-        isRemoteUpdate.current = true;
-        api.updateScene({ elements: els });
-      }
-    };
+
     const onUsers = (users: { userId: string; userName: string }[]) => {
       setWbUsers(users);
     };
 
-    socket.on("whiteboard:sync", onSync);
-    socket.on("whiteboard:cleared", onCleared);
     socket.on("whiteboard:pointer-update", onPointerUpdate);
-    socket.on("whiteboard:state", onState);
     socket.on("whiteboard:users", onUsers);
 
-    // Only emit join once per roomId (not on every api change)
-    if (roomId && joinedRoomRef.current !== roomId) {
+    // Join room + register presence (once per roomId)
+    if (joinedRoomRef.current !== roomId) {
       joinedRoomRef.current = roomId;
+      socket.emit("whiteboard:join", { roomId });
+    }
+
+    return () => {
+      socket.off("whiteboard:pointer-update", onPointerUpdate);
+      socket.off("whiteboard:users", onUsers);
+    };
+  }, [roomId]);
+
+  // ── Sync listeners (need api) ──
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket || !api) return;
+
+    const onSync = ({ elements: els }: { elements: any[] }) => {
+      isRemoteUpdate.current = true;
+      api.updateScene({ elements: els });
+    };
+    const onCleared = () => {
+      isRemoteUpdate.current = true;
+      api.updateScene({ elements: [] });
+    };
+    const onState = ({ elements: els }: { elements: any[] }) => {
+      isRemoteUpdate.current = true;
+      api.updateScene({ elements: els });
+    };
+
+    socket.on("whiteboard:sync", onSync);
+    socket.on("whiteboard:cleared", onCleared);
+    socket.on("whiteboard:state", onState);
+
+    // Re-request state now that api + listeners are ready
+    // (the first whiteboard:join in [roomId] effect may have fired before api was set)
+    if (roomId) {
       socket.emit("whiteboard:join", { roomId });
     }
 
     return () => {
       socket.off("whiteboard:sync", onSync);
       socket.off("whiteboard:cleared", onCleared);
-      socket.off("whiteboard:pointer-update", onPointerUpdate);
       socket.off("whiteboard:state", onState);
-      socket.off("whiteboard:users", onUsers);
     };
-  }, [api, roomId]);
+  }, [api]);
 
   // Clean up whiteboard presence on unmount
   useEffect(() => {
@@ -243,13 +243,10 @@ export default function WhiteboardPage() {
     };
   }, []);
 
-  // Pointer move → broadcast to others
+  // Pointer move → broadcast to others + auto-unfollow on click
   const handlePointerUpdate = useCallback(
     ({ pointer, button }: { pointer: { x: number; y: number; tool: "pointer" | "laser" }; button: "up" | "down" }) => {
-      // Stop following when local user clicks/draws on canvas
-      if (button === "down" && followingIdRef.current) {
-        setFollowingId(null);
-      }
+      if (button === "down" && followingIdRef.current) setFollowingId(null);
       const now = Date.now();
       if (now - pointerThrottle.current < 50) return;
       pointerThrottle.current = now;
@@ -326,6 +323,12 @@ export default function WhiteboardPage() {
 
   return (
     <div className="h-screen flex flex-col bg-gray-950">
+      {/* Hide Excalidraw's built-in collaborator avatars — we use our own pills */}
+      <style>{`
+        .excalidraw .UserList-Wrapper { display: none !important; }
+        .excalidraw .UserList__collaborators { display: none !important; }
+        .excalidraw .UserList__wrapper { display: none !important; }
+      `}</style>
       {/* Top toolbar */}
       <div className="flex-shrink-0 h-12 flex items-center justify-between px-4 bg-gradient-to-r from-violet-600 to-indigo-600 border-b border-violet-700 shadow-lg shadow-violet-500/10">
         {/* Left */}
@@ -354,60 +357,6 @@ export default function WhiteboardPage() {
 
         {/* Right */}
         <div className="flex items-center gap-2">
-          {/* Active users on whiteboard */}
-          {wbUsers.length > 0 && (
-            <div className="flex items-center gap-1.5 mr-1">
-              {wbUsers.map((u) => {
-                const isMe = u.userId === user?.userId;
-                const isFollowing = followingId === u.userId;
-                const color = getColorForUser(u.userId);
-                return (
-                  <button
-                    key={u.userId}
-                    onClick={() => {
-                      if (!isMe) {
-                        const newVal = isFollowing ? null : u.userId;
-                        console.log("[PILL] click → setting followingId to:", newVal);
-                        setFollowingId(newVal);
-                      }
-                    }}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full backdrop-blur-sm border transition-all duration-200 ${
-                      isMe
-                        ? "bg-white/20 border-white/25 cursor-default"
-                        : isFollowing
-                          ? "bg-white/25 border-white/40 ring-1 ring-white/30 cursor-pointer"
-                          : "bg-white/10 border-white/10 hover:bg-white/15 cursor-pointer"
-                    }`}
-                    title={isMe ? "You" : isFollowing ? `Stop following ${u.userName}` : `Follow ${u.userName}`}
-                  >
-                    <span className="relative flex h-2 w-2">
-                      {isMe ? (
-                        <>
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-60" />
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
-                        </>
-                      ) : (
-                        <>
-                          <span
-                            className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60"
-                            style={{ backgroundColor: color.background }}
-                          />
-                          <span
-                            className="relative inline-flex rounded-full h-2 w-2"
-                            style={{ backgroundColor: color.background }}
-                          />
-                        </>
-                      )}
-                    </span>
-                    <span className="text-[11px] text-white/90 poppins-medium truncate max-w-[80px]">
-                      {isMe ? "You" : isFollowing ? `Following ${u.userName}` : u.userName}
-                    </span>
-                  </button>
-                );
-              })}
-              <div className="w-px h-5 bg-violet-400/30" />
-            </div>
-          )}
           <button
             onClick={handleClear}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-violet-200 hover:text-red-400 hover:bg-red-500/20 transition-colors text-xs poppins-medium"
@@ -490,6 +439,64 @@ export default function WhiteboardPage() {
                   export: false,
                 },
               }}
+              renderTopRightUI={() =>
+                wbUsers.length > 0 ? (
+                  <div className="flex items-center gap-1.5 mr-2">
+                    {wbUsers.map((u) => {
+                      const isMe = u.userId === user?.userId;
+                      const isFollowing = followingId === u.userId;
+                      const color = getColorForUser(u.userId);
+                      return (
+                        <button
+                          key={u.userId}
+                          onClick={() => {
+                            if (!isMe) {
+                              setFollowingId(isFollowing ? null : u.userId);
+                            }
+                          }}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all duration-200 shadow-sm ${
+                            isMe
+                              ? "bg-indigo-50 border-indigo-200 cursor-default"
+                              : isFollowing
+                                ? "bg-violet-100 border-violet-300 ring-1 ring-violet-300 cursor-pointer"
+                                : "bg-white border-gray-200 hover:bg-gray-50 cursor-pointer"
+                          }`}
+                          title={isMe ? "You" : isFollowing ? `Stop following ${u.userName}` : `Follow ${u.userName}`}
+                        >
+                          <span className="relative flex h-2 w-2">
+                            {isMe ? (
+                              <>
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-60" />
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500" />
+                              </>
+                            ) : (
+                              <>
+                                <span
+                                  className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60"
+                                  style={{ backgroundColor: color.background }}
+                                />
+                                <span
+                                  className="relative inline-flex rounded-full h-2 w-2"
+                                  style={{ backgroundColor: color.background }}
+                                />
+                              </>
+                            )}
+                          </span>
+                          <span className={`text-[11px] poppins-medium truncate max-w-[80px] ${
+                            isMe
+                              ? "text-indigo-700"
+                              : isFollowing
+                                ? "text-violet-700"
+                                : "text-gray-700"
+                          }`}>
+                            {isMe ? "You" : isFollowing ? `Following ${u.userName}` : u.userName}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null
+              }
             />
           </React.Suspense>
         </div>
