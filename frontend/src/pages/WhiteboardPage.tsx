@@ -350,6 +350,17 @@ export default function WhiteboardPage() {
         .excalidraw .sidebar-trigger.default-sidebar-trigger { display: none !important; }
         .excalidraw .HelpButton { display: none !important; }
         .excalidraw .help-icon { display: none !important; }
+        .excalidraw .App-toolbar__extra-tools-trigger { display: none !important; }
+        .excalidraw .App-toolbar__divider:last-of-type { display: none !important; }
+        .excalidraw .Island.App-menu__left::before {
+          content: '';
+          display: block;
+          width: 100%;
+          padding-bottom: 52px;
+          background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 48'%3E%3Ctext x='100' y='20' text-anchor='middle' font-family='system-ui,-apple-system,sans-serif' font-weight='700' font-size='14' fill='%237c3aed'%3EVirtual Study Group%3C/text%3E%3Ctext x='100' y='36' text-anchor='middle' font-family='system-ui,-apple-system,sans-serif' font-weight='400' font-size='10' fill='%239ca3af'%3Eby Ankan Pal%3C/text%3E%3C/svg%3E") no-repeat center;
+          border-bottom: 1px solid var(--default-border-color);
+          margin-bottom: 8px;
+        }
         .excalidraw .main-menu-trigger { display: none !important; }
       `}</style>
       {/* Top toolbar */}
