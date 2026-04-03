@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import "./App.css";
 import AuthPage from "./pages/AuthPage";
@@ -28,9 +28,21 @@ import { RadioProvider } from "./context/RadioContext";
 import { PodcastPlayerProvider } from "./context/PodcastPlayerContext";
 import MiniPlayer from "./components/MiniPlayer";
 import PodcastMiniPlayer from "./components/PodcastMiniPlayer";
+import ColdStartScreen from "./components/ColdStartScreen";
 
 function AppInner() {
   const dispatch = useDispatch();
+  const [serverStatus, setServerStatus] = useState<'unknown' | 'alive' | 'dead'>('unknown');
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), 5000);
+    fetch(`${import.meta.env.VITE_API_URL}/ping`, { signal: controller.signal })
+      .then(r => { if (r.ok) setServerStatus('alive'); else setServerStatus('dead'); })
+      .catch(() => setServerStatus('dead'))
+      .finally(() => clearTimeout(id));
+    return () => { clearTimeout(id); controller.abort(); };
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -55,6 +67,9 @@ function AppInner() {
       }
     }
   }, []);
+
+  if (serverStatus === 'unknown') return null;
+  if (serverStatus === 'dead') return <ColdStartScreen />;
 
   return (
     <BrowserRouter>
