@@ -293,7 +293,7 @@ function EKGMonitor({ serverState }: { serverState: ServerState }) {
         className="rounded-lg"
         style={{ maxWidth: '100%' }}
       />
-      <span className="absolute bottom-1.5 right-2 font-mono text-[9px] text-slate-600 tracking-widest select-none">
+      <span className="absolute bottom-1.5 right-2 font-mono text-[9px] text-slate-400 tracking-widest select-none">
         SERVER PULSE
       </span>
     </div>
@@ -433,7 +433,7 @@ function TypingRacer({ serverState }: { serverState: ServerState }) {
         </div>
         {pb > 0 && (
           <div className="flex items-center gap-1.5 ml-auto">
-            <Trophy className={`w-3 h-3 flex-shrink-0 ${newRecord ? 'text-amber-400' : 'text-slate-600'}`} />
+            <Trophy className={`w-3 h-3 flex-shrink-0 ${newRecord ? 'text-amber-400' : 'text-slate-400'}`} />
             <span className="text-slate-500 text-xs">Best</span>
             <span className={`text-xs poppins-semibold font-semibold ${newRecord ? 'text-amber-400' : 'text-slate-400'}`}>
               {pb} WPM
@@ -711,7 +711,7 @@ export default function ColdStartScreen() {
                 </div>
                 <div>
                   <p className="text-slate-300 text-sm poppins-medium">{formatTime(elapsed)} elapsed</p>
-                  <p className="text-slate-600 text-xs poppins-regular mt-0.5">Polling every 3 seconds</p>
+                  <p className="text-slate-400 text-xs poppins-regular mt-0.5">Polling every 3 seconds</p>
                 </div>
               </div>
 
@@ -790,7 +790,7 @@ export default function ColdStartScreen() {
                 >
                   Warm up while you wait ⚡
                 </h2>
-                <p className="text-slate-600 text-xs poppins-regular mt-1">
+                <p className="text-slate-400 text-xs poppins-regular mt-1">
                   Test your typing speed with famous study quotes
                 </p>
               </div>
@@ -801,7 +801,7 @@ export default function ColdStartScreen() {
                 className="pt-4 mt-auto"
                 style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
               >
-                <p className="text-slate-600 text-[11px] poppins-medium uppercase tracking-wider mb-3">
+                <p className="text-slate-400 text-[11px] poppins-medium uppercase tracking-wider mb-3">
                   🔖 Study Tip
                 </p>
                 <StudyFactCarousel />
