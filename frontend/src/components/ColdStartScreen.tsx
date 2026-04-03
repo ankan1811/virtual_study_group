@@ -27,25 +27,25 @@ const STUDY_TIPS = [
 ];
 
 const STATUS_MSGS = [
-  { threshold: 0, text: "Waking up the study rooms", emoji: "📚" },
-  { threshold: 10, text: "Loading your companions", emoji: "🧑‍🤝‍🧑" },
-  { threshold: 20, text: "Almost ready", emoji: "✏️" },
-  { threshold: 40, text: "Setting up the whiteboards", emoji: "🖊️" },
-  { threshold: 60, text: "Warming up the AI tutor", emoji: "🤖" },
-  { threshold: 120, text: "Server seems to be napping. Please try again later", emoji: "😴" },
+  { threshold: 0, text: "Waking up the study rooms", emoji: "🎓" },
+  { threshold: 10, text: "Loading your companions", emoji: "🫂" },
+  { threshold: 20, text: "Almost ready", emoji: "🖋️" },
+  { threshold: 40, text: "Setting up the whiteboards", emoji: "🎨" },
+  { threshold: 60, text: "Warming up the AI tutor", emoji: "🔮" },
+  { threshold: 120, text: "Server seems to be napping. Please try again later", emoji: "🌙" },
 ] as const;
 
 const FEATURES = [
-  { icon: "📚", label: "Study Rooms" },
-  { icon: "🤖", label: "AI Tutor" },
-  { icon: "🎙️", label: "Live Calls" },
-  { icon: "🖊️", label: "Whiteboard" },
-  { icon: "🎵", label: "Radio" },
-  { icon: "📊", label: "Sessions" },
+  { icon: "🎓", label: "Study Rooms" },
+  { icon: "🔮", label: "AI Tutor" },
+  { icon: "🎤", label: "Live Calls" },
+  { icon: "🎨", label: "Whiteboard" },
+  { icon: "🎧", label: "Radio" },
+  { icon: "📈", label: "Sessions" },
 ];
 
 const PARTICLE_COLORS = ['#6366f1', '#8b5cf6', '#22d3ee'];
-const STUDY_ICONS = ['📚', '✏️', '🧠', '💡', '🔬', '📝', '🎯', '⚗️'];
+const STUDY_ICONS = ['🎓', '🖋️', '🧠', '✨', '🔭', '🗒️', '🎯', '🧬'];
 
 // ─── NeuralCanvas ─────────────────────────────────────────────────────────────
 
@@ -370,7 +370,7 @@ function TypingRacer({ serverState }: { serverState: ServerState }) {
           style={{ background: 'rgba(5,46,22,0.92)', backdropFilter: 'blur(8px)' }}
         >
           <div className="text-center">
-            <p className="text-3xl mb-2">🚀</p>
+            <p className="text-3xl mb-2">🌠</p>
             <p className="text-emerald-400 poppins-semibold text-sm">Great warm-up!</p>
             <p className="text-slate-400 text-xs poppins-regular mt-1">Entering your study room...</p>
           </div>
@@ -486,7 +486,7 @@ export default function ColdStartScreen() {
   const showRetry = elapsed >= 120 && serverState !== 'ready';
 
   const statusMsg = (() => {
-    if (serverState === 'ready') return { text: 'Study room is ready!', emoji: '🎉' };
+    if (serverState === 'ready') return { text: 'Study room is ready!', emoji: '✨' };
     return [...STATUS_MSGS].reverse().find(m => elapsed >= m.threshold) ?? STATUS_MSGS[0];
   })();
 
@@ -573,7 +573,7 @@ export default function ColdStartScreen() {
           style={{ background: '#0a0718' }}
         >
           <div className="text-center">
-            <p className="text-5xl mb-4">🚀</p>
+            <p className="text-5xl mb-4">🌠</p>
             <p className="text-white text-2xl poppins-semibold">Entering your study room...</p>
             <div className="mt-5 flex justify-center gap-2">
               {[0, 1, 2].map(i => (
@@ -802,7 +802,7 @@ export default function ColdStartScreen() {
                 style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
               >
                 <p className="text-slate-600 text-[11px] poppins-medium uppercase tracking-wider mb-3">
-                  📖 Study Tip
+                  🔖 Study Tip
                 </p>
                 <StudyFactCarousel />
               </div>
