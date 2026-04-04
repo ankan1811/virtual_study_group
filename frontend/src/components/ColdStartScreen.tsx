@@ -709,7 +709,7 @@ export default function ColdStartScreen() {
                     {formatTime(elapsed)}
                   </span>
                 </div>
-                <div>
+                <div className="pl-10">
                   <p className="text-slate-300 text-sm poppins-medium">{formatTime(elapsed)} elapsed</p>
                   <p className="text-slate-400 text-xs poppins-regular mt-0.5">Polling every 3 seconds</p>
                 </div>
