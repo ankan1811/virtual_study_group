@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { BookOpen, RefreshCw, Trophy } from 'lucide-react';
+import {
+  BookOpen, RefreshCw, Trophy,
+  GraduationCap, Users, PenTool, Palette, Sparkles, Moon, CheckCircle,
+  Mic2, Headphones, TrendingUp,
+  Zap, Bookmark, ExternalLink,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 // ─── Types & Constants ────────────────────────────────────────────────────────
 
@@ -26,26 +32,39 @@ const STUDY_TIPS = [
   "Interleaving multiple subjects in one session improves transfer and long-term retention.",
 ];
 
-const STATUS_MSGS = [
-  { threshold: 0, text: "Waking up the study rooms", emoji: "🎓" },
-  { threshold: 10, text: "Loading your companions", emoji: "🫂" },
-  { threshold: 20, text: "Almost ready", emoji: "🖋️" },
-  { threshold: 40, text: "Setting up the whiteboards", emoji: "🎨" },
-  { threshold: 60, text: "Warming up the AI tutor", emoji: "🔮" },
-  { threshold: 120, text: "Server seems to be napping. Please try again later", emoji: "🌙" },
-] as const;
+const STATUS_MSGS: { threshold: number; text: string; Icon: LucideIcon; color: string }[] = [
+  { threshold: 0, text: "Waking up the study rooms", Icon: GraduationCap, color: "text-violet-400" },
+  { threshold: 10, text: "Loading your companions", Icon: Users, color: "text-violet-400" },
+  { threshold: 20, text: "Almost ready", Icon: PenTool, color: "text-violet-400" },
+  { threshold: 40, text: "Setting up the whiteboards", Icon: Palette, color: "text-violet-400" },
+  { threshold: 60, text: "Warming up the AI tutor", Icon: Sparkles, color: "text-cyan-400" },
+  { threshold: 120, text: "Server seems to be napping. Please try again later", Icon: Moon, color: "text-slate-400" },
+];
 
-const FEATURES = [
-  { icon: "🎓", label: "Study Rooms" },
-  { icon: "🔮", label: "AI Tutor" },
-  { icon: "🎤", label: "Live Calls" },
-  { icon: "🎨", label: "Whiteboard" },
-  { icon: "🎧", label: "Radio" },
-  { icon: "📈", label: "Sessions" },
+const FEATURES: { Icon: LucideIcon; label: string }[] = [
+  { Icon: BookOpen, label: "Study Rooms" },
+  { Icon: Sparkles, label: "AI Tutor" },
+  { Icon: Mic2, label: "Live Calls" },
+  { Icon: PenTool, label: "Whiteboard" },
+  { Icon: Headphones, label: "Radio" },
+  { Icon: TrendingUp, label: "Sessions" },
 ];
 
 const PARTICLE_COLORS = ['#6366f1', '#8b5cf6', '#22d3ee'];
-const STUDY_ICONS = ['🎓', '🖋️', '🧠', '✨', '🔭', '🗒️', '🎯', '🧬'];
+
+const _svg = (d: string) =>
+  `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(196,181,253,0.85)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+
+const ICON_SVGS = [
+  _svg('<path d="M22 10v6"/><path d="M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>'),
+  _svg('<path d="m12 19 7-7 3 3-7 7-3-3z"/><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="m2 2 7.586 7.586"/><circle cx="11" cy="11" r="2"/>'),
+  _svg('<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/>'),
+  _svg('<path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/>'),
+  _svg('<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>'),
+  _svg('<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/>'),
+  _svg('<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>'),
+  _svg('<path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/>'),
+];
 
 // ─── NeuralCanvas ─────────────────────────────────────────────────────────────
 
@@ -54,7 +73,7 @@ interface Particle {
   vx: number; vy: number;
   radius: number;
   color: string;
-  emoji?: string;
+  iconIdx?: number;
   phase: number;
 }
 
@@ -88,11 +107,18 @@ function NeuralCanvas({ serverReady }: { serverReady: boolean }) {
         vy: (Math.random() - 0.5) * 0.8,
         radius: i < 8 ? 12 : Math.random() * 2 + 1,
         color: PARTICLE_COLORS[i % PARTICLE_COLORS.length],
-        emoji: i < 8 ? STUDY_ICONS[i] : undefined,
+        iconIdx: i < 8 ? i : undefined,
         phase: Math.random(),
       });
     }
     particlesRef.current = ps;
+
+    const iconImages: HTMLImageElement[] = [];
+    ICON_SVGS.forEach(svg => {
+      const img = new Image();
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+      iconImages.push(img);
+    });
 
     const draw = () => {
       const W = canvas.width, H = canvas.height;
@@ -142,12 +168,12 @@ function NeuralCanvas({ serverReady }: { serverReady: boolean }) {
       }
 
       for (const p of ps) {
-        if (p.emoji) {
-          ctx.font = '15px serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.globalAlpha = 0.65;
-          ctx.fillText(p.emoji, p.x, p.y);
+        if (p.iconIdx !== undefined && iconImages[p.iconIdx]) {
+          ctx.shadowColor = '#8b5cf6';
+          ctx.shadowBlur = 10;
+          ctx.globalAlpha = 0.7;
+          ctx.drawImage(iconImages[p.iconIdx], p.x - 10, p.y - 10, 20, 20);
+          ctx.shadowBlur = 0;
           ctx.globalAlpha = 1;
         } else {
           ctx.beginPath();
@@ -370,7 +396,7 @@ function TypingRacer({ serverState }: { serverState: ServerState }) {
           style={{ background: 'rgba(5,46,22,0.92)', backdropFilter: 'blur(8px)' }}
         >
           <div className="text-center">
-            <p className="text-3xl mb-2">🌠</p>
+            <Sparkles className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
             <p className="text-emerald-400 poppins-semibold text-sm">Great warm-up!</p>
             <p className="text-slate-400 text-xs poppins-regular mt-1">Entering your study room...</p>
           </div>
@@ -438,7 +464,11 @@ function TypingRacer({ serverState }: { serverState: ServerState }) {
             <span className={`text-xs poppins-semibold font-semibold ${newRecord ? 'text-amber-400' : 'text-slate-400'}`}>
               {pb} WPM
             </span>
-            {newRecord && <span className="text-amber-400 text-xs animate-pulse">✨ New!</span>}
+            {newRecord && (
+              <span className="flex items-center gap-0.5 text-amber-400 text-xs animate-pulse">
+                <Sparkles className="w-3 h-3" /> New!
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -486,7 +516,7 @@ export default function ColdStartScreen() {
   const showRetry = elapsed >= 120 && serverState !== 'ready';
 
   const statusMsg = (() => {
-    if (serverState === 'ready') return { text: 'Study room is ready!', emoji: '✨' };
+    if (serverState === 'ready') return { text: 'Study room is ready!', Icon: CheckCircle, color: 'text-emerald-400' };
     return [...STATUS_MSGS].reverse().find(m => elapsed >= m.threshold) ?? STATUS_MSGS[0];
   })();
 
@@ -573,7 +603,7 @@ export default function ColdStartScreen() {
           style={{ background: '#0a0718' }}
         >
           <div className="text-center">
-            <p className="text-5xl mb-4">🌠</p>
+            <Sparkles className="w-14 h-14 text-violet-400 mx-auto mb-4" style={{ filter: 'drop-shadow(0 0 14px rgba(139,92,246,0.6))' }} />
             <p className="text-white text-2xl poppins-semibold">Entering your study room...</p>
             <div className="mt-5 flex justify-center gap-2">
               {[0, 1, 2].map(i => (
@@ -665,7 +695,7 @@ export default function ColdStartScreen() {
                     transition={{ duration: 0.3 }}
                     className="flex items-center gap-2"
                   >
-                    <span className="text-base">{statusMsg.emoji}</span>
+                    <statusMsg.Icon className={`w-4 h-4 flex-shrink-0 ${statusMsg.color}`} />
                     <span className={`text-sm poppins-medium ${serverState === 'ready' ? 'text-emerald-400' : 'text-slate-300'}`}>
                       {statusMsg.text}
                     </span>
@@ -727,7 +757,7 @@ export default function ColdStartScreen() {
                       animation: `pill-in 0.5s ease-out ${0.1 + i * 0.08}s both`,
                     }}
                   >
-                    <span>{f.icon}</span>
+                    <f.Icon className="w-3.5 h-3.5 text-violet-300 flex-shrink-0" />
                     <span>{f.label}</span>
                   </div>
                 ))}
@@ -757,7 +787,8 @@ export default function ColdStartScreen() {
                         'drop-shadow(0 0 8px rgba(167,139,250,0.6))';
                     }}
                   >
-                    Visit ankanpal.com ✦
+                    <span>Visit ankanpal.com</span>
+                    <ExternalLink className="w-3 h-3 ml-1 inline-block opacity-80" style={{ color: '#a78bfa' }} />
                   </a>
                 )}
                 {showRetry && (
@@ -788,7 +819,8 @@ export default function ColdStartScreen() {
                     backgroundClip: 'text',
                   }}
                 >
-                  Warm up while you wait ⚡
+                  <span>Warm up while you wait</span>
+                  <Zap className="w-4 h-4 text-cyan-400 inline-block ml-1.5" />
                 </h2>
                 <p className="text-slate-400 text-xs poppins-regular mt-1">
                   Test your typing speed with famous study quotes
@@ -801,8 +833,9 @@ export default function ColdStartScreen() {
                 className="pt-4 mt-auto"
                 style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
               >
-                <p className="text-slate-400 text-[11px] poppins-medium uppercase tracking-wider mb-3">
-                  🔖 Study Tip
+                <p className="text-slate-400 text-[11px] poppins-medium uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                  <Bookmark className="w-3 h-3 text-violet-400" />
+                  Study Tip
                 </p>
                 <StudyFactCarousel />
               </div>

@@ -258,9 +258,9 @@ export default function ProfilePage() {
             <div className="relative group">
               {currentAvatar ? (
                 <div
-                  className={`w-28 h-28 rounded-full bg-gradient-to-br ${currentAvatar.gradient} flex items-center justify-center text-5xl ring-4 ring-white dark:ring-gray-900 shadow-lg transition-transform group-hover:scale-105`}
+                  className={`w-28 h-28 rounded-full bg-gradient-to-br ${currentAvatar.gradient} flex items-center justify-center ring-4 ring-white dark:ring-gray-900 shadow-lg transition-transform group-hover:scale-105`}
                 >
-                  {currentAvatar.emoji}
+                  <currentAvatar.Icon className="w-12 h-12 text-white" />
                 </div>
               ) : (
                 <div className="w-28 h-28 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-3xl font-bold poppins-semibold ring-4 ring-white dark:ring-gray-900 shadow-lg transition-transform group-hover:scale-105">
@@ -325,9 +325,9 @@ export default function ProfilePage() {
                         }`}
                       >
                         <div
-                          className={`w-14 h-14 rounded-full bg-gradient-to-br ${av.gradient} flex items-center justify-center text-2xl shadow-md`}
+                          className={`w-14 h-14 rounded-full bg-gradient-to-br ${av.gradient} flex items-center justify-center shadow-md`}
                         >
-                          {av.emoji}
+                          <av.Icon className="w-6 h-6 text-white" />
                         </div>
                         <span className="text-[10px] text-gray-500 dark:text-gray-400 poppins-regular truncate w-full text-center">
                           {av.label}

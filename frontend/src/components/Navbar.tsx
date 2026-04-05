@@ -101,9 +101,9 @@ export default function Navbar() {
           <div className="relative">
             <button
               onClick={() => setShowProfile(!showProfile)}
-              className={`w-10 h-10 rounded-full bg-gradient-to-br ${userAvatar ? userAvatar.gradient : "from-indigo-500 to-violet-600"} flex items-center justify-center ${userAvatar ? "text-xl" : "text-white text-sm font-bold poppins-semibold"} shadow-md hover:shadow-lg transition-all hover:scale-105 active:scale-95 ring-2 ring-white/20 dark:ring-white/10`}
+              className={`w-10 h-10 rounded-full bg-gradient-to-br ${userAvatar ? userAvatar.gradient : "from-indigo-500 to-violet-600"} flex items-center justify-center text-white text-sm font-bold poppins-semibold shadow-md hover:shadow-lg transition-all hover:scale-105 active:scale-95 ring-2 ring-white/20 dark:ring-white/10`}
             >
-              {userAvatar ? userAvatar.emoji : getInitials(user.name)}
+              {userAvatar ? <userAvatar.Icon className="w-5 h-5 text-white" /> : getInitials(user.name)}
             </button>
 
             {/* Dropdown */}
@@ -126,8 +126,8 @@ export default function Navbar() {
                     {/* User info header */}
                     <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
                       <div className="flex items-center gap-3">
-                        <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${userAvatar ? userAvatar.gradient : "from-indigo-500 to-violet-600"} flex items-center justify-center ${userAvatar ? "text-lg" : "text-white text-xs font-bold poppins-semibold"} flex-shrink-0`}>
-                          {userAvatar ? userAvatar.emoji : getInitials(user.name)}
+                        <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${userAvatar ? userAvatar.gradient : "from-indigo-500 to-violet-600"} flex items-center justify-center text-white text-xs font-bold poppins-semibold flex-shrink-0`}>
+                          {userAvatar ? <userAvatar.Icon className="w-4 h-4 text-white" /> : getInitials(user.name)}
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 poppins-semibold truncate">

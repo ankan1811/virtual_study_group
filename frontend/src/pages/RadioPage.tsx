@@ -119,11 +119,9 @@ export default function RadioPage() {
                 <div className="flex flex-col md:flex-row items-center gap-6">
                   {/* Left: Channel info + controls */}
                   <div className="flex flex-col items-center md:items-start gap-4 flex-shrink-0">
-                    {/* Emoji with glow */}
+                    {/* Channel icon with glow */}
                     <div className="relative">
-                      <span className="text-6xl drop-shadow-lg">
-                        {state.currentChannel.emoji}
-                      </span>
+                      <state.currentChannel.Icon className="w-16 h-16 text-white drop-shadow-lg" />
                       <div
                         className={`absolute inset-0 bg-gradient-to-br ${state.currentChannel.color} opacity-20 blur-2xl rounded-full`}
                       />
@@ -318,7 +316,7 @@ export default function RadioPage() {
                     </div>
                   )}
 
-                  <span className="text-3xl block mb-3">{channel.emoji}</span>
+                  <channel.Icon className="w-8 h-8 text-gray-700 dark:text-gray-300 mb-3" />
                   <h3 className="text-base poppins-bold text-gray-900 dark:text-white mb-1">
                     {channel.name}
                   </h3>

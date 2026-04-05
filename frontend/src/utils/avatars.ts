@@ -1,37 +1,48 @@
-export const DEFAULT_AVATARS = [
+import { Glasses, GraduationCap, FlaskConical, Palette, Rocket } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+
+export interface Avatar {
+  id: string;
+  label: string;
+  gradient: string;
+  Icon: LucideIcon;
+  bg: string;
+}
+
+export const DEFAULT_AVATARS: Avatar[] = [
   {
     id: "avatar_1",
     label: "Cool Guy",
     gradient: "from-blue-500 to-cyan-400",
-    emoji: "\u{1F60E}",
+    Icon: Glasses,
     bg: "#3B82F6",
   },
   {
     id: "avatar_2",
     label: "Scholar",
     gradient: "from-violet-500 to-purple-400",
-    emoji: "\u{1F9D1}\u200D\u{1F393}",
+    Icon: GraduationCap,
     bg: "#8B5CF6",
   },
   {
     id: "avatar_3",
     label: "Scientist",
     gradient: "from-emerald-500 to-teal-400",
-    emoji: "\u{1F9D1}\u200D\u{1F52C}",
+    Icon: FlaskConical,
     bg: "#10B981",
   },
   {
     id: "avatar_4",
     label: "Artist",
     gradient: "from-pink-500 to-rose-400",
-    emoji: "\u{1F9D1}\u200D\u{1F3A8}",
+    Icon: Palette,
     bg: "#EC4899",
   },
   {
     id: "avatar_5",
     label: "Astronaut",
     gradient: "from-amber-500 to-orange-400",
-    emoji: "\u{1F9D1}\u200D\u{1F680}",
+    Icon: Rocket,
     bg: "#F59E0B",
   },
 ];
