@@ -6,7 +6,6 @@ import {
   LogOut,
   Home,
   Bot,
-  Mail,
   X,
   Menu,
   ChevronRight,
@@ -41,7 +40,8 @@ const navItems = [
   { title: "Ask AI", path: "/ask", icon: Bot },
   { title: "Study Radio", path: "/radio", icon: Headphones },
   { title: "Podcasts", path: "/podcasts", icon: Mic2 },
-  { title: "Contact us", path: "/contact", icon: Mail },
+  { title: "Profile", path: "/profile", icon: User },
+  { title: "Settings", path: "/settings", icon: Settings },
 ];
 
 export default function Navbar() {
