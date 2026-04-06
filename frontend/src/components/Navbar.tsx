@@ -46,6 +46,7 @@ const navItems = [
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const dispatch = useDispatch();
   const location = useLocation();
   const navigate = useNavigate();
@@ -56,6 +57,16 @@ export default function Navbar() {
   const user = useSelector((state: AuthState) => state.auth.user);
 
   const close = () => setIsOpen(false);
+
+  const performLogout = () => {
+    localStorage.removeItem("token");
+    disconnectSocket();
+    dispatch(logout());
+    setShowLogoutConfirm(false);
+    setShowProfile(false);
+    close();
+    navigate("/login");
+  };
 
   const handleNavClick = (path: string) => {
     if (path === "/room/call" && user?.roomId) {
@@ -189,13 +200,7 @@ export default function Navbar() {
                     {/* Logout */}
                     <div className="border-t border-gray-100 dark:border-gray-700 py-1.5">
                       <button
-                        onClick={() => {
-                          localStorage.removeItem("token");
-                          disconnectSocket();
-                          dispatch(logout());
-                          setShowProfile(false);
-                          navigate("/login");
-                        }}
+                        onClick={() => setShowLogoutConfirm(true)}
                         className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors poppins-regular"
                       >
                         <LogOut size={15} />
@@ -340,13 +345,7 @@ export default function Navbar() {
             <div className="px-3 py-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-950/60">
               {isAuthenticated ? (
                 <button
-                  onClick={() => {
-                    localStorage.removeItem("token");
-                    disconnectSocket();
-                    dispatch(logout());
-                    close();
-                    navigate("/login");
-                  }}
+                  onClick={() => setShowLogoutConfirm(true)}
                   className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all duration-150 group poppins-regular text-sm font-medium"
                 >
                   <span className="p-1.5 rounded-lg bg-red-50 dark:bg-red-950/30 text-red-400 group-hover:bg-red-100 dark:group-hover:bg-red-900/30 transition-colors">
@@ -368,6 +367,55 @@ export default function Navbar() {
               )}
             </div>
           </motion.aside>
+        )}
+      </AnimatePresence>
+
+      {/* Logout confirmation modal */}
+      <AnimatePresence>
+        {showLogoutConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowLogoutConfirm(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ type: "spring", damping: 24, stiffness: 300 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-800 overflow-hidden mx-4 max-w-sm w-full"
+            >
+              <div className="h-1 bg-gradient-to-r from-red-500 to-rose-500" />
+              <div className="p-6 text-center">
+                <div className="w-14 h-14 rounded-full bg-red-50 dark:bg-red-950/30 flex items-center justify-center mx-auto mb-4">
+                  <LogOut size={24} className="text-red-500" />
+                </div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white poppins-bold mb-1">
+                  Log out?
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 poppins-regular mb-6">
+                  Are you sure you want to logout?
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowLogoutConfirm(false)}
+                    className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-400 poppins-semibold hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={performLogout}
+                    className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm poppins-semibold transition-colors shadow-md shadow-red-500/20"
+                  >
+                    Yes, logout
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </>

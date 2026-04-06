@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useDispatch, useSelector } from "react-redux";
+import { useSelector } from "react-redux";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -19,14 +19,11 @@ import {
   ExternalLink,
   Heart,
   User as UserIcon,
-  LogOut as LogOutIcon,
   Settings as SettingsIcon,
 } from "lucide-react";
 import Navbar from "../components/Navbar";
 import { AuthState } from "../store/authStore/store";
-import { logout } from "../store/authStore/authSlice";
 import { useDarkMode } from "../utils/useDarkMode";
-import { disconnectSocket } from "../utils/socketInstance";
 
 /* ── animation constants ── */
 const containerVariants = {
@@ -172,7 +169,6 @@ function SettingLink({
 
 export default function SettingsPage() {
   const navigate = useNavigate();
-  const dispatch = useDispatch();
   const isAuthenticated = useSelector(
     (s: AuthState) => s.auth.isAuthenticated
   );
@@ -187,12 +183,6 @@ export default function SettingsPage() {
     }
   }, [isAuthenticated]);
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    disconnectSocket();
-    dispatch(logout());
-    navigate("/login");
-  };
 
   const featurePills = [
     {
@@ -491,47 +481,6 @@ export default function SettingsPage() {
             </div>
           </motion.div>
 
-          {/* ── Account actions ── */}
-          <motion.div variants={cardVariants} className="md:col-span-2 space-y-3 pt-2">
-            {isAuthenticated && (
-              <>
-                <motion.button
-                  whileHover={{ y: -2, scale: 1.01 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => navigate("/profile")}
-                  className="w-full py-3.5 rounded-2xl text-sm poppins-semibold flex items-center justify-center gap-2 transition-all"
-                  style={{
-                    background: isDark
-                      ? "linear-gradient(135deg, rgba(99,102,241,0.1), rgba(139,92,246,0.05))"
-                      : "linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.04))",
-                    border: isDark
-                      ? "1px solid rgba(99,102,241,0.3)"
-                      : "1px solid rgba(99,102,241,0.2)",
-                    color: isDark ? "#a5b4fc" : "#4f46e5",
-                  }}
-                >
-                  <UserIcon size={16} /> Edit Profile
-                </motion.button>
-                <motion.button
-                  whileHover={{ y: -2, scale: 1.01 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={handleLogout}
-                  className="w-full py-3.5 rounded-2xl text-sm poppins-semibold flex items-center justify-center gap-2 transition-all"
-                  style={{
-                    background: isDark
-                      ? "rgba(239,68,68,0.08)"
-                      : "rgba(239,68,68,0.05)",
-                    border: isDark
-                      ? "1px solid rgba(239,68,68,0.2)"
-                      : "1px solid rgba(239,68,68,0.15)",
-                    color: isDark ? "#fca5a5" : "#ef4444",
-                  }}
-                >
-                  <LogOutIcon size={16} /> Log Out
-                </motion.button>
-              </>
-            )}
-          </motion.div>
         </motion.div>
 
         {/* ── footer ── */}
@@ -541,15 +490,31 @@ export default function SettingsPage() {
           transition={{ delay: 0.5 }}
           className="text-center mt-10 space-y-2"
         >
-          <div className="flex items-center justify-center gap-1.5">
-            <div className="h-px w-8 bg-gray-200 dark:bg-gray-800" />
-            <Heart size={12} className="text-gray-300 dark:text-gray-700" />
-            <div className="h-px w-8 bg-gray-200 dark:bg-gray-800" />
+          <div className="flex items-center justify-center gap-2">
+            <div className="h-px w-10 bg-gradient-to-r from-transparent to-violet-500/40" />
+            <Heart
+              size={13}
+              className="text-violet-400"
+              style={{ filter: "drop-shadow(0 0 6px rgba(139,92,246,0.6))" }}
+            />
+            <div className="h-px w-10 bg-gradient-to-l from-transparent to-violet-500/40" />
           </div>
-          <p className="text-xs text-gray-400 dark:text-gray-600 poppins-regular">
+          <p
+            className="text-xs poppins-regular"
+            style={{
+              color: "rgba(139,92,246,0.7)",
+              textShadow: "0 0 12px rgba(139,92,246,0.4)",
+            }}
+          >
             Made with care for learners everywhere
           </p>
-          <p className="text-[10px] text-gray-300 dark:text-gray-700 poppins-regular">
+          <p
+            className="text-[10px] poppins-regular"
+            style={{
+              color: "rgba(139,92,246,0.45)",
+              textShadow: "0 0 8px rgba(139,92,246,0.25)",
+            }}
+          >
             Virtual Study Group v1.0.0
           </p>
         </motion.div>
