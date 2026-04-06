@@ -1,7 +1,7 @@
-import { eq, gt, desc } from 'drizzle-orm';
+import { eq, gt, desc, inArray } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import { getNeonDb } from '../neon';
-import { roomSessions } from '../schema';
+import { roomSessions, chats } from '../schema';
 
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
 
@@ -39,8 +39,30 @@ export async function getAllSessions(ownerId: string) {
   return db
     .select()
     .from(roomSessions)
+    .where(
+      eq(roomSessions.ownerId, ownerId),
+    )
+    .orderBy(desc(roomSessions.createdAt));
+}
+
+export async function getSessionsWithChats(ownerId: string) {
+  const db = getNeonDb();
+  const sessions = await db
+    .select()
+    .from(roomSessions)
     .where(eq(roomSessions.ownerId, ownerId))
     .orderBy(desc(roomSessions.createdAt));
+
+  if (sessions.length === 0) return [];
+
+  const roomIds = sessions.map(s => s.roomId);
+  const rows = await db
+    .selectDistinct({ roomId: chats.roomId })
+    .from(chats)
+    .where(inArray(chats.roomId, roomIds));
+
+  const roomsWithChats = new Set(rows.map(r => r.roomId));
+  return sessions.filter(s => roomsWithChats.has(s.roomId));
 }
 
 export async function getSessionByRoomId(roomId: string) {

@@ -580,26 +580,16 @@ export default function SummariesPage() {
                       </div>
                     </div>
 
-                    {/* Preview / expanded content */}
-                    <div className="px-4 pb-4">
-                      <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
-                        <div
-                          className={`poppins-regular ${
-                            isExpanded ? "" : "line-clamp-3"
-                          }`}
-                        >
-                          {renderMarkdown(s.content)}
+                    {/* Expanded content */}
+                    {isExpanded && (
+                      <div className="px-4 pb-4">
+                        <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
+                          <div className="poppins-regular">
+                            {renderMarkdown(s.content)}
+                          </div>
                         </div>
-                        {!isExpanded && s.content.split("\n").length > 3 && (
-                          <button
-                            onClick={() => toggleExpand(s._id)}
-                            className="text-[11px] text-violet-600 dark:text-violet-400 poppins-medium mt-2 hover:underline"
-                          >
-                            View full summary
-                          </button>
-                        )}
                       </div>
-                    </div>
+                    )}
                   </motion.div>
                 );
               })}

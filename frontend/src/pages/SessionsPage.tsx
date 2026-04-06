@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { Clock, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { Clock, ChevronDown, ChevronRight, Loader2, FileText, Check } from "lucide-react";
+import { generateAndSaveSummary } from "../utils/summaryApi";
 import Navbar from "../components/Navbar";
 import { AuthState } from "../store/authStore/store";
 
@@ -30,6 +31,10 @@ export default function SessionsPage() {
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
   const [sessionChats, setSessionChats] = useState<Record<string, ChatMsg[]>>({});
   const [sessionChatsLoading, setSessionChatsLoading] = useState<string | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState<string | null>(null);
+  const [summaryDone, setSummaryDone] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState<Record<string, number>>({});
+  const PAGE_SIZE = 30;
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -109,19 +114,19 @@ export default function SessionsPage() {
               const isExpanded = expandedSession === s.roomId;
               const chats = sessionChats[s.roomId];
               const isLoading = sessionChatsLoading === s.roomId;
-              const isExpired = new Date(s.expiresAt) < new Date();
+              const chatCount = chats?.length;
               return (
                 <div
                   key={s.id}
                   className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden"
                 >
-                  <button
-                    onClick={() => toggleSessionChats(s.roomId)}
-                    className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-between px-4 py-3.5">
+                    <button
+                      onClick={() => toggleSessionChats(s.roomId)}
+                      className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                    >
                       {isExpanded ? (
-                        <ChevronDown size={14} className="text-gray-400" />
+                        <ChevronDown size={14} className="text-violet-400" />
                       ) : (
                         <ChevronRight size={14} className="text-gray-400" />
                       )}
@@ -139,60 +144,145 @@ export default function SessionsPage() {
                             minute: "2-digit",
                           })}
                         </p>
-                        <p className="text-[11px] text-gray-400 dark:text-gray-500 poppins-regular">
-                          {isExpired ? "Expired" : "Active"}
-                        </p>
+                        {chatCount !== undefined && (
+                          <p className="text-[11px] text-gray-400 dark:text-gray-500 poppins-regular">
+                            {chatCount} message{chatCount !== 1 ? "s" : ""}
+                          </p>
+                        )}
                       </div>
-                    </div>
-                  </button>
-                  {isExpanded && (
-                    <div className="border-t border-gray-100 dark:border-gray-800 px-4 py-3 max-h-80 overflow-y-auto">
-                      {isLoading ? (
-                        <div className="flex justify-center py-4">
-                          <Loader2 size={18} className="animate-spin text-indigo-400" />
-                        </div>
-                      ) : !chats || chats.length === 0 ? (
-                        <p className="text-xs text-gray-400 text-center py-4 poppins-regular">
-                          No messages in this session
-                        </p>
-                      ) : (
-                        <div className="space-y-2">
-                          {chats.map((c, i) => {
-                            const isMine = c.sendById === user?.userId;
-                            return (
-                              <div
-                                key={i}
-                                className={`flex ${isMine ? "justify-end" : "justify-start"}`}
-                              >
-                                <div
-                                  className={`max-w-[75%] px-3 py-2 rounded-2xl text-[13px] poppins-regular ${
-                                    isMine
-                                      ? "bg-indigo-600 text-white rounded-br-sm"
-                                      : "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-bl-sm"
-                                  }`}
-                                >
-                                  {!isMine && (
-                                    <p className="text-[10px] font-semibold poppins-semibold text-indigo-500 dark:text-indigo-400 mb-0.5">
-                                      {c.senderName}
-                                    </p>
-                                  )}
-                                  <p className="leading-snug">{c.message}</p>
-                                  <p
-                                    className={`text-[9px] mt-0.5 ${
-                                      isMine ? "text-indigo-200" : "text-gray-400"
-                                    }`}
-                                  >
-                                    {new Date(c.createdAt).toLocaleTimeString("en-US", {
-                                      hour: "numeric",
-                                      minute: "2-digit",
-                                    })}
-                                  </p>
-                                </div>
-                              </div>
+                    </button>
+                    <button
+                      title="Generate summary"
+                      disabled={summaryLoading === s.roomId}
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        setSummaryLoading(s.roomId);
+                        try {
+                          let msgs = sessionChats[s.roomId];
+                          if (!msgs) {
+                            const token = localStorage.getItem("token");
+                            const res = await axios.get(
+                              `${import.meta.env.VITE_API_URL}/room/sessions/${encodeURIComponent(s.roomId)}/chats`,
+                              { headers: { Authorization: token || "" } }
                             );
-                          })}
-                        </div>
+                            msgs = res.data.chats || [];
+                            setSessionChats((prev) => ({ ...prev, [s.roomId]: msgs }));
+                          }
+                          if (msgs.length > 0) {
+                            const chatMessages = msgs.map((c: ChatMsg) => ({
+                              sentby: c.senderName,
+                              msg: c.message,
+                            }));
+                            const dateLabel = new Date(s.createdAt).toLocaleDateString("en-US", {
+                              month: "short", day: "numeric", year: "numeric",
+                            });
+                            await generateAndSaveSummary(
+                              "/ai/summary",
+                              { messages: chatMessages },
+                              { type: "room", contextId: s.roomId, contextLabel: `Session — ${dateLabel}` }
+                            );
+                            setSummaryDone(s.roomId);
+                            setTimeout(() => setSummaryDone(null), 2500);
+                          }
+                        } catch (err) {
+                          console.error("Session summary failed:", err);
+                        } finally {
+                          setSummaryLoading(null);
+                        }
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-violet-50 dark:hover:bg-violet-950/30 text-gray-400 hover:text-violet-500 transition-colors disabled:opacity-40 flex-shrink-0 text-xs poppins-medium"
+                    >
+                      {summaryLoading === s.roomId ? (
+                        <>
+                          <Loader2 size={13} className="animate-spin text-violet-400" />
+                          <span className="text-violet-400">Saving...</span>
+                        </>
+                      ) : summaryDone === s.roomId ? (
+                        <>
+                          <Check size={13} className="text-emerald-400" />
+                          <span className="text-emerald-400">Saved!</span>
+                        </>
+                      ) : (
+                        <>
+                          <FileText size={13} />
+                          <span>Summary</span>
+                        </>
                       )}
+                    </button>
+                  </div>
+                  {isExpanded && (
+                    <div className="border-t border-gray-100 dark:border-gray-800">
+                      <div
+                        className="px-4 py-3 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700"
+                        style={{ maxHeight: '60vh' }}
+                      >
+                        {isLoading ? (
+                          <div className="flex justify-center py-4">
+                            <Loader2 size={18} className="animate-spin text-indigo-400" />
+                          </div>
+                        ) : !chats || chats.length === 0 ? (
+                          <p className="text-xs text-gray-400 text-center py-4 poppins-regular">
+                            No messages in this session
+                          </p>
+                        ) : (() => {
+                          const limit = visibleCount[s.roomId] || PAGE_SIZE;
+                          const total = chats.length;
+                          const startIdx = Math.max(0, total - limit);
+                          const visible = chats.slice(startIdx);
+                          const hasMore = startIdx > 0;
+                          return (
+                            <div className="space-y-2.5">
+                              {hasMore && (
+                                <button
+                                  onClick={() =>
+                                    setVisibleCount((prev) => ({
+                                      ...prev,
+                                      [s.roomId]: (prev[s.roomId] || PAGE_SIZE) + PAGE_SIZE,
+                                    }))
+                                  }
+                                  className="w-full py-2 text-xs text-violet-500 dark:text-violet-400 poppins-medium hover:text-violet-600 dark:hover:text-violet-300 transition-colors"
+                                >
+                                  Load {Math.min(PAGE_SIZE, startIdx)} older messages ({startIdx} remaining)
+                                </button>
+                              )}
+                              {visible.map((c, i) => {
+                                const isMine = c.sendById === user?.userId;
+                                return (
+                                  <div
+                                    key={startIdx + i}
+                                    className={`flex ${isMine ? "justify-end" : "justify-start"}`}
+                                  >
+                                    <div
+                                      className={`max-w-[75%] px-3.5 py-2 rounded-2xl text-[13px] poppins-regular ${
+                                        isMine
+                                          ? "bg-indigo-600 text-white rounded-br-sm"
+                                          : "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-bl-sm"
+                                      }`}
+                                    >
+                                      {!isMine && (
+                                        <p className="text-[10px] font-semibold poppins-semibold text-indigo-500 dark:text-indigo-400 mb-0.5">
+                                          {c.senderName}
+                                        </p>
+                                      )}
+                                      <p className="leading-snug break-words">{c.message}</p>
+                                      <p
+                                        className={`text-[9px] mt-1 ${
+                                          isMine ? "text-indigo-200" : "text-gray-400"
+                                        }`}
+                                      >
+                                        {new Date(c.createdAt).toLocaleTimeString("en-US", {
+                                          hour: "numeric",
+                                          minute: "2-digit",
+                                        })}
+                                      </p>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
+                      </div>
                     </div>
                   )}
                 </div>

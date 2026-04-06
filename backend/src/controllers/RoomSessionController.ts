@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/middleware';
-import { getOrCreateSession, getAllSessions, getSessionByRoomId } from '../db/queries/roomSessions';
+import { getOrCreateSession, getSessionsWithChats, getSessionByRoomId } from '../db/queries/roomSessions';
 import { getChatsByRoom } from '../db/queries/chats';
 
 export const createOrResumeSession = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
@@ -17,7 +17,7 @@ export const createOrResumeSession = async (req: AuthenticatedRequest, res: Resp
 export const listSessions = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user.userId;
-    const sessions = await getAllSessions(userId);
+    const sessions = await getSessionsWithChats(userId);
     res.status(200).json({ sessions });
   } catch (error) {
     console.error(error);
