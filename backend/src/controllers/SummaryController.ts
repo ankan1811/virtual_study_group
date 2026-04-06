@@ -52,8 +52,15 @@ function buildSummaryHTML(summary: string, userName: string, roomId: string): st
     const bulletMatch = trimmed.match(/^[-•*]\s+(.*)/);
 
     if (bulletMatch) {
-      if (!inList) { parts.push('<ul>'); inList = true; }
-      parts.push(`<li>${bold(bulletMatch[1])}</li>`);
+      const content = bulletMatch[1].trim();
+      const afterBold = content.replace(/^\*\*.+?\*\*:?\s*/, '').trim();
+      if (/^\*\*.+?\*\*/.test(content) && afterBold.length === 0) {
+        if (inList) { parts.push('</ul>'); inList = false; }
+        parts.push(`<h3>${content.replace(/\*\*/g, '').replace(/:$/, '')}</h3>`);
+      } else {
+        if (!inList) { parts.push('<ul>'); inList = true; }
+        parts.push(`<li>${bold(content)}</li>`);
+      }
     } else {
       if (inList) { parts.push('</ul>'); inList = false; }
       if (trimmed.startsWith('**') && trimmed.endsWith('**')) {

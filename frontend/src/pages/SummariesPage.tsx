@@ -104,7 +104,19 @@ function renderMarkdown(text: string): React.ReactNode[] {
     const trimmed = line.trim();
     const bulletMatch = trimmed.match(/^[*\-]\s+(.*)$/);
     if (bulletMatch) {
-      bulletBuffer.push(bulletMatch[1]);
+      const content = bulletMatch[1].trim();
+      const afterBold = content.replace(/^\*\*.+?\*\*:?\s*/, '').trim();
+      if (/^\*\*.+?\*\*/.test(content) && afterBold.length === 0) {
+        flushBullets();
+        const heading = content.replace(/\*\*/g, '').replace(/:$/, '');
+        result.push(
+          <p key={key++} className="text-[13px] text-gray-200 font-semibold mt-3 mb-1">
+            {heading}
+          </p>
+        );
+      } else {
+        bulletBuffer.push(content);
+      }
     } else {
       flushBullets();
       if (trimmed.length > 0) {
@@ -192,13 +204,15 @@ export default function SummariesPage() {
         headers: { Authorization: token || "" },
       });
       if (res.data.url) {
+        const blob = await fetch(res.data.url).then((r) => r.blob());
+        const blobUrl = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = res.data.url;
+        a.href = blobUrl;
         a.download = `summary-${id}.html`;
-        a.rel = "noopener noreferrer";
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
       }
     } catch (err) {
       console.error("Failed to download summary:", err);
