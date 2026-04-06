@@ -7,12 +7,14 @@ import { countAcceptedCompanions } from '../db/queries/companions';
 export const getProfile = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const me = req.user.userId;
-    const user = await findById(me);
+    const [user, companionCount] = await Promise.all([
+      findById(me),
+      countAcceptedCompanions(me),
+    ]);
     if (!user) {
       res.status(404).json({ error: 'User not found' });
       return;
     }
-    const companionCount = await countAcceptedCompanions(me);
     res.json({
       name: user.name,
       email: user.email,
