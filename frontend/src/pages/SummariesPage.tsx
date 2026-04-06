@@ -56,6 +56,70 @@ const typeBadgeColors: Record<SummaryType, string> = {
   whiteboard: "bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-400",
 };
 
+const typeAccentColors: Record<SummaryType, string> = {
+  room: "from-indigo-500 to-violet-500",
+  dm: "from-emerald-500 to-teal-500",
+  whiteboard: "from-teal-500 to-cyan-500",
+};
+
+function renderMarkdown(text: string): React.ReactNode[] {
+  const lines = text.split("\n");
+  const result: React.ReactNode[] = [];
+  let bulletBuffer: string[] = [];
+  let key = 0;
+
+  const parseBold = (line: string): React.ReactNode[] => {
+    const parts: React.ReactNode[] = [];
+    const regex = /\*\*(.+?)\*\*/g;
+    let last = 0;
+    let match;
+    while ((match = regex.exec(line)) !== null) {
+      if (match.index > last) parts.push(line.slice(last, match.index));
+      parts.push(
+        <strong key={`b${match.index}`} className="text-gray-100 font-semibold">
+          {match[1]}
+        </strong>
+      );
+      last = regex.lastIndex;
+    }
+    if (last < line.length) parts.push(line.slice(last));
+    return parts.length > 0 ? parts : [line];
+  };
+
+  const flushBullets = () => {
+    if (bulletBuffer.length === 0) return;
+    result.push(
+      <ul key={key++} className="list-disc pl-5 space-y-1.5 my-2">
+        {bulletBuffer.map((b, i) => (
+          <li key={i} className="text-[13px] text-gray-400 dark:text-gray-300 leading-relaxed">
+            {parseBold(b)}
+          </li>
+        ))}
+      </ul>
+    );
+    bulletBuffer = [];
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const bulletMatch = trimmed.match(/^[*\-]\s+(.*)$/);
+    if (bulletMatch) {
+      bulletBuffer.push(bulletMatch[1]);
+    } else {
+      flushBullets();
+      if (trimmed.length > 0) {
+        result.push(
+          <p key={key++} className="text-[13px] text-gray-400 dark:text-gray-300 leading-relaxed my-1.5">
+            {parseBold(trimmed)}
+          </p>
+        );
+      }
+    }
+  }
+  flushBullets();
+  return result;
+}
+
 const suggestions = [
   "What topics did I study this week?",
   "Summarize my recent sessions",
@@ -446,6 +510,9 @@ export default function SummariesPage() {
                     transition={{ delay: i * 0.03 }}
                     className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden"
                   >
+                    {/* Type accent line */}
+                    <div className={`h-[2px] bg-gradient-to-r ${typeAccentColors[s.type]}`} />
+
                     {/* Card header */}
                     <div className="px-4 py-3.5 flex items-start gap-3">
                       <div className="flex-1 min-w-0">
@@ -508,22 +575,24 @@ export default function SummariesPage() {
                     </div>
 
                     {/* Preview / expanded content */}
-                    <div className="px-4 pb-3.5">
-                      <p
-                        className={`text-[13px] text-gray-600 dark:text-gray-400 poppins-regular whitespace-pre-line ${
-                          isExpanded ? "" : "line-clamp-3"
-                        }`}
-                      >
-                        {s.content}
-                      </p>
-                      {!isExpanded && s.content.split("\n").length > 3 && (
-                        <button
-                          onClick={() => toggleExpand(s._id)}
-                          className="text-[11px] text-violet-600 dark:text-violet-400 poppins-medium mt-1 hover:underline"
+                    <div className="px-4 pb-4">
+                      <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
+                        <div
+                          className={`poppins-regular ${
+                            isExpanded ? "" : "line-clamp-3"
+                          }`}
                         >
-                          View full summary
-                        </button>
-                      )}
+                          {renderMarkdown(s.content)}
+                        </div>
+                        {!isExpanded && s.content.split("\n").length > 3 && (
+                          <button
+                            onClick={() => toggleExpand(s._id)}
+                            className="text-[11px] text-violet-600 dark:text-violet-400 poppins-medium mt-2 hover:underline"
+                          >
+                            View full summary
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </motion.div>
                 );

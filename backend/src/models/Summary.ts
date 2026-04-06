@@ -1,7 +1,7 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface ISummary extends Document {
-  userId: mongoose.Types.ObjectId;
+  userId: string;
   type: 'room' | 'dm' | 'whiteboard';
   contextId: string;
   contextLabel: string;
@@ -16,7 +16,7 @@ export interface ISummary extends Document {
 
 const summarySchema: Schema = new Schema(
   {
-    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    userId: { type: String, required: true },
     type: { type: String, enum: ['room', 'dm', 'whiteboard'], required: true },
     contextId: { type: String, required: true },
     contextLabel: { type: String, default: '' },
