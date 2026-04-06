@@ -13,6 +13,7 @@ import {
   Loader2,
   Trash2,
   PenTool,
+  BookOpen,
   FileText,
   Check,
   Save,
@@ -389,7 +390,7 @@ export default function WhiteboardPage() {
           </button>
           <div className="w-px h-5 bg-violet-400/30" />
           <div className="flex items-center gap-2">
-            <PenTool size={14} className="text-white" />
+            <BookOpen size={14} className="text-white" />
             <span className="text-sm text-white poppins-semibold">
               Whiteboard
             </span>
