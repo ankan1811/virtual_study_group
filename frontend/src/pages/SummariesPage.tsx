@@ -192,7 +192,13 @@ export default function SummariesPage() {
         headers: { Authorization: token || "" },
       });
       if (res.data.url) {
-        window.open(res.data.url, "_blank");
+        const a = document.createElement("a");
+        a.href = res.data.url;
+        a.download = `summary-${id}.html`;
+        a.rel = "noopener noreferrer";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
       }
     } catch (err) {
       console.error("Failed to download summary:", err);
