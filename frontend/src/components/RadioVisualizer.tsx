@@ -25,11 +25,7 @@ export default function RadioVisualizer({
     const canvas = canvasRef.current;
     if (!canvas || !isPlaying) {
       cancelAnimationFrame(animFrameRef.current);
-      // Clear canvas when stopped
-      if (canvas) {
-        const ctx = canvas.getContext("2d");
-        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
-      }
+      // Keep last frame visible — don't clear canvas
       return;
     }
 

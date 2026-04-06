@@ -115,6 +115,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
   // Create audio element once
   useEffect(() => {
     const audio = new Audio();
+    audio.crossOrigin = "anonymous";
     audio.preload = "none";
     audioRef.current = audio;
 

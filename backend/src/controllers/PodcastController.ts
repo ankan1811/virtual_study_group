@@ -47,7 +47,7 @@ async function readCache(topic: Topic): Promise<{ data: PodcastItem[]; fetchedAt
 async function writeCache(topic: Topic, data: PodcastItem[]): Promise<void> {
   const redis = getRedis();
   const entry: PodcastCacheEntry = { data, fetchedAt: new Date().toISOString() };
-  await redis.set(`podcast:v2:${topic}`, entry, { ex: PODCAST_TTL_SECONDS });
+  await redis.set(`podcast:${topic}`, entry, { ex: PODCAST_TTL_SECONDS });
 }
 
 // ─── Cache validity: refresh on Tue (2) and Sat (6) ─────────────────────────

@@ -1,4 +1,4 @@
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Play,
   Pause,
@@ -6,6 +6,7 @@ import {
   VolumeX,
   Headphones,
   Radio,
+  Square,
 } from "lucide-react";
 import Navbar from "../components/Navbar";
 import RadioVisualizer from "../components/RadioVisualizer";
@@ -51,37 +52,31 @@ export default function RadioPage() {
   const isActive = (id: string) => state.currentChannel?.id === id;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-indigo-50/20 to-gray-50 dark:from-gray-950 dark:via-indigo-950/20 dark:to-gray-950 transition-colors">
+    <div className="min-h-screen bg-gray-950 transition-colors">
       <Navbar />
 
-      {/* Floating background orbs */}
+      {/* Ambient background */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10">
-        <motion.div
-          animate={{
-            x: [0, 40, -20, 0],
-            y: [0, -30, 20, 0],
-            scale: [1, 1.1, 0.95, 1],
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(ellipse at 20% 30%, rgba(99,102,241,0.08) 0%, transparent 60%), " +
+              "radial-gradient(ellipse at 80% 60%, rgba(139,92,246,0.06) 0%, transparent 50%), " +
+              "radial-gradient(ellipse at 50% 90%, rgba(34,211,238,0.04) 0%, transparent 40%)",
           }}
-          transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute top-[15%] left-[10%] w-[400px] h-[400px] rounded-full bg-indigo-400/10 dark:bg-indigo-500/5 blur-3xl"
         />
-        <motion.div
-          animate={{
-            x: [0, -30, 25, 0],
-            y: [0, 25, -35, 0],
-            scale: [1, 0.9, 1.15, 1],
-          }}
-          transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute top-[40%] right-[5%] w-[350px] h-[350px] rounded-full bg-violet-400/10 dark:bg-violet-500/5 blur-3xl"
-        />
-        <motion.div
-          animate={{
-            x: [0, 20, -15, 0],
-            y: [0, -20, 30, 0],
-          }}
-          transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute bottom-[10%] left-[30%] w-[300px] h-[300px] rounded-full bg-purple-400/8 dark:bg-purple-500/5 blur-3xl"
-        />
+        {state.currentChannel && state.isPlaying && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute top-[10%] left-[20%] w-[500px] h-[500px] rounded-full blur-[120px]"
+            style={{
+              background: "radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%)",
+            }}
+          />
+        )}
       </div>
 
       <main className="pt-20 px-4 pb-32 max-w-6xl mx-auto relative">
@@ -92,97 +87,122 @@ export default function RadioPage() {
           className="mb-8"
         >
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/25">
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{
+                background: "linear-gradient(135deg, #4f46e5, #7c3aed)",
+                boxShadow: "0 0 24px rgba(99,102,241,0.35)",
+              }}
+            >
               <Radio size={20} className="text-white" />
             </div>
-            <h1 className="text-2xl poppins-bold text-gray-900 dark:text-white">
-              Study Radio
-            </h1>
+            <h1 className="text-2xl poppins-bold text-white">Study Radio</h1>
           </div>
-          <p className="text-sm text-gray-500 dark:text-gray-400 ml-[52px]">
+          <p className="text-sm text-gray-500 ml-[52px]">
             Free, ad-free radio. Pick a vibe and start studying.
           </p>
         </motion.div>
 
         {/* Now Playing Hero */}
-        {state.currentChannel && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.97 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ type: "spring", damping: 28, stiffness: 220 }}
-            className="mb-8 rounded-3xl overflow-hidden"
-          >
-            <div
-              className={`relative bg-gradient-to-br ${state.currentChannel.color} p-[1px] rounded-3xl`}
+        <AnimatePresence>
+          {state.currentChannel && (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ type: "spring", damping: 28, stiffness: 220 }}
+              className="mb-10 rounded-3xl overflow-hidden"
+              style={{
+                background: "rgba(255,255,255,0.03)",
+                backdropFilter: "blur(24px)",
+                border: "1px solid rgba(255,255,255,0.07)",
+                boxShadow:
+                  "0 0 80px rgba(99,102,241,0.08), inset 0 0 0 1px rgba(255,255,255,0.03)",
+              }}
             >
-              <div className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-2xl rounded-3xl p-6 md:p-8">
-                <div className="flex flex-col md:flex-row items-center gap-6">
-                  {/* Left: Channel info + controls */}
-                  <div className="flex flex-col items-center md:items-start gap-4 flex-shrink-0">
-                    {/* Channel icon with glow */}
+              <div className="p-6 md:p-8">
+                <div className="flex flex-col md:flex-row gap-8">
+                  {/* Left: Channel info */}
+                  <div className="flex flex-col items-center md:items-start gap-5 flex-shrink-0 md:w-[280px]">
+                    {/* Icon with glow */}
                     <div className="relative">
-                      <state.currentChannel.Icon className="w-16 h-16 text-white drop-shadow-lg" />
                       <div
-                        className={`absolute inset-0 bg-gradient-to-br ${state.currentChannel.color} opacity-20 blur-2xl rounded-full`}
-                      />
+                        className={`w-20 h-20 rounded-2xl bg-gradient-to-br ${state.currentChannel.color} flex items-center justify-center`}
+                        style={{ boxShadow: "0 0 40px rgba(99,102,241,0.3)" }}
+                      >
+                        <state.currentChannel.Icon className="w-10 h-10 text-white" />
+                      </div>
+                      {state.isPlaying && (
+                        <motion.div
+                          animate={{ scale: [1, 1.4, 1], opacity: [0.3, 0, 0.3] }}
+                          transition={{ duration: 2.5, repeat: Infinity }}
+                          className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${state.currentChannel.color}`}
+                          style={{ zIndex: -1 }}
+                        />
+                      )}
                     </div>
 
                     <div className="text-center md:text-left">
                       <h2
-                        className={`text-2xl md:text-3xl poppins-bold bg-clip-text text-transparent bg-gradient-to-r ${state.currentChannel.color}`}
+                        className="text-2xl md:text-3xl poppins-bold"
+                        style={{
+                          background: "linear-gradient(135deg, #e0e7ff, #ffffff 50%, #c4b5fd)",
+                          WebkitBackgroundClip: "text",
+                          WebkitTextFillColor: "transparent",
+                          backgroundClip: "text",
+                        }}
                       >
                         {state.currentChannel.name}
                       </h2>
-                      <span className="inline-block mt-1.5 px-3 py-0.5 rounded-full text-xs poppins-semibold bg-indigo-100 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300">
+                      <span
+                        className={`inline-block mt-2 px-3 py-1 rounded-full text-[11px] poppins-semibold bg-gradient-to-r ${state.currentChannel.color} text-white`}
+                      >
                         {state.currentChannel.genre}
                       </span>
-                      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400 max-w-xs">
+                      <p className="mt-3 text-sm text-gray-400 leading-relaxed max-w-xs">
                         {state.currentChannel.description}
                       </p>
                     </div>
 
-                    {/* Play / Pause button with pulse ring */}
-                    <div className="relative">
-                      {state.isPlaying && (
-                        <motion.div
-                          animate={{ scale: [1, 1.3, 1], opacity: [0.4, 0, 0.4] }}
-                          transition={{ duration: 2, repeat: Infinity }}
-                          className={`absolute inset-0 rounded-full bg-gradient-to-br ${state.currentChannel.color}`}
-                        />
-                      )}
+                    {/* Controls */}
+                    <div className="flex items-center gap-4">
                       <motion.button
                         whileHover={{ scale: 1.08 }}
                         whileTap={{ scale: 0.92 }}
-                        onClick={() =>
-                          state.isPlaying ? pause() : resume()
-                        }
-                        className="relative w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white flex items-center justify-center shadow-lg shadow-indigo-500/30 hover:shadow-xl transition-shadow"
+                        onClick={() => (state.isPlaying ? pause() : resume())}
+                        className="w-14 h-14 rounded-full flex items-center justify-center text-white"
+                        style={{
+                          background: "linear-gradient(135deg, #4f46e5, #7c3aed)",
+                          boxShadow: "0 0 28px rgba(99,102,241,0.4)",
+                        }}
                       >
                         {state.isPlaying ? (
-                          <Pause size={28} fill="currentColor" />
+                          <Pause size={24} fill="currentColor" />
                         ) : (
-                          <Play
-                            size={28}
-                            fill="currentColor"
-                            className="ml-1"
-                          />
+                          <Play size={24} fill="currentColor" className="ml-1" />
                         )}
+                      </motion.button>
+                      <motion.button
+                        whileHover={{ scale: 1.08 }}
+                        whileTap={{ scale: 0.92 }}
+                        onClick={stop}
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-red-400 transition-colors"
+                        style={{
+                          background: "rgba(255,255,255,0.06)",
+                          border: "1px solid rgba(255,255,255,0.08)",
+                        }}
+                      >
+                        <Square size={16} fill="currentColor" />
                       </motion.button>
                     </div>
 
-                    {/* Volume control */}
-                    <div className="flex items-center gap-2 w-full max-w-[200px]">
+                    {/* Volume */}
+                    <div className="flex items-center gap-2.5 w-full max-w-[220px]">
                       <button
-                        onClick={() =>
-                          setVolume(state.volume === 0 ? 0.7 : 0)
-                        }
-                        className="text-gray-500 dark:text-gray-400 hover:text-indigo-500 transition-colors"
+                        onClick={() => setVolume(state.volume === 0 ? 0.7 : 0)}
+                        className="text-gray-500 hover:text-violet-400 transition-colors"
                       >
-                        {state.volume === 0 ? (
-                          <VolumeX size={18} />
-                        ) : (
-                          <Volume2 size={18} />
-                        )}
+                        {state.volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
                       </button>
                       <input
                         type="range"
@@ -190,10 +210,8 @@ export default function RadioPage() {
                         max="1"
                         step="0.01"
                         value={state.volume}
-                        onChange={(e) =>
-                          setVolume(parseFloat(e.target.value))
-                        }
-                        className="flex-1 h-1.5 rounded-full appearance-none bg-gray-200 dark:bg-gray-700 accent-indigo-500 cursor-pointer"
+                        onChange={(e) => setVolume(parseFloat(e.target.value))}
+                        className="flex-1 h-1 rounded-full appearance-none bg-gray-800 accent-violet-500 cursor-pointer"
                       />
                     </div>
 
@@ -201,80 +219,143 @@ export default function RadioPage() {
                     <label className="flex items-center gap-2 cursor-pointer select-none">
                       <div
                         onClick={toggleMiniPlayer}
-                        className={`relative w-10 h-5 rounded-full transition-colors ${
-                          state.isMiniPlayerEnabled
-                            ? "bg-indigo-500"
-                            : "bg-gray-300 dark:bg-gray-600"
+                        className={`relative w-9 h-5 rounded-full transition-colors ${
+                          state.isMiniPlayerEnabled ? "bg-violet-500" : "bg-gray-700"
                         }`}
                       >
                         <motion.div
-                          animate={{
-                            x: state.isMiniPlayerEnabled ? 20 : 2,
-                          }}
-                          transition={{
-                            type: "spring",
-                            damping: 20,
-                            stiffness: 300,
-                          }}
+                          animate={{ x: state.isMiniPlayerEnabled ? 18 : 2 }}
+                          transition={{ type: "spring", damping: 20, stiffness: 300 }}
                           className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm"
                         />
                       </div>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                        Keep playing in background
-                      </span>
+                      <span className="text-xs text-gray-500">Keep playing in background</span>
                     </label>
                   </div>
 
                   {/* Right: Visualizer */}
-                  <div className="flex-1 w-full min-w-0">
-                    <RadioVisualizer
-                      analyser={analyserRef.current}
-                      isPlaying={state.isPlaying}
-                      variant="full"
-                      className="w-full"
-                    />
+                  <div className="flex-1 min-w-0 flex items-center">
+                    <div
+                      className="w-full rounded-2xl overflow-hidden p-4"
+                      style={{
+                        background: "rgba(255,255,255,0.02)",
+                        border: "1px solid rgba(255,255,255,0.05)",
+                      }}
+                    >
+                      <RadioVisualizer
+                        analyser={analyserRef.current}
+                        isPlaying={state.isPlaying}
+                        variant="full"
+                        className="w-full"
+                      />
+                    </div>
                   </div>
                 </div>
-
-                {/* Stop button */}
-                <div className="mt-4 flex justify-center md:justify-start">
-                  <button
-                    onClick={stop}
-                    className="text-xs text-gray-400 hover:text-red-500 transition-colors poppins-semibold"
-                  >
-                    Stop & Close
-                  </button>
-                </div>
               </div>
-            </div>
-          </motion.div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Empty state */}
         {!state.currentChannel && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="mb-12 text-center py-12"
+            className="mb-10"
           >
-            <motion.div
-              animate={{ y: [0, -8, 0] }}
-              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-              className="inline-block mb-4"
+            <div
+              className="rounded-3xl p-8 md:p-10 text-center relative overflow-hidden"
+              style={{
+                background: "rgba(255,255,255,0.025)",
+                border: "1px solid rgba(255,255,255,0.06)",
+              }}
             >
-              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500/10 to-violet-500/10 dark:from-indigo-500/20 dark:to-violet-500/20 flex items-center justify-center">
-                <Headphones
-                  size={40}
-                  className="text-indigo-500 dark:text-indigo-400"
-                />
+              {/* Decorative background rings */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                {[120, 200, 280].map((size, i) => (
+                  <motion.div
+                    key={i}
+                    animate={{ rotate: i % 2 === 0 ? 360 : -360 }}
+                    transition={{ duration: 30 + i * 10, repeat: Infinity, ease: "linear" }}
+                    className="absolute rounded-full border border-dashed"
+                    style={{
+                      width: size,
+                      height: size,
+                      borderColor: `rgba(139,92,246,${0.08 - i * 0.02})`,
+                    }}
+                  />
+                ))}
               </div>
-            </motion.div>
-            <h2 className="text-xl poppins-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400 mb-2">
-              Pick a vibe to start studying
-            </h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Free, ad-free radio. Just hit play.
-            </p>
+
+              <div className="relative z-10">
+                {/* Icon */}
+                <motion.div
+                  animate={{ y: [0, -8, 0] }}
+                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                  className="inline-block mb-5"
+                >
+                  <div
+                    className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto"
+                    style={{
+                      background: "linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.15))",
+                      border: "1px solid rgba(99,102,241,0.2)",
+                      boxShadow: "0 0 50px rgba(99,102,241,0.15)",
+                    }}
+                  >
+                    <Headphones size={36} className="text-violet-400" />
+                  </div>
+                </motion.div>
+
+                {/* Title */}
+                <h2
+                  className="text-xl poppins-bold mb-2"
+                  style={{
+                    background: "linear-gradient(135deg, #a5b4fc, #ffffff 60%, #c4b5fd)",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    backgroundClip: "text",
+                  }}
+                >
+                  Pick a vibe to start studying
+                </h2>
+                <p className="text-sm text-gray-500 mb-8 max-w-md mx-auto">
+                  Free, ad-free radio. Curated ambient, chill, and focus channels to keep you in the zone.
+                </p>
+
+                {/* Feature highlights */}
+                <div className="flex flex-wrap justify-center gap-3 mb-6">
+                  {[
+                    { icon: Radio, label: "8 curated channels" },
+                    { icon: Volume2, label: "Background playback" },
+                    { icon: Headphones, label: "Ad-free streaming" },
+                  ].map((feat, i) => (
+                    <motion.div
+                      key={feat.label}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2 + i * 0.1 }}
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl"
+                      style={{
+                        background: "rgba(255,255,255,0.04)",
+                        border: "1px solid rgba(255,255,255,0.07)",
+                      }}
+                    >
+                      <feat.icon size={14} className="text-violet-400" />
+                      <span className="text-xs text-gray-400 poppins-medium">{feat.label}</span>
+                    </motion.div>
+                  ))}
+                </div>
+
+                {/* Scroll hint */}
+                <motion.div
+                  animate={{ y: [0, 4, 0] }}
+                  transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                  className="text-gray-600 text-xs poppins-regular"
+                >
+                  Scroll down to browse channels
+                </motion.div>
+              </div>
+            </div>
           </motion.div>
         )}
 
@@ -287,74 +368,142 @@ export default function RadioPage() {
         >
           {radioChannels.map((channel) => {
             const active = isActive(channel.id);
+            const playing = active && state.isPlaying;
             return (
               <motion.div
                 key={channel.id}
                 variants={cardVariants}
-                whileHover={{ y: -4, scale: 1.02 }}
+                whileHover={{ y: -6, scale: 1.01 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={() => handleChannelClick(channel)}
-                className={`relative cursor-pointer rounded-2xl overflow-hidden transition-shadow ${
-                  active
-                    ? "ring-2 ring-indigo-500 shadow-lg shadow-indigo-500/15"
-                    : "hover:shadow-lg"
-                }`}
+                className="relative cursor-pointer group"
               >
-                {/* Gradient top accent */}
-                <div
-                  className={`h-[3px] bg-gradient-to-r ${channel.color}`}
-                />
+                {/* Card glow for active channel */}
+                {active && (
+                  <div
+                    className="absolute -inset-[1px] rounded-2xl opacity-60"
+                    style={{
+                      background: `linear-gradient(135deg, rgba(99,102,241,0.4), rgba(139,92,246,0.2))`,
+                      filter: "blur(8px)",
+                    }}
+                  />
+                )}
 
-                <div className="bg-white/80 dark:bg-white/5 backdrop-blur-xl border border-gray-100 dark:border-white/10 p-5 rounded-b-2xl">
-                  {/* NOW PLAYING badge */}
-                  {active && state.isPlaying && (
-                    <div className="absolute top-3 right-3">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] poppins-semibold uppercase tracking-wider bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300">
-                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
-                        Playing
+                <div
+                  className="relative rounded-2xl overflow-hidden"
+                  style={{
+                    background: active
+                      ? "linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.06))"
+                      : "rgba(255,255,255,0.03)",
+                    border: active
+                      ? "1px solid rgba(99,102,241,0.3)"
+                      : "1px solid rgba(255,255,255,0.06)",
+                    transition: "all 0.3s ease",
+                  }}
+                >
+                  {/* Top section: gradient hero strip with icon */}
+                  <div
+                    className={`relative h-24 bg-gradient-to-br ${channel.color} overflow-hidden`}
+                  >
+                    {/* Decorative pattern overlay */}
+                    <div
+                      className="absolute inset-0"
+                      style={{
+                        background:
+                          "radial-gradient(circle at 80% 20%, rgba(255,255,255,0.15) 0%, transparent 50%), " +
+                          "radial-gradient(circle at 20% 80%, rgba(0,0,0,0.15) 0%, transparent 50%)",
+                      }}
+                    />
+                    {/* Floating icon */}
+                    <div className="absolute bottom-3 left-4">
+                      <div
+                        className="w-12 h-12 rounded-xl flex items-center justify-center"
+                        style={{
+                          background: "rgba(255,255,255,0.2)",
+                          backdropFilter: "blur(12px)",
+                          border: "1px solid rgba(255,255,255,0.25)",
+                        }}
+                      >
+                        <channel.Icon className="w-6 h-6 text-white" />
+                      </div>
+                    </div>
+                    {/* Playing indicator */}
+                    {playing && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full"
+                        style={{
+                          background: "rgba(0,0,0,0.35)",
+                          backdropFilter: "blur(8px)",
+                          border: "1px solid rgba(255,255,255,0.15)",
+                        }}
+                      >
+                        <motion.span
+                          animate={{ opacity: [1, 0.3, 1] }}
+                          transition={{ duration: 1.5, repeat: Infinity }}
+                          className="w-1.5 h-1.5 rounded-full bg-white"
+                        />
+                        <span className="text-[10px] poppins-semibold text-white uppercase tracking-wider">
+                          Live
+                        </span>
+                      </motion.div>
+                    )}
+                    {/* Equalizer bars for playing state */}
+                    {playing && (
+                      <div className="absolute bottom-3 right-4 flex items-end gap-[3px]">
+                        {[0, 1, 2, 3].map((i) => (
+                          <motion.div
+                            key={i}
+                            animate={{ height: [6, 16, 8, 14, 6] }}
+                            transition={{
+                              duration: 0.8,
+                              repeat: Infinity,
+                              delay: i * 0.15,
+                              ease: "easeInOut",
+                            }}
+                            className="w-[3px] rounded-full bg-white/70"
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Card body */}
+                  <div className="p-4 pt-3.5">
+                    <h3 className="text-[15px] poppins-bold text-white mb-1">
+                      {channel.name}
+                    </h3>
+                    <span className="inline-block text-[10px] poppins-semibold text-gray-400 mb-2.5 uppercase tracking-wider">
+                      {channel.genre}
+                    </span>
+                    <p className="text-[12px] text-gray-500 leading-relaxed line-clamp-2 mb-4">
+                      {channel.description}
+                    </p>
+
+                    {/* Play button */}
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className="w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300"
+                        style={{
+                          background: active
+                            ? "linear-gradient(135deg, #4f46e5, #7c3aed)"
+                            : "rgba(255,255,255,0.06)",
+                          border: active ? "none" : "1px solid rgba(255,255,255,0.08)",
+                          boxShadow: active ? "0 0 16px rgba(99,102,241,0.3)" : "none",
+                          color: active ? "#fff" : "rgba(255,255,255,0.4)",
+                        }}
+                      >
+                        {playing ? (
+                          <Pause size={14} fill="currentColor" />
+                        ) : (
+                          <Play size={14} fill="currentColor" className="ml-0.5" />
+                        )}
+                      </div>
+                      <span className="text-xs text-gray-500 poppins-medium group-hover:text-gray-300 transition-colors">
+                        {playing ? "Now playing" : active ? "Paused" : "Click to play"}
                       </span>
                     </div>
-                  )}
-
-                  <channel.Icon className="w-8 h-8 text-gray-700 dark:text-gray-300 mb-3" />
-                  <h3 className="text-base poppins-bold text-gray-900 dark:text-white mb-1">
-                    {channel.name}
-                  </h3>
-                  <span
-                    className={`inline-block px-2 py-0.5 rounded-full text-[10px] poppins-semibold mb-2 bg-gradient-to-r ${channel.color} text-white`}
-                  >
-                    {channel.genre}
-                  </span>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2">
-                    {channel.description}
-                  </p>
-
-                  {/* Play indicator */}
-                  <div className="mt-4 flex items-center gap-2">
-                    <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
-                        active
-                          ? "bg-gradient-to-br from-indigo-500 to-violet-600 text-white"
-                          : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
-                      }`}
-                    >
-                      {active && state.isPlaying ? (
-                        <Pause size={14} fill="currentColor" />
-                      ) : (
-                        <Play
-                          size={14}
-                          fill="currentColor"
-                          className="ml-0.5"
-                        />
-                      )}
-                    </div>
-                    <span className="text-xs text-gray-400 dark:text-gray-500">
-                      {active && state.isPlaying
-                        ? "Now playing"
-                        : active
-                          ? "Paused"
-                          : "Click to play"}
-                    </span>
                   </div>
                 </div>
               </motion.div>
@@ -362,15 +511,14 @@ export default function RadioPage() {
           })}
         </motion.div>
 
-        {/* Footer attribution */}
+        {/* Footer */}
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
-          className="text-center text-[11px] text-gray-400 dark:text-gray-600 mt-12"
+          className="text-center text-[11px] text-gray-600 mt-12"
         >
-          Streams provided by SomaFM.com — Listener-supported, commercial-free
-          radio
+          Streams provided by SomaFM.com — Listener-supported, commercial-free radio
         </motion.p>
       </main>
     </div>

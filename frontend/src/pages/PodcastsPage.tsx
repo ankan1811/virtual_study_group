@@ -9,7 +9,6 @@ import {
   Zap,
   Play,
   Pause,
-  ExternalLink,
   Star,
   RefreshCw,
   AlertCircle,
@@ -54,57 +53,24 @@ interface TabConfig {
 }
 
 const TABS: TabConfig[] = [
-  {
-    key: "trending",
-    label: "Trending",
-    icon: TrendingUp,
-    gradient: "from-orange-500 to-pink-500",
-    accentColor: "#f97316",
-  },
-  {
-    key: "ai",
-    label: "AI",
-    icon: Bot,
-    gradient: "from-indigo-500 to-violet-600",
-    accentColor: "#6366f1",
-  },
-  {
-    key: "tech",
-    label: "Tech",
-    icon: Cpu,
-    gradient: "from-sky-500 to-cyan-500",
-    accentColor: "#0ea5e9",
-  },
-  {
-    key: "business",
-    label: "Business",
-    icon: Briefcase,
-    gradient: "from-emerald-500 to-teal-500",
-    accentColor: "#10b981",
-  },
-  {
-    key: "productivity",
-    label: "Productivity & Tools",
-    icon: Zap,
-    gradient: "from-amber-500 to-yellow-400",
-    accentColor: "#f59e0b",
-  },
+  { key: "trending", label: "Trending", icon: TrendingUp, gradient: "from-orange-500 to-pink-500", accentColor: "#f97316" },
+  { key: "ai", label: "AI", icon: Bot, gradient: "from-indigo-500 to-violet-600", accentColor: "#6366f1" },
+  { key: "tech", label: "Tech", icon: Cpu, gradient: "from-sky-500 to-cyan-500", accentColor: "#0ea5e9" },
+  { key: "business", label: "Business", icon: Briefcase, gradient: "from-emerald-500 to-teal-500", accentColor: "#10b981" },
+  { key: "productivity", label: "Productivity & Tools", icon: Zap, gradient: "from-amber-500 to-yellow-400", accentColor: "#f59e0b" },
 ];
 
 // ─── Animation variants ───────────────────────────────────────────────────────
 
 const containerVariants = {
   hidden: {},
-  show: {
-    transition: { staggerChildren: 0.055 },
-  },
+  show: { transition: { staggerChildren: 0.055 } },
 };
 
 const cardVariants = {
   hidden: { opacity: 0, y: 22 },
   show: {
-    opacity: 1,
-    y: 0,
+    opacity: 1, y: 0,
     transition: { type: "spring", damping: 28, stiffness: 220 },
   },
 };
@@ -115,28 +81,17 @@ function SkeletonGrid() {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
       {Array.from({ length: 8 }).map((_, i) => (
-        <div
-          key={i}
-          className="rounded-2xl overflow-hidden bg-white dark:bg-white/5
-                     border border-gray-100 dark:border-white/10 p-4"
-        >
-          <div className="h-[3px] bg-gray-200 dark:bg-gray-700 rounded mb-4 animate-pulse" />
-          <div className="flex gap-3 mb-3">
-            <div className="w-16 h-16 rounded-xl bg-gray-200 dark:bg-gray-700 animate-pulse flex-shrink-0" />
-            <div className="flex-1 space-y-2 pt-1">
-              <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
-              <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-3/4 animate-pulse" />
-              <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded w-1/2 animate-pulse" />
+        <div key={i} className="rounded-2xl overflow-hidden" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+          <div className="h-28 bg-gray-800/50 animate-pulse" />
+          <div className="p-4 space-y-3">
+            <div className="h-3.5 bg-gray-800/50 rounded animate-pulse" />
+            <div className="h-3 bg-gray-800/30 rounded w-3/4 animate-pulse" />
+            <div className="h-2.5 bg-gray-800/20 rounded w-full animate-pulse" />
+            <div className="h-2.5 bg-gray-800/20 rounded w-4/5 animate-pulse" />
+            <div className="flex justify-between items-center pt-2">
+              <div className="h-3 w-16 bg-gray-800/20 rounded animate-pulse" />
+              <div className="h-8 w-20 bg-gray-800/30 rounded-full animate-pulse" />
             </div>
-          </div>
-          <div className="space-y-1.5 mb-4">
-            <div className="h-2.5 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
-            <div className="h-2.5 bg-gray-100 dark:bg-gray-800 rounded w-4/5 animate-pulse" />
-            <div className="h-2.5 bg-gray-100 dark:bg-gray-800 rounded w-3/5 animate-pulse" />
-          </div>
-          <div className="flex justify-between items-center">
-            <div className="h-3 w-20 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
-            <div className="h-7 w-24 bg-gray-100 dark:bg-gray-800 rounded-lg animate-pulse" />
           </div>
         </div>
       ))}
@@ -144,28 +99,24 @@ function SkeletonGrid() {
   );
 }
 
-function ErrorState({
-  message,
-  onRetry,
-}: {
-  message: string;
-  onRetry: () => void;
-}) {
+function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       className="flex flex-col items-center justify-center py-24 gap-4"
     >
-      <div className="w-14 h-14 rounded-2xl bg-red-50 dark:bg-red-950/30 flex items-center justify-center">
+      <div
+        className="w-14 h-14 rounded-2xl flex items-center justify-center"
+        style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.15)" }}
+      >
         <AlertCircle size={26} className="text-red-400" />
       </div>
-      <p className="text-sm text-gray-500 dark:text-gray-400">{message}</p>
+      <p className="text-sm text-gray-400">{message}</p>
       <button
         onClick={onRetry}
-        className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold
-                   bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400
-                   hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
+        className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-violet-400 transition-colors hover:text-violet-300"
+        style={{ background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.15)" }}
       >
         <RefreshCw size={14} />
         Try again
@@ -176,122 +127,185 @@ function ErrorState({
 
 function PodcastCard({
   podcast,
-  accentColor,
+  gradient,
   isCurrentlyPlaying,
   onPlay,
 }: {
   podcast: PodcastItem;
-  accentColor: string;
+  gradient: string;
   isCurrentlyPlaying: boolean;
   onPlay: (podcast: PodcastItem) => void;
 }) {
   return (
     <motion.div
       variants={cardVariants}
-      whileHover={{ y: -4, scale: 1.015 }}
-      transition={{ type: "spring", damping: 26, stiffness: 300 }}
-      className="rounded-2xl overflow-hidden bg-white dark:bg-white/5
-                 backdrop-blur-xl border border-gray-100 dark:border-white/10
-                 hover:shadow-xl hover:shadow-black/5 dark:hover:shadow-black/30
-                 transition-shadow flex flex-col"
+      whileHover={{ y: -6, scale: 1.01 }}
+      whileTap={{ scale: 0.97 }}
+      onClick={() => onPlay(podcast)}
+      className="relative cursor-pointer group"
     >
-      {/* Top accent strip */}
-      <div className="h-[3px]" style={{ background: accentColor }} />
+      {/* Glow for active */}
+      {isCurrentlyPlaying && (
+        <div
+          className="absolute -inset-[1px] rounded-2xl opacity-60"
+          style={{
+            background: "linear-gradient(135deg, rgba(99,102,241,0.4), rgba(139,92,246,0.2))",
+            filter: "blur(8px)",
+          }}
+        />
+      )}
 
-      {/* Thumbnail + metadata */}
-      <div className="p-4 flex gap-3">
-        <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800">
-          {podcast.thumbnail ? (
-            <img
-              src={podcast.thumbnail}
-              alt={podcast.title}
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = "none";
-                (e.target as HTMLImageElement).parentElement!.classList.add(
-                  "flex",
-                  "items-center",
-                  "justify-center"
-                );
-                const icon = document.createElement("span");
-                icon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>`;
-                (e.target as HTMLImageElement).parentElement!.appendChild(icon);
+      <div
+        className="relative rounded-2xl overflow-hidden"
+        style={{
+          background: isCurrentlyPlaying
+            ? "linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.06))"
+            : "rgba(255,255,255,0.03)",
+          border: isCurrentlyPlaying
+            ? "1px solid rgba(99,102,241,0.3)"
+            : "1px solid rgba(255,255,255,0.06)",
+          transition: "all 0.3s ease",
+        }}
+      >
+        {/* Gradient hero with thumbnail */}
+        <div className={`relative h-28 bg-gradient-to-br ${gradient} overflow-hidden`}>
+          {/* Decorative overlay */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(circle at 80% 20%, rgba(255,255,255,0.15) 0%, transparent 50%), " +
+                "radial-gradient(circle at 20% 80%, rgba(0,0,0,0.15) 0%, transparent 50%)",
+            }}
+          />
+          {/* Thumbnail */}
+          <div className="absolute bottom-3 left-4">
+            <div
+              className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0"
+              style={{
+                background: "rgba(255,255,255,0.2)",
+                backdropFilter: "blur(12px)",
+                border: "1px solid rgba(255,255,255,0.25)",
               }}
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <Mic2 size={22} className="text-gray-400" />
+            >
+              {podcast.thumbnail ? (
+                <img
+                  src={podcast.thumbnail}
+                  alt={podcast.title}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = "none";
+                  }}
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <Mic2 size={20} className="text-white/70" />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Score badge */}
+          {podcast.listenScore !== null && (
+            <div
+              className="absolute top-3 right-3 flex items-center gap-1 px-2 py-0.5 rounded-full"
+              style={{
+                background: "rgba(0,0,0,0.35)",
+                backdropFilter: "blur(8px)",
+                border: "1px solid rgba(255,255,255,0.15)",
+              }}
+            >
+              <Star size={9} fill="currentColor" className="text-amber-400" />
+              <span className="text-[10px] poppins-semibold text-white">
+                {podcast.listenScore}
+              </span>
+            </div>
+          )}
+
+          {/* Playing indicator */}
+          {isCurrentlyPlaying && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full"
+              style={{
+                background: "rgba(0,0,0,0.35)",
+                backdropFilter: "blur(8px)",
+                border: "1px solid rgba(255,255,255,0.15)",
+              }}
+            >
+              <motion.span
+                animate={{ opacity: [1, 0.3, 1] }}
+                transition={{ duration: 1.5, repeat: Infinity }}
+                className="w-1.5 h-1.5 rounded-full bg-white"
+              />
+              <span className="text-[10px] poppins-semibold text-white uppercase tracking-wider">
+                Playing
+              </span>
+            </motion.div>
+          )}
+
+          {/* Equalizer bars */}
+          {isCurrentlyPlaying && (
+            <div className="absolute bottom-3 right-4 flex items-end gap-[3px]">
+              {[0, 1, 2, 3].map((i) => (
+                <motion.div
+                  key={i}
+                  animate={{ height: [6, 16, 8, 14, 6] }}
+                  transition={{
+                    duration: 0.8,
+                    repeat: Infinity,
+                    delay: i * 0.15,
+                    ease: "easeInOut",
+                  }}
+                  className="w-[3px] rounded-full bg-white/70"
+                />
+              ))}
             </div>
           )}
         </div>
 
-        <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-bold text-gray-900 dark:text-white line-clamp-2 leading-snug mb-1">
+        {/* Card body */}
+        <div className="p-4 pt-3.5">
+          <h3 className="text-[14px] poppins-bold text-white mb-0.5 line-clamp-2 leading-snug">
             {podcast.title}
           </h3>
-          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+          <p className="text-[11px] text-gray-500 poppins-medium mb-2.5 truncate">
             {podcast.publisher}
           </p>
-          {podcast.listenScore !== null && (
-            <span
-              className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full
-                           text-[10px] font-semibold
-                           bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400"
-            >
-              <Star size={8} fill="currentColor" />
-              {podcast.listenScore}
+          <p className="text-[12px] text-gray-500 leading-relaxed line-clamp-2 mb-4">
+            {podcast.description}
+          </p>
+
+          {/* Footer: episodes + play button */}
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] text-gray-600">
+              {podcast.totalEpisodes > 0 ? `${podcast.totalEpisodes.toLocaleString()} eps` : ""}
             </span>
-          )}
+            <div className="flex items-center gap-2.5">
+              <div
+                className="w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300"
+                style={{
+                  background: isCurrentlyPlaying
+                    ? "linear-gradient(135deg, #4f46e5, #7c3aed)"
+                    : "rgba(255,255,255,0.06)",
+                  border: isCurrentlyPlaying ? "none" : "1px solid rgba(255,255,255,0.08)",
+                  boxShadow: isCurrentlyPlaying ? "0 0 16px rgba(99,102,241,0.3)" : "none",
+                  color: isCurrentlyPlaying ? "#fff" : "rgba(255,255,255,0.4)",
+                }}
+              >
+                {isCurrentlyPlaying ? (
+                  <Pause size={14} fill="currentColor" />
+                ) : (
+                  <Play size={14} fill="currentColor" className="ml-0.5" />
+                )}
+              </div>
+              <span className="text-xs text-gray-500 poppins-medium group-hover:text-gray-300 transition-colors">
+                {isCurrentlyPlaying ? "Playing" : "Play"}
+              </span>
+            </div>
+          </div>
         </div>
-      </div>
-
-      {/* Description */}
-      <div className="px-4 pb-3 flex-1">
-        <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-3 leading-relaxed">
-          {podcast.description}
-        </p>
-      </div>
-
-      {/* Footer */}
-      <div className="px-4 pb-4 flex items-center justify-between">
-        <span className="text-[11px] text-gray-400 dark:text-gray-500">
-          {podcast.totalEpisodes > 0
-            ? `${podcast.totalEpisodes.toLocaleString()} eps`
-            : ""}
-        </span>
-        {podcast.audio ? (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onPlay(podcast);
-            }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-              isCurrentlyPlaying
-                ? "bg-teal-100 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300"
-                : "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40"
-            }`}
-          >
-            {isCurrentlyPlaying ? (
-              <Pause size={11} fill="currentColor" />
-            ) : (
-              <Play size={11} fill="currentColor" />
-            )}
-            {isCurrentlyPlaying ? "Playing" : "Play"}
-          </button>
-        ) : (
-          <a
-            href={podcast.website || podcast.listenNotesUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
-                       bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400
-                       hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <ExternalLink size={11} />
-            Listen Now
-          </a>
-        )}
       </div>
     </motion.div>
   );
@@ -330,10 +344,9 @@ export default function PodcastsPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await axios.get<PodcastsResponse>(
-        `${API}/podcasts/${topic}`
-      );
-      setTopicCache((prev) => ({ ...prev, [topic]: res.data }));
+      const res = await axios.get<PodcastsResponse>(`${API}/podcasts/${topic}`);
+      const filtered = { ...res.data, data: res.data.data.filter((p) => p.audio) };
+      setTopicCache((prev) => ({ ...prev, [topic]: filtered }));
     } catch {
       setError("Could not load podcasts. Please check your connection.");
     } finally {
@@ -355,22 +368,24 @@ export default function PodcastsPage() {
       delete next[activeTab];
       return next;
     });
-    // trigger re-fetch via useEffect by clearing cache entry
     setTimeout(() => fetchTopic(activeTab), 0);
   };
 
   return (
-    <div
-      className="min-h-screen bg-gradient-to-br from-gray-50 via-indigo-50/30 to-gray-50
-                    dark:from-gray-950 dark:via-indigo-950/20 dark:to-gray-950 transition-colors"
-    >
+    <div className="min-h-screen bg-gray-950 transition-colors">
       <Navbar />
 
-      {/* Background orbs */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-[600px] h-[600px] rounded-full bg-indigo-400/8 dark:bg-indigo-600/8 blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-[500px] h-[500px] rounded-full bg-violet-400/6 dark:bg-violet-600/6 blur-3xl" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full bg-sky-400/4 dark:bg-sky-600/4 blur-3xl" />
+      {/* Ambient background */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10">
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(ellipse at 20% 30%, rgba(99,102,241,0.08) 0%, transparent 60%), " +
+              "radial-gradient(ellipse at 80% 60%, rgba(139,92,246,0.06) 0%, transparent 50%), " +
+              "radial-gradient(ellipse at 50% 90%, rgba(34,211,238,0.04) 0%, transparent 40%)",
+          }}
+        />
       </div>
 
       <main className="relative pt-20 px-4 pb-16 max-w-7xl mx-auto">
@@ -378,21 +393,21 @@ export default function PodcastsPage() {
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ type: "spring", damping: 26, stiffness: 200 }}
           className="mb-5"
         >
-          <div className="flex items-center gap-3 mb-1.5">
+          <div className="flex items-center gap-3 mb-2">
             <div
-              className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600
-                           flex items-center justify-center shadow-lg shadow-indigo-500/25"
+              className="w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{
+                background: "linear-gradient(135deg, #4f46e5, #7c3aed)",
+                boxShadow: "0 0 24px rgba(99,102,241,0.35)",
+              }}
             >
               <Mic2 size={20} className="text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
-              Podcasts
-            </h1>
+            <h1 className="text-2xl poppins-bold text-white">Podcasts</h1>
           </div>
-          <p className="text-sm text-gray-500 dark:text-gray-400 ml-[52px]">
+          <p className="text-sm text-gray-500 ml-[52px]">
             Discover top podcasts across AI, tech, business, and productivity.
           </p>
         </motion.div>
@@ -401,20 +416,21 @@ export default function PodcastsPage() {
         <motion.div
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1, type: "spring", damping: 26, stiffness: 200 }}
-          className="mb-6 flex items-center gap-3 px-4 py-3 rounded-2xl
-                     bg-gradient-to-r from-indigo-500/10 via-violet-500/8 to-purple-500/10
-                     dark:from-indigo-500/15 dark:via-violet-500/10 dark:to-purple-500/15
-                     border border-indigo-200/50 dark:border-indigo-700/30"
+          transition={{ delay: 0.1 }}
+          className="mb-6 flex items-center gap-3 px-4 py-3 rounded-2xl"
+          style={{
+            background: "rgba(99,102,241,0.06)",
+            border: "1px solid rgba(99,102,241,0.12)",
+          }}
         >
           <span className="flex h-2 w-2 relative flex-shrink-0">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500" />
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500" />
           </span>
-          <p className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">
+          <p className="text-sm poppins-semibold text-violet-300">
             Fresh drops every Tue &amp; Sat — stay ahead of the curve.
           </p>
-          <span className="ml-auto text-xs text-gray-400 dark:text-gray-500 hidden sm:block whitespace-nowrap">
+          <span className="ml-auto text-xs text-gray-600 hidden sm:block whitespace-nowrap">
             Curated for the curious learner
           </span>
         </motion.div>
@@ -423,7 +439,7 @@ export default function PodcastsPage() {
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15, type: "spring", damping: 26, stiffness: 200 }}
+          transition={{ delay: 0.15 }}
           className="flex gap-1.5 overflow-x-auto pb-1 mb-8 scrollbar-hide"
         >
           {TABS.map((tab) => {
@@ -435,11 +451,7 @@ export default function PodcastsPage() {
                 onClick={() => setActiveTab(tab.key)}
                 className={`relative flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold
                            whitespace-nowrap transition-colors flex-shrink-0 cursor-pointer
-                           ${
-                             isActive
-                               ? "text-white"
-                               : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5"
-                           }`}
+                           ${isActive ? "text-white" : "text-gray-500 hover:text-gray-300"}`}
               >
                 {isActive && (
                   <motion.div
@@ -468,20 +480,19 @@ export default function PodcastsPage() {
           >
             {loading && <SkeletonGrid />}
 
-            {!loading && error && (
-              <ErrorState message={error} onRetry={handleRetry} />
-            )}
+            {!loading && error && <ErrorState message={error} onRetry={handleRetry} />}
 
             {!loading && !error && currentData && (
               <>
-                {/* Source badge for stale cache */}
                 {currentData.source === "stale-cache" && (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="mb-4 inline-flex items-center gap-1.5 px-3 py-1 rounded-full
-                               text-xs font-medium bg-amber-50 dark:bg-amber-950/30
-                               text-amber-600 dark:text-amber-400 border border-amber-200/50 dark:border-amber-800/30"
+                    className="mb-4 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium text-amber-400"
+                    style={{
+                      background: "rgba(245,158,11,0.08)",
+                      border: "1px solid rgba(245,158,11,0.15)",
+                    }}
                   >
                     <AlertCircle size={11} />
                     Showing cached data — live refresh coming next Tue or Sat
@@ -498,10 +509,9 @@ export default function PodcastsPage() {
                     <PodcastCard
                       key={podcast.id}
                       podcast={podcast}
-                      accentColor={activeTabConfig.accentColor}
+                      gradient={activeTabConfig.gradient}
                       isCurrentlyPlaying={
-                        podcastState.currentTrack?.id === podcast.id &&
-                        podcastState.isPlaying
+                        podcastState.currentTrack?.id === podcast.id && podcastState.isPlaying
                       }
                       onPlay={handlePlay}
                     />
@@ -512,19 +522,19 @@ export default function PodcastsPage() {
           </motion.div>
         </AnimatePresence>
 
-        {/* Footer attribution */}
+        {/* Footer */}
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.6 }}
-          className="text-center text-[11px] text-gray-400 dark:text-gray-600 mt-14"
+          className="text-center text-[11px] text-gray-600 mt-14"
         >
           Podcast data provided by{" "}
           <a
             href="https://www.listennotes.com"
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-indigo-500 transition-colors"
+            className="hover:text-violet-400 transition-colors"
           >
             Listen Notes
           </a>
