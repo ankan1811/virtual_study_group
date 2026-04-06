@@ -430,7 +430,7 @@ export default function PodcastsPage() {
           <p className="text-sm poppins-semibold text-violet-300">
             Fresh drops every Tue &amp; Sat — stay ahead of the curve.
           </p>
-          <span className="ml-auto text-xs text-gray-600 hidden sm:block whitespace-nowrap">
+          <span className="ml-auto text-xs text-gray-500 hidden sm:block whitespace-nowrap">
             Curated for the curious learner
           </span>
         </motion.div>
@@ -523,22 +523,6 @@ export default function PodcastsPage() {
         </AnimatePresence>
 
         {/* Footer */}
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.6 }}
-          className="text-center text-[11px] text-gray-600 mt-14"
-        >
-          Podcast data provided by{" "}
-          <a
-            href="https://www.listennotes.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-violet-400 transition-colors"
-          >
-            Listen Notes
-          </a>
-        </motion.p>
       </main>
     </div>
   );

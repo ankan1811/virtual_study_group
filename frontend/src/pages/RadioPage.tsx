@@ -350,7 +350,7 @@ export default function RadioPage() {
                 <motion.div
                   animate={{ y: [0, 4, 0] }}
                   transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                  className="text-gray-600 text-xs poppins-regular"
+                  className="text-gray-500 text-xs poppins-regular"
                 >
                   Scroll down to browse channels
                 </motion.div>
@@ -512,14 +512,6 @@ export default function RadioPage() {
         </motion.div>
 
         {/* Footer */}
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-          className="text-center text-[11px] text-gray-600 mt-12"
-        >
-          Streams provided by SomaFM.com — Listener-supported, commercial-free radio
-        </motion.p>
       </main>
     </div>
   );

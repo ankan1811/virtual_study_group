@@ -111,6 +111,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const restoredRef = useRef(false);
+  const currentChannelRef = useRef<RadioChannel | null>(null);
 
   // Create audio element once
   useEffect(() => {
@@ -141,9 +142,10 @@ export function RadioProvider({ children }: { children: ReactNode }) {
     if (audioRef.current) audioRef.current.volume = state.volume;
   }, [state.volume]);
 
-  // Persist state
+  // Persist state & sync channel ref
   useEffect(() => {
     saveState(state);
+    currentChannelRef.current = state.currentChannel;
   }, [state]);
 
   const initAudioContext = useCallback(() => {
@@ -181,17 +183,27 @@ export function RadioProvider({ children }: { children: ReactNode }) {
   );
 
   const pause = useCallback(() => {
+    audioContextRef.current?.suspend();
     audioRef.current?.pause();
     dispatch({ type: "PAUSE" });
   }, []);
 
   const resume = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    // After page refresh, audio has no source — need full initialization
+    if (!audio.src && currentChannelRef.current) {
+      initAudioContext();
+      audio.src = currentChannelRef.current.streamUrl;
+    }
+
     if (audioContextRef.current?.state === "suspended") {
       audioContextRef.current.resume();
     }
-    audioRef.current?.play().catch(() => {});
+    audio.play().catch(() => {});
     dispatch({ type: "RESUME" });
-  }, []);
+  }, [initAudioContext]);
 
   const stop = useCallback(() => {
     const audio = audioRef.current;

@@ -17,15 +17,30 @@ export default function RadioVisualizer({
   const animFrameRef = useRef<number>(0);
   const [useFallback, setUseFallback] = useState(false);
   const zeroCountRef = useRef(0);
+  const snapshotRef = useRef<ImageData | null>(null);
+  const frameCountRef = useRef(0);
 
   const barCount = variant === "full" ? 64 : 32;
   const height = variant === "full" ? 140 : 40;
+
+  // Stable random animation values so they don't reset on re-render (pause/resume)
+  const barAnimsRef = useRef<{ duration: number; delay: number }[]>([]);
+  if (barAnimsRef.current.length !== barCount) {
+    barAnimsRef.current = Array.from({ length: barCount }, () => ({
+      duration: 0.6 + Math.random() * 0.8,
+      delay: Math.random() * 0.5,
+    }));
+  }
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !isPlaying) {
       cancelAnimationFrame(animFrameRef.current);
-      // Keep last frame visible — don't clear canvas
+      // Restore the last good snapshot to overwrite any decayed frames
+      if (canvas && snapshotRef.current && canvas.width > 0) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) ctx.putImageData(snapshotRef.current, 0, 0);
+      }
       return;
     }
 
@@ -36,6 +51,8 @@ export default function RadioVisualizer({
 
     setUseFallback(false);
     zeroCountRef.current = 0;
+    snapshotRef.current = null;
+    frameCountRef.current = 0;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -78,7 +95,8 @@ export default function RadioVisualizer({
       const mainH = h - reflectionH;
 
       for (let i = 0; i < barCount; i++) {
-        const dataIndex = Math.floor((i / barCount) * dataArray.length);
+        const t = i / barCount;
+        const dataIndex = Math.floor(Math.pow(t, 1.8) * (dataArray.length - 1));
         const value = dataArray[dataIndex] / 255;
         const barH = Math.max(2, value * mainH * 0.95);
 
@@ -122,6 +140,12 @@ export default function RadioVisualizer({
         ctx.shadowBlur = 0;
       }
 
+      // Save a canvas snapshot every 10 frames for pause-freeze
+      frameCountRef.current++;
+      if (frameCountRef.current % 10 === 0 && sum > 0) {
+        snapshotRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      }
+
       animFrameRef.current = requestAnimationFrame(draw);
     }
 
@@ -129,17 +153,18 @@ export default function RadioVisualizer({
     return () => cancelAnimationFrame(animFrameRef.current);
   }, [analyser, isPlaying, barCount, variant]);
 
-  // CSS fallback animated bars
-  if (useFallback && isPlaying) {
+  // CSS fallback animated bars (CORS blocks analyser data)
+  if (useFallback) {
     return (
       <div className={`flex items-end gap-[2px] ${className}`} style={{ height }}>
-        {Array.from({ length: barCount }).map((_, i) => (
+        {barAnimsRef.current.map((anim, i) => (
           <div
             key={i}
             className="flex-1 rounded-t-sm bg-gradient-to-t from-indigo-500 via-violet-500 to-purple-500"
             style={{
               height: "100%",
-              animation: `radioBar ${0.6 + Math.random() * 0.8}s ease-in-out ${Math.random() * 0.5}s infinite alternate`,
+              animation: `radioBar ${anim.duration}s ease-in-out ${anim.delay}s infinite alternate`,
+              animationPlayState: isPlaying ? "running" : "paused",
               transformOrigin: "bottom",
             }}
           />
@@ -147,7 +172,7 @@ export default function RadioVisualizer({
         <style>{`
           @keyframes radioBar {
             0% { transform: scaleY(0.1); }
-            100% { transform: scaleY(${0.3 + Math.random() * 0.7}); }
+            100% { transform: scaleY(0.85); }
           }
         `}</style>
       </div>
