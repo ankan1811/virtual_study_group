@@ -85,7 +85,7 @@ export default function RoomCallPage() {
   const [isInCall, setIsInCall] = useState(false);
   const [lobbySummaryLoading, setLobbySummaryLoading] = useState(false);
   const [lobbySummaryDone, setLobbySummaryDone] = useState(false);
-  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+  const [_remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [callLimitToast, setCallLimitToast] = useState<string | null>(null);
   const [uidToName, setUidToName] = useState<Record<string, string>>({});
 
