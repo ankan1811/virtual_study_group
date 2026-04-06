@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import axios from "axios";
-import { Clock, ChevronDown, ChevronRight, Loader2, FileText, Check } from "lucide-react";
+import { Clock, ChevronDown, ChevronRight, Loader2, FileText, Check, MessageSquare } from "lucide-react";
 import { generateAndSaveSummary } from "../utils/summaryApi";
 import Navbar from "../components/Navbar";
 import { AuthState } from "../store/authStore/store";
@@ -77,20 +78,54 @@ export default function SessionsPage() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors">
       <Navbar />
 
-      <div className="max-w-3xl mx-auto px-4 pt-16 pb-10">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
-            <Clock size={20} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-gray-800 dark:text-gray-100 poppins-bold">
-              Session History
-            </h1>
-            <p className="text-xs text-gray-400 dark:text-gray-500 poppins-regular">
-              Browse your past study room sessions
-            </p>
-          </div>
-        </div>
+      <div className="max-w-3xl mx-auto px-4 pt-24 pb-12">
+        <motion.div
+          initial={{ opacity: 0, y: -12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6"
+        >
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white poppins-semibold flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/50">
+              <Clock
+                size={22}
+                className="text-indigo-600 dark:text-indigo-400"
+              />
+            </div>
+            Session History
+          </h1>
+          <p className="text-sm text-gray-400 dark:text-gray-500 mt-1 poppins-regular">
+            Browse your past study room sessions and generate AI summaries
+          </p>
+
+          {/* Stats strip */}
+          {!loading && sessions.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.08 }}
+              className="mt-4 flex flex-wrap items-center gap-2.5"
+            >
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200/60 dark:border-indigo-800/40">
+                <Clock size={13} className="text-indigo-500 dark:text-indigo-400" />
+                <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 poppins-semibold">
+                  {sessions.length} session{sessions.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-violet-50 dark:bg-violet-950/40 border border-violet-200/60 dark:border-violet-800/40">
+                <MessageSquare size={13} className="text-violet-500 dark:text-violet-400" />
+                <span className="text-xs font-semibold text-violet-700 dark:text-violet-300 poppins-semibold">
+                  With chat history
+                </span>
+              </div>
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800/40">
+                <FileText size={13} className="text-emerald-500 dark:text-emerald-400" />
+                <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 poppins-semibold">
+                  AI summaries available
+                </span>
+              </div>
+            </motion.div>
+          )}
+        </motion.div>
 
         {loading ? (
           <div className="flex justify-center py-16">

@@ -17,8 +17,6 @@ export default function RadioVisualizer({
   const animFrameRef = useRef<number>(0);
   const [useFallback, setUseFallback] = useState(false);
   const zeroCountRef = useRef(0);
-  const snapshotRef = useRef<ImageData | null>(null);
-  const frameCountRef = useRef(0);
 
   const barCount = variant === "full" ? 64 : 32;
   const height = variant === "full" ? 140 : 40;
@@ -36,11 +34,6 @@ export default function RadioVisualizer({
     const canvas = canvasRef.current;
     if (!canvas || !isPlaying) {
       cancelAnimationFrame(animFrameRef.current);
-      // Restore the last good snapshot to overwrite any decayed frames
-      if (canvas && snapshotRef.current && canvas.width > 0) {
-        const ctx = canvas.getContext("2d");
-        if (ctx) ctx.putImageData(snapshotRef.current, 0, 0);
-      }
       return;
     }
 
@@ -51,8 +44,6 @@ export default function RadioVisualizer({
 
     setUseFallback(false);
     zeroCountRef.current = 0;
-    snapshotRef.current = null;
-    frameCountRef.current = 0;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -138,12 +129,6 @@ export default function RadioVisualizer({
         }
 
         ctx.shadowBlur = 0;
-      }
-
-      // Save a canvas snapshot every 10 frames for pause-freeze
-      frameCountRef.current++;
-      if (frameCountRef.current % 10 === 0 && sum > 0) {
-        snapshotRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
       }
 
       animFrameRef.current = requestAnimationFrame(draw);

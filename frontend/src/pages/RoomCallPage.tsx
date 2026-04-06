@@ -449,10 +449,10 @@ export default function RoomCallPage() {
             })}
             <button
               onClick={handleExitClick}
-              className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 mr-2 rounded-lg bg-red-50 dark:bg-red-950/30 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/40 text-[11px] font-semibold poppins-semibold transition-colors"
+              title="Exit room"
+              className="flex-shrink-0 w-8 h-8 mr-2 rounded-full flex items-center justify-center text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
             >
-              <LogOut size={12} />
-              Exit
+              <LogOut size={15} />
             </button>
           </div>
 
