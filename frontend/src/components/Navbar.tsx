@@ -1,5 +1,4 @@
 import { useState } from "react";
-import Logo from "../assets/logo.svg";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LogIn,
@@ -249,7 +248,25 @@ export default function Navbar() {
 
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
-              <img alt="Logo" src={Logo} className="h-8 dark:invert" />
+              <div className="relative flex-shrink-0">
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center"
+                  style={{
+                    background: "linear-gradient(135deg, #4f46e5, #7c3aed)",
+                    boxShadow: "0 0 24px rgba(99,102,241,0.4)",
+                  }}
+                >
+                  <BookOpen className="w-5 h-5 text-white" />
+                </div>
+                <div
+                  className="absolute inset-[-4px] rounded-xl border border-dashed border-violet-500/30 animate-spin"
+                  style={{ animationDuration: "5s" }}
+                />
+                <div
+                  className="absolute inset-[-9px] rounded-xl border border-cyan-500/15 animate-spin"
+                  style={{ animationDuration: "9s", animationDirection: "reverse" }}
+                />
+              </div>
               <button
                 onClick={close}
                 aria-label="Close menu"

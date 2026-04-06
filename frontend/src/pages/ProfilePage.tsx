@@ -199,14 +199,9 @@ export default function ProfilePage() {
   const hasEducation = education.degree || education.institution || education.year;
   const hasWorkExp = workExperience.company || workExperience.role;
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
-        <Navbar />
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
-      </div>
-    );
-  }
+  const Skeleton = ({ className = "" }: { className?: string }) => (
+    <div className={`animate-pulse rounded-lg bg-gray-200 dark:bg-gray-700 ${className}`} />
+  );
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -283,7 +278,9 @@ export default function ProfilePage() {
 
             {/* Name + badge */}
             <div className="text-center mb-4">
-              {editing ? (
+              {loading ? (
+                <Skeleton className="h-8 w-48 mx-auto" />
+              ) : editing ? (
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -294,12 +291,16 @@ export default function ProfilePage() {
                 <h1 className="text-2xl poppins-bold text-gray-900 dark:text-white">{name}</h1>
               )}
               <div className="mt-2">
-                <span
-                  className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs poppins-semibold text-white"
-                  style={{ background: "linear-gradient(135deg, #4f46e5, #7c3aed)" }}
-                >
-                  <GraduationCap size={12} /> Student
-                </span>
+                {loading ? (
+                  <Skeleton className="h-6 w-24 mx-auto rounded-full" />
+                ) : (
+                  <span
+                    className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs poppins-semibold text-white"
+                    style={{ background: "linear-gradient(135deg, #4f46e5, #7c3aed)" }}
+                  >
+                    <GraduationCap size={12} /> Student
+                  </span>
+                )}
               </div>
             </div>
 
@@ -310,7 +311,7 @@ export default function ProfilePage() {
                   <Users size={16} className="text-indigo-500" />
                 </div>
                 <div>
-                  <p className="text-lg font-bold text-gray-900 dark:text-white poppins-bold">{companionCount}</p>
+                  {loading ? <Skeleton className="h-6 w-8" /> : <p className="text-lg font-bold text-gray-900 dark:text-white poppins-bold">{companionCount}</p>}
                   <p className="text-[11px] text-gray-500 dark:text-gray-400 poppins-regular">Companions</p>
                 </div>
               </motion.div>
@@ -319,7 +320,7 @@ export default function ProfilePage() {
                   <Mail size={16} className="text-violet-500" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white poppins-semibold truncate max-w-[120px]">{email}</p>
+                  {loading ? <Skeleton className="h-5 w-28" /> : <p className="text-sm font-semibold text-gray-900 dark:text-white poppins-semibold truncate max-w-[120px]">{email}</p>}
                   <p className="text-[11px] text-gray-500 dark:text-gray-400 poppins-regular">Email</p>
                 </div>
               </motion.div>
@@ -392,6 +393,23 @@ export default function ProfilePage() {
         </AnimatePresence>
 
         {/* ── Content sections ── */}
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="bg-white/80 dark:bg-gray-900/80 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden">
+                <div className="h-[3px] bg-gradient-to-r from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-600" />
+                <div className="p-5 space-y-3">
+                  <div className="flex items-center gap-2.5">
+                    <Skeleton className="w-8 h-8 rounded-lg" />
+                    <Skeleton className="h-4 w-24" />
+                  </div>
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-3/4" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
         <motion.div variants={containerVariants} initial="hidden" animate="show" className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Bio */}
           <motion.div variants={cardVariants} whileHover={{ y: -3 }} className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl rounded-2xl border border-gray-100 dark:border-gray-800 hover:border-indigo-200 dark:hover:border-indigo-800/50 shadow-sm hover:shadow-md overflow-hidden transition-all">
@@ -549,6 +567,7 @@ export default function ProfilePage() {
             </motion.div>
           )}
         </motion.div>
+        )}
 
         {/* Saved toast */}
         <AnimatePresence>

@@ -1,16 +1,12 @@
 import { Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { AuthenticatedRequest } from '../middlewares/middleware';
-import { findById, updateUser, searchUsers } from '../db/queries/users';
-import { countAcceptedCompanions } from '../db/queries/companions';
+import { findById, findByIdWithCompanionCount, updateUser, searchUsers } from '../db/queries/users';
 
 export const getProfile = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const me = req.user.userId;
-    const [user, companionCount] = await Promise.all([
-      findById(me),
-      countAcceptedCompanions(me),
-    ]);
+    const user = await findByIdWithCompanionCount(me);
     if (!user) {
       res.status(404).json({ error: 'User not found' });
       return;
@@ -20,7 +16,7 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response): Prom
       email: user.email,
       bio: user.bio || '',
       avatar: user.avatar || '',
-      companionCount,
+      companionCount: user.companionCount,
       education: user.education || { degree: '', institution: '', year: '' },
       projects: user.projects || [],
       workExperience: user.workExperience || { company: '', role: '', duration: '', description: '' },

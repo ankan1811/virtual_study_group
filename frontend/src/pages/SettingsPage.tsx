@@ -155,7 +155,8 @@ function SettingLink({
       {external ? (
         <ExternalLink
           size={16}
-          className="text-gray-300 dark:text-gray-600 group-hover:text-indigo-400 group-hover:translate-x-0.5 transition-transform flex-shrink-0 ml-3"
+          className="text-indigo-400 dark:text-indigo-400 group-hover:text-indigo-500 dark:group-hover:text-indigo-300 group-hover:translate-x-0.5 transition-all flex-shrink-0 ml-3"
+          style={{ filter: "drop-shadow(0 0 4px rgba(99,102,241,0.5))" }}
         />
       ) : (
         <ChevronRight

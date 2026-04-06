@@ -1,6 +1,6 @@
-import { eq, ne, ilike, or } from 'drizzle-orm';
+import { eq, ne, ilike, or, sql } from 'drizzle-orm';
 import { getNeonDb } from '../neon';
-import { users, type NewUser } from '../schema';
+import { users, companions, type NewUser } from '../schema';
 
 export async function findByEmail(email: string) {
   const db = getNeonDb();
@@ -33,6 +33,31 @@ export async function updateUser(
     .set({ ...data, updatedAt: new Date() })
     .where(eq(users.id, id))
     .returning();
+  return row;
+}
+
+/** Fetches user + accepted companion count in a single query (one HTTP round-trip). */
+export async function findByIdWithCompanionCount(id: string) {
+  const db = getNeonDb();
+  const [row] = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      bio: users.bio,
+      avatar: users.avatar,
+      education: users.education,
+      projects: users.projects,
+      workExperience: users.workExperience,
+      companionCount: sql<number>`cast((
+        select count(*) from companions
+        where (companions.requester_id = ${id} or companions.recipient_id = ${id})
+        and companions.status = 'accepted'
+      ) as integer)`,
+    })
+    .from(users)
+    .where(eq(users.id, id))
+    .limit(1);
   return row;
 }
 
