@@ -4,7 +4,7 @@
   "description": "Virtual Study Group - monorepo root",
   "scripts": {
     "dev:frontend": "cd frontend && npm run dev",
-    "dev:backend": "cd backend && npm start",
+    "dev:backend": "cd backend && npm run dev",
     "install:all": "cd backend && npm install && cd ../frontend && npm install"
   }
 }
