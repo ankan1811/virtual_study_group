@@ -68,7 +68,40 @@ function AppInner() {
     }
   }, []);
 
-  if (serverStatus === 'unknown') return null;
+  if (serverStatus === 'unknown') return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{
+        background:
+          'radial-gradient(ellipse at 20% 50%, #1e1040 0%, transparent 60%), ' +
+          'radial-gradient(ellipse at 80% 20%, #0f1f4d 0%, transparent 60%), ' +
+          'linear-gradient(135deg, #0a0718 0%, #0f1628 50%, #0a0f28 100%)',
+      }}
+    >
+      <div className="text-center">
+        <h1
+          className="text-[1.75rem] font-bold poppins-bold mb-3"
+          style={{
+            background: 'linear-gradient(135deg, #a5b4fc, #fff 55%, #67e8f9)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}
+        >
+          Virtual Study Group
+        </h1>
+        <p className="text-sm text-indigo-300/80 poppins-regular mb-4">Waking up the study rooms</p>
+        <div className="flex gap-1.5 justify-center">
+          {[0, 0.2, 0.4].map((d) => (
+            <span
+              key={d}
+              className="w-1.5 h-1.5 rounded-full bg-indigo-300"
+              style={{ animation: 'dot-pulse 1.2s ease-in-out infinite both', animationDelay: `${d}s` }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
   if (serverStatus === 'dead') return <ColdStartScreen />;
 
   return (

@@ -151,6 +151,7 @@ export default function RoomPage() {
     "All" | "AI" | "Tech" | "Productivity"
   >("All");
   const [newsLoading, setNewsLoading] = useState(true);
+  const [companionsLoading, setCompanionsLoading] = useState(true);
 
   // DM panel state
   const [dmTarget, setDmTarget] = useState<{
@@ -227,7 +228,8 @@ export default function RoomPage() {
           // Ask server which companions are currently online AFTER list is loaded
           getSocket()?.emit("companion:getOnlineCompanions");
         })
-        .catch(console.error);
+        .catch(console.error)
+        .finally(() => setCompanionsLoading(false));
 
       // Pending companion requests
       axios
@@ -764,8 +766,23 @@ export default function RoomPage() {
             )}
           </div>
 
-          {/* Logged-in empty state */}
-          {isAuthenticated && companions.length === 0 ? (
+          {/* Companion loading skeleton */}
+          {isAuthenticated && companionsLoading ? (
+            <div className="flex gap-4 overflow-hidden px-1 py-1">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex flex-col items-center gap-2 flex-shrink-0">
+                  <div
+                    className="w-14 h-14 rounded-full skeleton-shimmer ring-2 ring-gray-200 dark:ring-gray-700/50"
+                    style={{ animationDelay: `${i * 0.15}s` }}
+                  />
+                  <div
+                    className="h-2.5 w-10 rounded-full skeleton-shimmer"
+                    style={{ animationDelay: `${i * 0.15 + 0.08}s` }}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : isAuthenticated && companions.length === 0 ? (
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
